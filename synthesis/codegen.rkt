@@ -9,8 +9,9 @@
 ;; self.b = child.b
 ;; The idea is that FTL will generate a sched file with something in it which we would like to convert to this:
 
-(define example_target-schedule `((td (root child a) (midnode left a) (midnode right a))
-                                  (bu (root child b) (midnode left b) (midnode right b))))
+(define example_target-schedule `((td (root child attribute_1) (midnode left attribute_1) (midnode right attribute_1))
+                                  (bu (root child attribute_2) (midnode left attribute_2) (midnode right attribute_2))
+                                  (bu (root child attribute_3) (midnode left attribute_3) (midnode right attribute_3))))
 
 ;; Note: we do not consider loops for now.
 
@@ -21,7 +22,15 @@
 
 (define (trim_newlines list_of_strings)
   (map (lambda (st)
-         (string-split st "\newline")) list_of_strings))
+         (string-split st "\n")) list_of_strings))
 
+(define (trim_leftsq list_of_strings)
+  (map (lambda (st)
+         (string-split st "[")) list_of_strings))
 
-(display (trim_newlines split_commas))
+(define (trim_rightsq list_of_strings)
+  (map (lambda (st)
+         (string-split st "]")) list_of_strings))
+
+;(display (trim_leftsq (trim_newlines split_commas)))
+
