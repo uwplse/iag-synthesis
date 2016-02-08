@@ -1,0 +1,6 @@
+[td, [root child a], 
+     [midnode left a], 
+     [midnode right a]], 
+[bu, [root child b], 
+     [midnode left b], 
+     [midnode right b]]
