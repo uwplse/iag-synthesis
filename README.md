@@ -1,6 +1,8 @@
-# Incremental and Parallel Evaluation of Attribute Grammars Through Synthesis
+# Synthesis of Incremental and Parallel Attribute Grammar Evaluators
 
-This is a work in progress.
+This is a work in progress. If you're interested in the background for this
+research project, take a look at [Superconductor](https://github.com/Superconductor/superconductor), which is the culmination of a substantial amount
+of prior work in this subject.
 
 ## Synthesis Engine (`./synthesis`)
 
