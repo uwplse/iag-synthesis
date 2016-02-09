@@ -2,9 +2,11 @@
 
 (require racket/dict)
 
-(provide symbol-table?
-         (struct-out symbol-table)
-         make-symbol-table
+(provide (struct-out symtab)
+         make-symtab
+         symtab-ref
+         symtab-set!
+         symtab-map!
          domain
          mapthunk
          choose*
@@ -12,74 +14,61 @@
          number*
          hole*)
 
-; --------------------
-; Fixed-key dictionary
-; --------------------
+; ---------------------
+; Symbol (lookup) table
+; ---------------------
 
-(define (vector-iterate-first vec)
-  (dict-iterate-first vec))
+(struct symtab (symbols lookup table) #:transparent)
 
-(define (vector-iterate-next vec pos)
-  (dict-iterate-next vec pos))
-
-(define (vector-iterate-key vec pos)
-  (dict-iterate-key vec pos))
-
-(define (vector-iterate-value vec pos)
-  (dict-iterate-key vec pos))
-
-; dictionary implementation optimized for symbolic evaluation
-(struct symbol-table (index store)
-  #:transparent
-  #:methods gen:dict
-  [(define (dict-ref symtab symbol [default (λ () (raise exn:fail:contract))])
-     (vector-ref (symbol-table-store symtab)
-              (hash-ref (symbol-table-index symtab)
-                        symbol
-                        default)))
-   (define (dict-set _0 _1 _2)
-     (raise exn:fail:contract))
-   (define (dict-set! symtab symbol value)
-     (vector-set! (symbol-table-store symtab)
-               (hash-ref (symbol-table-index symtab)
-                         symbol
-                         (thunk (raise exn:fail:contract)))
-               value))
-   (define (dict-remove _0 _1)
-     (raise exn:fail:contract))
-   (define (dict-remove! _0 _1)
-     (raise exn:fail:contract))
-   (define (dict-count symtab)
-     (vector-length (symbol-table-store symtab)))
-   (define (dict-copy symtab)
-     (symbol-table (symbol-table-index symtab)
-                (vector-copy (symbol-table-store symtab))))
-   (define (dict-values symtab)
-     (vector->list (symbol-table-store symtab)))
-   (define (dict-iterate-first symtab)
-     (vector-iterate-first (symbol-table-index symtab)))
-   (define (dict-iterate-next symtab pos)
-     (vector-iterate-next (symbol-table-index symtab) pos))
-   (define (dict-iterate-key symtab pos)
-     (vector-iterate-key (symbol-table-index symtab) pos))
-   (define (dict-iterate-value symtab pos)
-     (vector-ref (symbol-table-store symtab)
-                 (vector-iterate-value (symbol-table-index symtab)
-                                       pos)))])
-
-(define (make-symbol-table symbols default)
+(define (make-symtab symbols default)
+  (define (make-lookup symbols index)
+    (if (null? symbols)
+        (λ (_) -1) ; symbol not found
+        (let ([symbol (first symbols)]
+              [recurse (make-lookup (rest symbols) (+ index 1))])
+          (λ (input)
+            (if (eq? input symbol)
+                index
+                (recurse input))))))
   (let* ([size (length symbols)]
-         [index (make-immutable-hasheq (zip symbols (in-naturals)))]
-         [store (make-vector size default)])
-    (symbol-table index store)))
+         [lookup (make-lookup symbols 0)]
+         [table (make-vector size default)])
+    (symtab symbols lookup table)))
 
-(define symbol-table-ref dict-ref)
+(define (symtab-ref symtab
+                    symbol
+                    [default (thunk
+                              (error "symbol not found: "
+                                     (symbol->string symbol)))])
+  (let ([index ((symtab-lookup symtab) symbol)])
+    (if (eq? index -1)
+        (if (procedure? default)
+            (default)
+            default)
+        (vector-ref (symtab-table symtab) index))))
 
-(define symbol-table-set! dict-set!)
+(define (symtab-set! symtab
+                     symbol
+                     value)
+  (let ([index ((symtab-lookup symtab) symbol)]
+        [table (symtab-table symtab)])
+    (if (eq? index -1)
+        (error "symbol not found: "
+               (symbol->string symbol))
+        (vector-set! table index value))))
 
-(define symbol-table-copy dict-copy)
-
-(define symbol-table-size dict-count)
+(define (symtab-map! symtab
+                     function)
+  (let ([symbols (symtab-symbols symtab)]
+        [lookup (symtab-lookup symtab)]
+        [table (symtab-table symtab)])
+    (for-each
+     (λ (p)
+       (let ([i (cdr p)])
+         (vector-set! table
+                      i
+                      (function (car p) (vector-ref table i)))))
+     (zip symbols (in-naturals)))))
 
 ; ------------------------
 ; Random utility functions
