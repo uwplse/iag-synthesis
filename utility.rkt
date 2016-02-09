@@ -4,6 +4,7 @@
 
 (provide (struct-out symtab)
          make-symtab
+         symtab-keys
          symtab-ref
          symtab-set!
          symtab-map!
@@ -34,6 +35,9 @@
          [lookup (make-lookup symbols 0)]
          [table (make-vector size default)])
     (symtab symbols lookup table)))
+
+(define (symtab-keys symtab)
+  (symtab-symbols symtab))
 
 (define (symtab-ref symtab
                     symbol
