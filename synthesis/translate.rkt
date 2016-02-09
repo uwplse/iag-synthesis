@@ -1,12 +1,7 @@
 #lang s-exp rosette
 
-; Functional Tree Traversal Transformation Language (FT3L) intepreter
-; Translate
-
-; this whole interpreter is a function from a sentence in the FTL language (dependently) paired with
-; a derivation (sentence) in the language of the grammar described by the FTL source that outputs
-; another, fully evaluated derivation
-; interpret : L(FTL) * L(G(L(FTL))) -> L(G(L(FTL)))
+; Functional Tree Language (FTL) synthesis engine
+; Translation (AST to IR with closed lambdas)
 
 (require racket/dict
          "parse.rkt"
@@ -18,13 +13,13 @@
          (struct-out ftl-ir-definition)
          (struct-out ftl-ir-alternative)
          (struct-out ftl-ir-grammar)
-         (struct-out ftl-ir-derivation))
-
-; FIXME: describe data structures in greater detail, with invariants
+         example-ir)
 
 ; ---------------------------
 ; Intermediate Representation
 ; ---------------------------
+
+; FIXME: describe data structures in greater detail, with invariants
 
 ; names are symbols and dictionaries are immutable hash{eq,} tables
 
@@ -62,19 +57,17 @@
    sentence ; starting symbol (key) from vocabulary (for schedule synthesis and verification)
    ) #:transparent)
 
-; input to the
-(struct ftl-ir-derivation
-  (symbol ; key from vocabulary
-   option ; identifier of production instance
-   attributes ; symbol table of labels to values, such that all input attributes are set and the rest are (void)
-   children ; dictionary of IR derivations (or lists of them) keyed by child names
-   ) #:transparent)
-
 ; -------------------------------
 ; Grammar Translation (AST -> IR)
 ; -------------------------------
 
+; Driver: translate parsed abstract syntax tree into intermediate representation
+(define (translate ftl-ast-list root runtime)
+  (compile (check-types (validate (organize ftl-ast-list)) runtime) root runtime))
+
 (define fail (thunk (error "Error: could not translate AST to IR")))
+
+; TODO: refactor everything here on down
 
 ; 1. ORGANIZE - transform AST list into vocabulary, while
 ;    * inlining all inherited traits and implemented interfaces
@@ -155,6 +148,7 @@
                        grouped)])
     (make-immutable-hasheq assoced)))
 
+
 ; Phase 1: return an inlined AST vocabulary from a list of AST top-level nodes while checking for
 ;  * namespace collisions between traits, interfaces, or classes
 ;  * the existence of all implemented interfaces
@@ -179,6 +173,7 @@
         (error "one or more interfaces lacks an implementation"))
       ; all done, return the AST vocabulary
       vocab)))
+
 
 ; Phase 2: check for certain semantic errors in the abstract syntax trees
 ;  * duplicate declarations within a class, its traits, and its interface
@@ -242,6 +237,7 @@
                             has-duplicate-child)
     vocabulary))
 
+
 (define (environment vocabulary)
   (let* ([context (λ (decls)
                     (make-immutable-hasheq
@@ -275,6 +271,7 @@
                   (hash-ref context
                             label
                             (undefined-error-thunk "attribute" (cons object label))))))))))
+
 
 (define (typecheck typeof signature value? iterable? bool-type loop definition) ; produce an index-normalized form of expr if well-typed
   (define lhs (ftl-ast-define-lhs definition))
@@ -471,6 +468,7 @@
        (cons (ftl-ast-refer->pair lhs)
              (ftl-ir-define rhs))])))
 
+
 (define (compile ftl-ast-vocab root runtime)
   (let* ([cdrmap (λ (f xs)
                    (map (λ (p)
@@ -520,37 +518,8 @@
                                             (rest production)))))))
                 root)))
 
-; Driver: translate parsed abstract syntax tree into intermediate representation
-(define (translate ftl-ast-list root runtime)
-  (compile (check-types (validate (organize ftl-ast-list)) runtime) root runtime))
+; --------------------------
+; Example Grammar in IR Form
+; --------------------------
 
-; -------------------------
-; Derivation initialization
-; -------------------------
-
-; convert from some more convenient representation of an attribute tree to one for execution
-(define (derive tree)
-  (void))
-
-; --------------------
-; Derivation traversal
-; --------------------
-
-;(define (preorder f t)
-;  (let* ([tree (f t)]
-;         [symbol (node-symbol tree)]
-;         [attributes (node-attributes tree)]
-;         [children (node-children tree)])
-;    (node symbol
-;          attributes
-;          (map (λ (child) (preorder f child))
-;               children))))
-;
-;(define (postorder f t)
-;  (let ([symbol (node-symbol t)]
-;        [attributes (node-attributes t)]
-;        [children (node-children t)])
-;    (f (node symbol
-;             attributes
-;             (map (λ (child) (postorder f child))
-;                  children)))))
+(define example-ir (translate example-ast 'Root ftl-base-runtime))
