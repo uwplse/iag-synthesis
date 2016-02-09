@@ -1,6 +1,6 @@
 #lang s-exp rosette
 
-; Functional Tree Traversal Transformation Language (FT3L) intepreter
+; Functional Tree Language (FTL) synthesis engine
 ; Parser
 
 (require parser-tools/lex

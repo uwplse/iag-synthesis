@@ -1,7 +1,7 @@
 #lang s-exp rosette
 
-; Functional Tree Traversal Transformation Language (FT3L) intepreter
-; Runtime
+; Functional Tree Language (FTL) synthesis engine
+; Runtime (library and types)
 
 (require "../utility.rkt")
 

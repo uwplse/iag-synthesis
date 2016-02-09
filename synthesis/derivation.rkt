@@ -1,6 +1,6 @@
 #lang s-exp rosette
 
-; Functional Tree Language (FTL) intepreter
+; Functional Tree Language (FTL) synthesis engine
 ; Derivation
 
 (require xml
