@@ -1,7 +1,7 @@
 #lang s-exp rosette
 
 ; Functional Tree Traversal Transformation Language (FT3L) intepreter
-; Parse
+; Parser
 
 (require parser-tools/lex
          (prefix-in : parser-tools/lex-sre)
@@ -177,7 +177,7 @@
 ; -----------------
 
 ; TODO: phantom types and the fold child by expr { ... } construct, which may be deprecated
-; TODO: default/given input values
+; TODO: default/given input values of the form input <ident> : <type> = <literal>;
 (struct ftl-ast-interface (name fields) #:transparent)
 (struct ftl-ast-trait (name body) #:transparent)
 (struct ftl-ast-class (name traits interface body) #:transparent)

@@ -15,13 +15,14 @@
    library ; hash(eq) table from symbols to pairs of types and functions, s.t. a type a * b -> c is '(a b c)
    ) #:transparent)
 
-; Note that FTL (or perhaps just this implementation) has a strictly monomorphic type system
+; FIXME: distinguish operators from functions to allow overloading (perhaps just through an op->fn map?)
+; by necessaity, comparison operators require special handling, because they're of type t*t -> 2 rather than t*t -> t
 (define ftl-base-runtime
   (ftl-runtime 'bool
-               (hasheq 'int (cons integer? hole*)
+               (hasheq 'int (cons integer? hole*) ; (list integer? hole* = < (hasheq '+ + '* *...))
                        'float (cons number? void)
                        'bool (cons boolean? decide*)
-                       'string (cons string? void))
+                       'string (cons string? void)) ; (list string? void string-append void void void equal?
                (hasheq '+ `((int int int) . ,+)
                        '- `((int int int) . ,-)
                        '* `((int int int) . ,*)
