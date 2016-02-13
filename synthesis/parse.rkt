@@ -281,7 +281,7 @@
      ((PREVIOUS DOT IDENT) (ftl-ast-refer 'self 'previous (string->symbol $3))) ; $0, $i, and $$ have no semantic meaning for self
      ((IDENT FIRST DOT IDENT) (ftl-ast-refer (string->symbol $1) 'first (string->symbol $4)))
      ((IDENT PREVIOUS DOT IDENT) (ftl-ast-refer (string->symbol $1) 'previous (string->symbol $4)))
-     ((IDENT INDEX DOT IDENT) (ftl-ast-refer (string->symbol $1) 'index (string->symbol $4)))
+     ((IDENT INDEX DOT IDENT) (ftl-ast-refer (string->symbol $1) 'current (string->symbol $4)))
      ((IDENT LAST DOT IDENT) (ftl-ast-refer (string->symbol $1) 'last (string->symbol $4))))
     
     (child-list
@@ -438,7 +438,7 @@
                  ['none ""]
                  ['first "$0"]
                  ['previous "$-"]
-                 ['index "$i"]
+                 ['current "$i"]
                  ['last "$$"])])
     (string-append (symbol->string (ftl-ast-refer-object ref))
                    index

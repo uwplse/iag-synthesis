@@ -78,7 +78,7 @@
                                         (cond
                                           [(and (eq? dep-obj def-obj)
                                                 def-seq
-                                                (eq? dep-idx 'index)) (symtab-ref child-attributes dep-lbl)]
+                                                (eq? dep-idx 'current)) (symtab-ref child-attributes dep-lbl)]
                                           [(and (eq? dep-obj def-obj)
                                                 reduce
                                                 (eq? dep-idx 'previous)) accumulator]
