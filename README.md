@@ -10,7 +10,7 @@ This directory contains Rosette code for the parsing, transformation,
 serialization, and angelic evaluation (interpretation) of derivations of an
 attribute grammar given as FTL (backronym: "Functional Tree Language") code. In
 the future,  this will also include optimal schedule synthesis,
-incrementalization with optimal synthesis of change propagation  functions, and
+incrementalization with optimal synthesis of change propagation functions, and
 code generation (compilation) targeting a variety of backends (language + tree +
 library).
 
