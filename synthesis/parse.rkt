@@ -180,17 +180,55 @@
 
 ; TODO: phantom types and the fold child by expr { ... } construct, which may be deprecated
 ; TODO: default/given input values of the form input <ident> : <type> = <literal>;
-(struct ftl-ast-interface (name fields) #:transparent)
-(struct ftl-ast-trait (name body) #:transparent)
-(struct ftl-ast-class (name traits interface body) #:transparent)
-(struct ftl-ast-body (children attributes actions) #:transparent)
-(struct ftl-ast-child (name sequence interface) #:transparent)
-(struct ftl-ast-declare (input name type) #:transparent)
-(struct ftl-ast-define (lhs rhs) #:transparent) ; perhaps add a loop/iterate field, as any definition is either in a single loop or not, never nested
-(struct ftl-ast-refer (object index label) #:transparent)
-(struct ftl-ast-loop (iterate actions) #:transparent)
+
+; Note that identifiers are symbols
+
+(struct ftl-ast-interface ; interface definition
+  (name ; identifier corresponding to nonterminal in the attribute grammar
+   fields ; list of attribute declarations
+   ) #:transparent)
+(struct ftl-ast-trait ; trait (mixin class) definition
+  (name ; identifier
+   body ; class body
+   ) #:transparent)
+(struct ftl-ast-class
+  (name ; identifier corresponding to a particular production for the nonterminal
+   traits ; list of trait identifiers
+   interface ; the nonterminal symbol
+   body ; a class body
+   ) #:transparent)
+(struct ftl-ast-body ; body of a class or trait
+  (children ; list of child declarations
+   attributes ; list of attribute declarations
+   actions ; list of attribute definitions, possibly inside of loops
+   ) #:transparent)
+(struct ftl-ast-child ; child declaration
+  (name ; child (more generally, object) identifier (cannot be 'self)
+   sequence ; whether this is a child sequence
+   interface ; the nonterminal that this child's subtree(s) generates
+   ) #:transparent)
+(struct ftl-ast-declare ; attribute declaration
+  (input ; whether this attribute's value is given (#t) or computed (#f)
+   name ; attribute identifier, also known as a label
+   type ; the identifier for the attribute value's type, interpreted by the runtime/backend
+   ) #:transparent)
+(struct ftl-ast-define ; attribute definition
+  (lhs ; attribute reference
+   rhs ; expression, made up of function calls, conditionals, unary/binary operations, and
+       ; zero-to-one top-level fold
+   ) #:transparent)
+(struct ftl-ast-refer ; attribute reference
+  (object ; object identifier, i.e., a child identifier or 'self 
+   index ; 'previous, 'current, 'last, or 'none
+   label ; attribute identifier
+   ) #:transparent)
+(struct ftl-ast-loop ; loop body
+  (iterate ; identifier of a sequence child
+   actions ; list of attribute definitions
+   ) #:transparent)
+
 (struct ftl-ast-expr-fold (init step) #:transparent)
-(struct ftl-ast-expr-call (fun args) #:transparent) ; the function name for an operator cannot be alphabetical, as that may conflict with some function
+(struct ftl-ast-expr-call (fun args) #:transparent)
 (struct ftl-ast-expr-unary (operator operand) #:transparent)
 (struct ftl-ast-expr-binary (left operator right) #:transparent)
 (struct ftl-ast-expr-cond (if then else) #:transparent)
