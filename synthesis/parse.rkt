@@ -25,6 +25,8 @@
          (struct-out ftl-ast-loop)
          (struct-out ftl-ast-expr-fold)
          (struct-out ftl-ast-expr-call)
+         (struct-out ftl-ast-expr-unary)
+         (struct-out ftl-ast-expr-binary)
          (struct-out ftl-ast-expr-cond))
 
 ; ----------------
@@ -189,6 +191,8 @@
 (struct ftl-ast-loop (iterate actions) #:transparent)
 (struct ftl-ast-expr-fold (init step) #:transparent)
 (struct ftl-ast-expr-call (fun args) #:transparent) ; the function name for an operator cannot be alphabetical, as that may conflict with some function
+(struct ftl-ast-expr-unary (operator operand) #:transparent)
+(struct ftl-ast-expr-binary (left operator right) #:transparent)
 (struct ftl-ast-expr-cond (if then else) #:transparent)
 
 (define (ftl-ast-body-merge . xs)
@@ -301,34 +305,34 @@
     
     (and-expr
      ((or-expr) $1)
-     ((or-expr AND and-expr) (ftl-ast-expr-call '&& (list $1 $3))))
+     ((or-expr AND and-expr) (ftl-ast-expr-binary $1 '&& $3)))
     
     (or-expr
      ((comp-expr) $1)
-     ((comp-expr OR or-expr) (ftl-ast-expr-call '|| (list $1 $3))))
+     ((comp-expr OR or-expr) (ftl-ast-expr-binary $1 '|| $3)))
     
     (comp-expr
      ((term) $1)
-     ((NOT term) (ftl-ast-expr-call 'not (list $2)))
-     ((term GT term) (ftl-ast-expr-call '> (list $1 $3)))
-     ((term LT term) (ftl-ast-expr-call '< (list $1 $3)))
-     ((term GE term) (ftl-ast-expr-call '>= (list $1 $3)))
-     ((term LE term) (ftl-ast-expr-call '<= (list $1 $3)))
-     ((term EQ term) (ftl-ast-expr-call '== (list $1 $3)))
-     ((term NE term) (ftl-ast-expr-call '! (ftl-ast-expr-call '== (list $1 $3)))))
+     ((NOT term) (ftl-ast-expr-unary '! $2))
+     ((term GT term) (ftl-ast-expr-binary $1 '> $3))
+     ((term LT term) (ftl-ast-expr-binary $1 '< $3))
+     ((term GE term) (ftl-ast-expr-binary $1 '>= $3))
+     ((term LE term) (ftl-ast-expr-binary $1 '<= $3))
+     ((term EQ term) (ftl-ast-expr-binary $1 '== $3))
+     ((term NE term) (ftl-ast-expr-binary $1 '!= $3)))
     
     (term
      ((factor) $1)
-     ((factor PLUS term) (ftl-ast-expr-call '+ (list $1 $3)))
-     ((factor MINUS term) (ftl-ast-expr-call '- (list $1 $3))))
+     ((factor PLUS term) (ftl-ast-expr-binary $1 '+ $3))
+     ((factor MINUS term) (ftl-ast-expr-binary $1 '- $3)))
     
     (factor
      ((prim-expr) $1)
-     ((prim-expr MULTIPLY factor) (ftl-ast-expr-call '* (list $1 $3)))
-     ((prim-expr DIVIDE factor) (ftl-ast-expr-call '/ (list $1 $3))))
+     ((prim-expr MULTIPLY factor) (ftl-ast-expr-binary $1 '* $3))
+     ((prim-expr DIVIDE factor) (ftl-ast-expr-binary $1 '/ $3)))
     
     (prim-expr
-     ((MINUS prim-expr) (ftl-ast-expr-call '- (list $2)))
+     ((MINUS prim-expr) (ftl-ast-expr-unary '- $2))
      ((attr-def-loop-ref) $1) ; would be a lot of duplication to distinguish between attr-def-ref and attr-def-loop-ref in expressions
      ((LITERAL) $1)
      ((IDENT LPAREN arg-list RPAREN) (ftl-ast-expr-call (string->symbol $1) $3))
@@ -442,27 +446,16 @@
                    (symbol->string (ftl-ast-refer-label ref)))))
 
 (define (ftl-ast-expr-serialize expr)
-  (define (serialize-prefix op e)
-    (string-append op "(" (ftl-ast-expr-serialize e) ")"))
-  (define (serialize-infix op e1 e2)
-    (string-append "(" (ftl-ast-expr-serialize e1) ") " op " (" (ftl-ast-expr-serialize e2) ")"))
   (match expr
-    [(ftl-ast-expr-fold init step) (string-append "fold (" (ftl-ast-expr-serialize init) ") .. (" (ftl-ast-expr-serialize step) ")")]
-    [(ftl-ast-expr-cond if then else) (string-append "(" (ftl-ast-expr-serialize if) ") ? (" (ftl-ast-expr-serialize then) ") : (" (ftl-ast-expr-serialize else) ")")]
-    [(ftl-ast-expr-call '&& (list e1 e2)) (serialize-infix "&&" e1 e2)]
-    [(ftl-ast-expr-call '|| (list e1 e2)) (serialize-infix "||" e1 e2)]
-    [(ftl-ast-expr-call '! (list e)) (serialize-prefix "!" e)]
-    [(ftl-ast-expr-call '> (list e1 e2)) (serialize-infix ">" e1 e2)]
-    [(ftl-ast-expr-call '< (list e1 e2)) (serialize-infix "<" e1 e2)]
-    [(ftl-ast-expr-call '>= (list e1 e2)) (serialize-infix ">=" e1 e2)]
-    [(ftl-ast-expr-call '<= (list e1 e2)) (serialize-infix "<=" e1 e2)]
-    [(ftl-ast-expr-call '== (list e1 e2)) (serialize-infix "==" e1 e2)]
-    [(ftl-ast-expr-call '!= (list e1 e2)) (serialize-infix "!=" e1 e2)]
-    [(ftl-ast-expr-call '+ (list e1 e2)) (serialize-infix "+" e1 e2)]
-    [(ftl-ast-expr-call '- (list e1 e2)) (serialize-infix "-" e1 e2)]
-    [(ftl-ast-expr-call '* (list e1 e2)) (serialize-infix "*" e1 e2)]
-    [(ftl-ast-expr-call '/ (list e1 e2)) (serialize-infix "/" e1 e2)]
-    [(ftl-ast-expr-call '- (list e)) (serialize-prefix "-" e)]
+    [(ftl-ast-expr-fold init step) (string-append "fold (" (ftl-ast-expr-serialize init) ") .. "
+                                                  "(" (ftl-ast-expr-serialize step) ")")]
+    [(ftl-ast-expr-cond if then else) (string-append "(" (ftl-ast-expr-serialize if) ") ? "
+                                                     "(" (ftl-ast-expr-serialize then) ") : "
+                                                     "(" (ftl-ast-expr-serialize else) ")")]
+    [(ftl-ast-expr-unary op e) (string-append (symbol->string op) "(" (ftl-ast-expr-serialize e) ")")]
+    [(ftl-ast-expr-binary e1 op e2) (string-append "(" (ftl-ast-expr-serialize e1) ") "
+                                                   (symbol->string op)
+                                                   " (" (ftl-ast-expr-serialize e2) ")")]
     [(ftl-ast-expr-call name args) (string-append (symbol->string name) "(" (string-join (map ftl-ast-expr-serialize args) ",") ")")]
     [(? ftl-ast-refer?) (ftl-ast-refer-serialize expr)]
     [(? number?) (number->string expr)]
