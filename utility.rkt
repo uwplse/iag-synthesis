@@ -19,11 +19,17 @@
 (define (unique? alist)
   (not (not (check-duplicates alist eq? #:key car))))
 
-; lookup the value of a symbol in an association list or give a default
-(define (lookup alist symbol default)
+(define (defined alist symbol)
+  (not (not (member (cons symbol (void))
+                    alist
+                    (λ (b0 b1) ; equate two bindings
+                      (eq? (car b0) (car b1)))))))
+
+; lookup the value of a symbol in an association list or void
+(define (lookup alist symbol)
   (match (assoc symbol alist eq?)
     [(cons _ value) value]
-    [#f default]))
+    [#f (void)]))
 
 ; ------------------------
 ; Random utility functions
@@ -38,6 +44,18 @@
   (if (hash-has-key? hash key)
       (hash-update hash key modifier)
       (hash-set hash key (modifier default))))
+
+(define (carmap f xs)
+  (map (λ (p)
+         (cons (f (car p))
+               (cdr p)))
+       xs))
+
+(define (cdrmap f xs)
+  (map (λ (p)
+         (cons (car p)
+               (f (cdr p))))
+       xs))
 
 (define (zip xs ys)
   (for/list ([x xs]
