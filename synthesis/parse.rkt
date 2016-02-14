@@ -213,7 +213,7 @@
    type ; the identifier for the attribute value's type, interpreted by the runtime/backend
    ) #:transparent)
 (struct ftl-ast-define ; attribute definition
-  (lhs ; attribute reference
+  (lhs ; attribute reference (index will always be 'none)
    rhs ; expression, made up of function calls, conditionals, unary/binary operations, and
        ; zero-to-one top-level fold
    ) #:transparent)
