@@ -3,7 +3,10 @@
 (require racket/dict)
 
 (provide lookup
+         defined
          unique?
+         carmap
+         cdrmap
          domain
          mapthunk
          choose*
