@@ -178,7 +178,7 @@
 ; Parser Definition
 ; -----------------
 
-; TODO: phantom types and the fold child by expr { ... } construct, which may be deprecated
+; TODO: phantom types and the fold child by <expr> { ... } construct, which may be deprecated
 ; TODO: default/given input values of the form input <ident> : <type> = <literal>;
 
 ; Note that identifiers are symbols
