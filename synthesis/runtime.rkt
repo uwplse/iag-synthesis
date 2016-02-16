@@ -27,22 +27,35 @@
 
 ; FTL has a monomorphic type system with operator overloading
 
-(struct ftl-type ; type descriptor
-  (predicate ; test whether the given value is of this type
-   generate ; generate symbolic value, i.e., an oracle; may be void
-   equal? ; t*t -> boolean
-   less? ; t*t -> boolean
-   unary ; hasheq from symbols (e.g., -) to unary operations : t -> t
-   binary ; hasheq from symbols (e.g., +, -, *, /)  to binary operations : t*t -> t
+; type descriptor
+(struct ftl-type
+  (; test whether the given value is of this type
+   predicate
+   ; generate symbolic value, i.e., an oracle; may be void
+   generate
+   ; t*t -> boolean
+   equal?
+   ; t*t -> boolean
+   less?
+   ; hasheq from symbols (e.g., -) to unary operations : t -> t
+   unary
+   ; hasheq from symbols (e.g., +, -, *, /)  to binary operations : t*t -> t
+   binary
    ) #:transparent)
 
-(struct ftl-runtime ; description of an interpreted FTL runtime environment
-  (boolean ; name of boolean type (symbol)
-   types ; hash(eq) table from types (symbols) to pairs of value predicates and oracles (or void if unsupported)
-   library ; hash(eq) table from symbols to pairs of types and functions, s.t. a type a * b -> c is '(a b c)
+; description of an interpreted FTL runtime environment
+(struct ftl-runtime
+  (; name of boolean type (symbol)
+   boolean
+   ; hash(eq) table from typenames (symbols) to type descriptors
+   types
+   ; hash(eq) table from symbols to pairs of types and functions, s.t. the type
+   ; 'a*b->c' is '(a b c)
+   library
    ) #:transparent)
 
-(define ftl-base-runtime ; minimal runtime environment (basic arithmetic with no external functions)
+; minimal runtime environment (basic arithmetic with no external functions)
+(define ftl-base-runtime
   (ftl-runtime 'bool
                (hasheq 'int (ftl-type integer? hole* = < arithmetic-unary arithmetic-binary)
                        'float (ftl-type number? hole* = < arithmetic-unary arithmetic-binary)
