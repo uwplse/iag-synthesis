@@ -43,7 +43,7 @@
 
 ;; Example derivation tree : node name, class, interface, attributes, children
 (define example-tree '(root Root Top '() '(
-                                           (child Midnode Node '(a  #f) '(
+                                           (child Midnode Node '(a #f) '(
                                                                         (left Midnode Node '(a  #f) '()) (right Midnode Node '(a  #f) '()))))))
 ;; Functions to access different tree elements
 (define node-name car)
@@ -55,7 +55,8 @@
 (define (set-attribute! n attr-name val)
   (map (lambda (p) (if (equal? attr-name (car p)) (set-box! (cdr p) val) (void))) (cadr(node-attributes n)))
   (void))
-(define (get-attribute n attr-name) (unbox (cdr (assoc attr-name (node-attributes n)))))
+
+(define (get-attribute n attr-name) (cdr (assoc attr-name (cadr(node-attributes n)))))
  
 (define codegen-file "generated-code.rkt")
 
@@ -74,7 +75,7 @@
   (map (lambda (p) (if (equal? attr-name (car p)) (set-box! (cdr p) val) (void))) (cadr(node-attributes n)))
   (void))
 
-(define (get-attribute n attr-name) (unbox (cdr (assoc attr-name (node-attributes n)))))
+(define (get-attribute n attr-name) (cdr (assoc attr-name (cadr(node-attributes n)))))
 
 " code)
 
@@ -99,12 +100,12 @@
                                           (display " " code)
                                           (display (symbol->string(car(cdr(cdr(cadr i))))) code)
                                           (display "_assignment tree)" code) (newline code)
-                                          (display " (map (lambda (child) (" code)
+                                          (display " (map (λ (child) (" code)
                                           (display (string-append (string-downcase(symbol->string (car i))) "_assign ") code)
                                           (display (symbol->string(car(cdr(cdr(cadr i))))) code)
                                           (display "_assignment child)) (cadr(node-children tree)))))" code) (newline code) (newline code)]                                         
                                          [(string=? (string-downcase(symbol->string (car i))) "bu")
-                                          (display "(map (lambda (child) (" code)
+                                          (display "(map (λ (child) (" code)
                                           (display (string-append (string-downcase(symbol->string (car i))) "_assign ") code)
                                           (display (symbol->string(car(cdr(cdr(cadr i))))) code)
                                           (display "_assignment child)) (cadr(node-children tree)))" code)(newline code)
@@ -145,7 +146,7 @@
                                                     (display (ftl-ast-class-name y) code)
                                                     ])
                                                  (display ") " code)
-                                                 (display "(map (λ(w)(set-attribute! w " code)
+                                                 (display "(map (λ(w) (set-attribute! w " code)
                                                  (display (symbol->string(ftl-ast-declare-name i)) code) (display " " code)
                                                  (cond
                                                    [(not(equal? (ftl-ast-refer-label(ftl-ast-define-rhs j)) (ftl-ast-declare-name i)))
@@ -153,8 +154,7 @@
                                                    [(equal? (ftl-ast-refer-label(ftl-ast-define-rhs j)) (ftl-ast-declare-name i))
                                                     (display " (get-attribute tree " code)
                                                     (display (symbol->string(ftl-ast-refer-label(ftl-ast-define-rhs j))) code)
-                                                    (display ")" code)])
-                                                   
+                                                    (display ")" code)])                                                   
                                                  (display ")) (node-children tree))]" code)]
                                                  (newline code))                                                 
                                               (newline code)])) (ftl-ast-body-actions (ftl-ast-class-body y)))])) grammar)
