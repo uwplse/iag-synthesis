@@ -11,6 +11,9 @@
 (provide parse-ftl 
          ftl-ast-serialize
          ftl-ast-refer-serialize
+         ftl-ast-partition
+         ftl-ast-conflicts?
+         ftl-ast-expr-depends
          ftl-ast-body-merge
          example-ftl
          example-ast
@@ -282,6 +285,37 @@
   (ftl-ast-body (apply append (map ftl-ast-body-children xs))
             (apply append (map ftl-ast-body-attributes xs))
             (apply append (map ftl-ast-body-actions xs))))
+
+; collect all dependencies (attribute references) of the given expression
+(define (ftl-ast-expr-depends expr)
+  (define (recurse expr base)
+    (match expr
+      [(ftl-ast-expr-unary op subexpr) (recurse subexpr base)]
+      [(ftl-ast-expr-binary left op right) (recurse right (recurse left base))]
+      [(ftl-ast-expr-call fun args) (foldl recurse base args)]
+      [(ftl-ast-expr-cond cond then else) (foldl recurse base (list cond then else))]
+      [(ftl-ast-expr-fold init step) (recurse step (recurse init base))]
+      [(? ftl-ast-refer?) (if (not (member expr base))
+                              (cons expr base)
+                              base)]
+      [else base]))
+  (recurse expr null))
+
+; check for conflicts in the top-level namespace of interfaces, traits, and classes
+(define (ftl-ast-conflicts? ast-list)
+  (let ([pr (λ (ast)
+              (match ast
+                [(ftl-ast-interface name _) name]
+                [(ftl-ast-trait name _) name]
+                [(ftl-ast-class name _ _ _) name]))])
+    (pr (check-duplicates ast-list eq? #:key pr))))
+
+; partition the list of top-level ASTs into [a list of] three lists of ASTs:
+; interfaces, traits, and classes
+(define (ftl-ast-partition ast-list)
+  (let*-values ([(trait-list other-list) (partition ftl-ast-trait? ast-list)]
+                [(class-list iface-list) (partition ftl-ast-class? other-list)])
+    (list iface-list trait-list class-list)))
 
 (define ftl-parse
   (parser
