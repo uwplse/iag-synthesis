@@ -1,8 +1,11 @@
 #lang s-exp rosette
 
+(require "../utility.rkt")
+
 (provide ftl-ast-conflicts?
          ftl-ast-partition
          ftl-ast-inline
+         ftl-ast-validate
          ftl-ast-expr-depends
          ftl-ast-body-merge
          (struct-out ftl-ast-interface)
@@ -114,12 +117,16 @@
 (struct ftl-ast-expr-binary (left operator right) #:transparent)
 (struct ftl-ast-expr-cond (if then else) #:transparent)
 
+(define (ftl-ast-refer->pair ref)
+  (cons (ftl-ast-refer-object ref)
+        (ftl-ast-refer-label ref)))
+
 (define (ftl-ast-body-merge . xs)
   (ftl-ast-body (apply append (map ftl-ast-body-children xs))
             (apply append (map ftl-ast-body-attributes xs))
             (apply append (map ftl-ast-body-actions xs))))
 
-; collect all dependencies (attribute references) of the given expression
+; Collect all dependencies (attribute references) of the given expression
 (define (ftl-ast-expr-depends expr)
   (define (recurse expr base)
     (match expr
@@ -134,7 +141,8 @@
       [else base]))
   (recurse expr null))
 
-; check for conflicts in the top-level namespace of interfaces, traits, and classes
+; Check for conflicts in the top-level namespace of interfaces, traits, and
+; classes.
 (define (ftl-ast-conflicts? ast-list)
   (let ([pr (λ (ast)
               (match ast
@@ -143,17 +151,18 @@
                 [(ftl-ast-class name _ _ _) name]))])
     (pr (check-duplicates ast-list eq? #:key pr))))
 
-; partition the list of top-level ASTs into [a list of] three lists of ASTs:
-; interfaces, traits, and classes
+; Partition the list of top-level ASTs into [a list of] three lists of ASTs:
+; interfaces, traits, and classes.
 (define (ftl-ast-partition ast-list)
   (let*-values ([(trait-list other-list) (partition ftl-ast-trait? ast-list)]
                 [(class-list iface-list) (partition ftl-ast-class? other-list)])
     (list iface-list trait-list class-list)))
 
-; inline all inherited traits and implemented interfaces into class bodies and
-; produce a hash(eq) from symbols (interface names) to a list such that the head
-; is the interface AST rooted with a body node and the rest are pairs of options
-; (class names) and inlined ASTs (also rooted with a body node)
+; Given a (conflict-free) list of top-level AST nodes, produce a hash(eq) table
+; mapping each symbol of the grammar's implicit alphabet (i.e., interface names)
+; with the interface as a body AST paired with another list associating each
+; production option (i.e., class name) with its inlined body AST. The output of
+; this function is often referred to as an AST vocabulary or an AST hash.
 (define (ftl-ast-inline ast-list)
   (define (undefined kind name)
     (thunk (raise-arguments-error 'inline (string-append "undefined " kind)
@@ -203,5 +212,93 @@
                            (list* (caar group)
                                   (hash-ref iface-hash (caar group))
                                   (map cdr group)))
-                       grouped)])
-    assoced))
+                       grouped)]
+         [hashed (make-hasheq assoced)])
+    ; make sure all unimplemented interfaces are included (I guess?)
+    (hash-for-each iface-hash
+                   (λ (symbol iface)
+                     (unless (hash-has-key? hashed symbol)
+                       (hash-set! hashed (list* symbol iface null)))))
+    hashed))
+
+(define (for-each-class proc ast-hash)
+  (hash-for-each ast-hash
+                 (λ (symbol production)
+                   (let ([classes (rest production)])
+                     (cdrmap proc classes)))))
+
+(define (map-class proc ast-hash)
+  (make-immutable-hasheq
+   (hash-map ast-hash
+             (λ (symbol production)
+               (let ([iface (first production)]
+                     [classes (rest production)])
+                 (list* symbol
+                       iface
+                       (cdrmap proc classes)))))))
+
+; Check for certain semantic errors in an inlined AST hash:
+;  * duplicate declarations among a class, its trait(s), and its interface
+;  * duplicate definitions among a class and its trait(s)
+;  * definitions of undeclared traits among a class and its trait(s)
+;  * the existence of traits inherited by a class
+(define (ftl-ast-validate ast-hash)
+  (let* ([deloopify (λ (act)
+                      (if (ftl-ast-loop? act)
+                          (ftl-ast-loop-actions act)
+                          act))]
+         [check-duplicate-fields (λ (access identify equal has-duplicate)
+                                   (for-each-class
+                                    (λ (class)
+                                      ; check-duplicates requires Racket v6.3+
+                                      (let ([duplicate (check-duplicates
+                                                        (access class)
+                                                        equal
+                                                        #:key identify)])
+                                        (when duplicate
+                                          (has-duplicate class duplicate))))
+                                    ast-hash))]
+         [has-duplicate (λ (part class name)
+                          (raise-arguments-error
+                           'ftl-ast-validate
+                           (string-append "duplicate " part)
+                           part (if (symbol? name) (symbol->string name) name)
+                           "component of class" class))]
+         [has-duplicate-define (λ (class def)
+                                 (has-duplicate "definition of attribute"
+                                                (ftl-ast-class-name class)
+                                                (string-append
+                                                 (symbol->string
+                                                  (ftl-ast-refer-object
+                                                   (ftl-ast-define-lhs def)))
+                                                 "."
+                                                 (symbol->string
+                                                  (ftl-ast-refer-label
+                                                   (ftl-ast-define-lhs def))))))]
+         [has-duplicate-declare (λ (class decl)
+                                  (has-duplicate "declaration of attribute"
+                                                 (ftl-ast-class-name class)
+                                                 (ftl-ast-declare-name decl)))]
+         [has-duplicate-child (λ (class child)
+                                (has-duplicate "declaration of child"
+                                               (ftl-ast-class-name class)
+                                               (ftl-ast-child-name child)))])
+    ; check that no attribute is defined more than once
+    (check-duplicate-fields (compose flatten
+                                     (curry map deloopify)
+                                     ftl-ast-body-actions)
+                            (compose ftl-ast-refer->pair
+                                     ftl-ast-define-lhs)
+                            equal?
+                            has-duplicate-define)
+    ; check that the same label was not used for multiple attributes
+    (check-duplicate-fields ftl-ast-body-attributes
+                            ftl-ast-declare-name
+                            eq?
+                            has-duplicate-declare)
+    ; check that no child name was declared more than once
+    (check-duplicate-fields ftl-ast-body-children
+                            ftl-ast-child-name
+                            eq?
+                            has-duplicate-child)
+    ast-hash))
