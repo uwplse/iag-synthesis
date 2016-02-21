@@ -11,8 +11,9 @@
 (provide parse-ftl 
          ftl-ast-serialize
          ftl-ast-refer-serialize
-         ftl-ast-partition
          ftl-ast-conflicts?
+         ftl-ast-partition
+         ftl-ast-inline
          ftl-ast-expr-depends
          ftl-ast-body-merge
          example-ftl
@@ -187,6 +188,8 @@
 ; TODO: default/given input values of the form 'input <ident> : <type> =
 ; <literal>;'
 
+; TODO: refactor into separate syntax module
+
 ; Note that identifiers are symbols
 
 ; interface definition
@@ -316,6 +319,62 @@
   (let*-values ([(trait-list other-list) (partition ftl-ast-trait? ast-list)]
                 [(class-list iface-list) (partition ftl-ast-class? other-list)])
     (list iface-list trait-list class-list)))
+
+; inline all inherited traits and implemented interfaces into class bodies and
+; produce a hash(eq) from symbols (interface names) to a list such that the head
+; is the interface AST and the rest are body ASTs representing the inlined
+; classes that implement the interface
+(define (ftl-ast-inline ast-list)
+  (define (undefined kind name)
+    (thunk (raise-arguments-error 'inline (string-append "undefined " kind)
+                                  "occurrence" (symbol->string name))))
+  (let* ([parts (ftl-ast-partition ast-list)]
+         [iface-list (list-ref parts 0)]
+         [trait-list (list-ref parts 1)]
+         [class-list (list-ref parts 2)]
+         [pair-trait (λ (trait)
+                       (cons (ftl-ast-trait-name trait)
+                             (ftl-ast-trait-body trait)))]
+         [pair-iface (λ (iface)
+                       (cons (ftl-ast-interface-name iface)
+                             (ftl-ast-body null
+                                           (ftl-ast-interface-fields iface)
+                                           null)))]
+         [trait-hash (make-immutable-hasheq
+                      (map pair-trait trait-list))]
+         [iface-hash (make-immutable-hasheq
+                      (map pair-iface iface-list))]
+         [inline (λ (class)
+                   (let* ([iface-name (ftl-ast-class-interface class)]
+                          [iface-body (hash-ref iface-hash
+                                                iface-name
+                                                (undefined "interface"
+                                                           iface-name))]
+                          [class-name (ftl-ast-class-name class)]
+                          [class-body (ftl-ast-class-body class)]
+                          [trait-names (ftl-ast-class-traits class)]
+                          [trait-bodies (map (λ (trait-name)
+                                               (hash-ref trait-hash
+                                                         trait-name
+                                                         (undefined "trait"
+                                                                    trait-name)))
+                                             trait-names)]
+                          [bodies (list* class-body iface-body trait-bodies)])
+                     (cons iface-name
+                           (cons class-name
+                                 (apply ftl-ast-body-merge bodies)))))]
+         [inlined (map inline class-list)]
+         [grouped (group-by car inlined eq?)] ; requires Racket v6.3+
+         ; to transform each grouping into an association, pull a copy of the
+         ; symbol (interface name) out front, cons with a list of the interface
+         ; "body" followed by the inlined class bodies of that interface in no
+         ; particular order.
+         [assoced (map (λ (group)
+                           (list* (caar group)
+                                  (hash-ref iface-hash (caar group))
+                                  (map cdr group)))
+                       grouped)])
+    assoced))
 
 (define ftl-parse
   (parser
