@@ -44,7 +44,7 @@
 ;; (later, this should be read from a sched file, parsed and stored in a racket data structure automatically):
 (define example-schedule '([TD (Root child a) (Midnode left a) (Midnode right a)]))
 
-;; Structs for representing derivation trees : each node has a name, class, interface, and zero or more attributes and children
+;; For representing derivation trees : each node has a name, class, interface, and zero or more attributes and children
 (struct parse_tree
   (name
    parent_name
@@ -53,6 +53,7 @@
    attrs
    children) #:mutable #:transparent)
 
+;; For representing the attributes in a node
 (struct attribute
   (name
    (value #:mutable)
@@ -88,12 +89,11 @@
                            (list(attribute 'a 0))
                            '()))))))
 
-(define generated-code (list))
-
+;; To update the attribute values 
 (define (set-attr! att val)
   (set-attribute-value! att val))
 
-;; go through the schedule and get the attributes assigned in TD or BU manner. Then call another method to actually do the assignment.
+;; Go through the schedule and get the attributes assigned in TD or BU manner. Then call another method to actually do the assignment.
 (define (gen-code schedule grammar tree)
  (map (λ(x)
        (cond
@@ -102,6 +102,7 @@
          [(equal? (car x) 'BU)
           (let ([node-attr (cdr x)]) (do-bu-assignment node-attr grammar tree))])) schedule) (void))
 
+;; Top-down algorithm
 (define (do-td-assignment attr grammar tree)
  (map (λ(x)
         (cond
@@ -112,6 +113,7 @@
           [(not (equal? (parse_tree-name tree) (cadr x)))
            (map (λ(y) (do-td-assignment attr grammar y)) (parse_tree-children tree))])) attr))
 
+;; Bottom-up algorithm
 (define (do-bu-assignment attr grammar tree)
   (map (λ(x)
          ((map (λ(y) (do-bu-assignment attr grammar y)) (parse_tree-children tree))
@@ -121,12 +123,14 @@
                [(not (null?(parse_tree-attrs tree)))
                 (assign (caddr x) grammar tree)])]))) attr))
 
+;; Traverse the grammar and if an element is a class, go through the list of actions and invoke another method to analyse the actions
 (define (assign attr-name grammar node)
   (map (λ(x)
          (cond
            [(ftl-ast-class? x)
             (traverse-actions attr-name (ftl-ast-body-actions (ftl-ast-class-body x)) node)])) grammar))
 
+;; Depending on the lhs and rhs of an an action, do the assignment of attributes accordingly
 (define (traverse-actions attr-name class-actions node)
   (map(λ(x)
         (cond
@@ -137,8 +141,15 @@
               (map (λ(y)
                      (cond
                        [(equal? (attribute-name y) attr-name)
-                        (find-parent-and-assign y example-tree (parse_tree-parent_name node) (ftl-ast-refer-label(ftl-ast-define-rhs x)))])) (parse_tree-attrs node))])])) class-actions))
+                        (find-parent-and-assign y example-tree (parse_tree-parent_name node) (ftl-ast-refer-label(ftl-ast-define-rhs x)))])) (parse_tree-attrs node))]
+             [(not (equal? (ftl-ast-refer-object (ftl-ast-define-rhs x)) 'self))
+              (map (λ(y)
+                     (cond
+                       [(equal? (attribute-name y) attr-name)
+                        (find-nonparent-and-assign y example-tree (ftl-ast-refer-object (ftl-ast-define-rhs x)) (ftl-ast-refer-label(ftl-ast-define-rhs x)))]))
+                   (parse_tree-attrs node))])])) class-actions))
 
+;; Assignment of an attribute of a node based on the value of the parent node
 (define (find-parent-and-assign node_attr entire-tree parent-name assignment-rhs)
   (cond
   [(equal? parent-name (parse_tree-name entire-tree))
@@ -152,4 +163,21 @@
           (unless null? j)
           (find-parent-and-assign node_attr j parent-name assignment-rhs)) (parse_tree-children entire-tree))]))
 
+
+;; Assignment of an attribute of a node based on the value of some node not a parent
+(define (find-nonparent-and-assign node_attr entire-tree nonparent-name assignment-rhs)
+  (cond
+  [(equal? nonparent-name (parse_tree-name entire-tree))
+   (map(λ(i)
+         (cond
+           [(equal? (attribute-name i) assignment-rhs)
+            (set-attr! node_attr (attribute-value i))
+            (display (attribute-value node_attr))])) (parse_tree-attrs entire-tree))]
+  [(not (equal? nonparent-name (parse_tree-name entire-tree)))
+   (map (λ(j)
+          (unless null? j)
+          (find-nonparent-and-assign node_attr j nonparent-name assignment-rhs)) (parse_tree-children entire-tree))]))
+
+
+;; Entry point
 (define codegen (gen-code example-schedule parsed-example-grammar example-tree))
