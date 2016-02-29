@@ -124,60 +124,48 @@
                 (assign (caddr x) grammar tree)])]))) attr))
 
 ;; Traverse the grammar and if an element is a class, go through the list of actions and invoke another method to analyse the actions
-(define (assign attr-name grammar node)
+(define (assign attr-name grammar tree)
   (map (λ(x)
          (cond
            [(ftl-ast-class? x)
-            (traverse-actions attr-name (ftl-ast-body-actions (ftl-ast-class-body x)) node)])) grammar))
+            (traverse-actions attr-name (ftl-ast-body-actions (ftl-ast-class-body x)) tree)])) grammar))
 
-;; Depending on the lhs and rhs of an an action, do the assignment of attributes accordingly
-(define (traverse-actions attr-name class-actions node)
+;; Depending on the lhs and rhs of an action, do the assignment of attributes accordingly
+(define (traverse-actions attr-name class-actions tree)
   (map(λ(x)
         (cond
-          [(and (and (equal? (parse_tree-name node) (ftl-ast-refer-object (ftl-ast-define-lhs x))) (equal? attr-name (ftl-ast-refer-label (ftl-ast-define-lhs x))))
-                (not (equal? (parse_tree-name node) 'self)))
+          [(and (equal? (parse_tree-name tree) (ftl-ast-refer-object (ftl-ast-define-lhs x))) (equal? attr-name (ftl-ast-refer-label (ftl-ast-define-lhs x))))              
            (cond 
              [(equal? (ftl-ast-refer-object (ftl-ast-define-rhs x)) 'self)
               (map (λ(y)
                      (cond
                        [(equal? (attribute-name y) attr-name)
-                        (find-parent-and-assign y example-tree (parse_tree-parent_name node) (ftl-ast-refer-label(ftl-ast-define-rhs x)))])) (parse_tree-attrs node))]
+                        (find-node-and-assign y example-tree (parse_tree-parent_name tree) (ftl-ast-refer-label(ftl-ast-define-rhs x)))])) (parse_tree-attrs tree))]
              [(not (equal? (ftl-ast-refer-object (ftl-ast-define-rhs x)) 'self))
               (map (λ(y)
                      (cond
                        [(equal? (attribute-name y) attr-name)
-                        (find-nonparent-and-assign y example-tree (ftl-ast-refer-object (ftl-ast-define-rhs x)) (ftl-ast-refer-label(ftl-ast-define-rhs x)))]))
-                   (parse_tree-attrs node))])])) class-actions))
+                        (find-node-and-assign y example-tree (ftl-ast-refer-object (ftl-ast-define-rhs x)) (ftl-ast-refer-label(ftl-ast-define-rhs x)))]))
+                   (parse_tree-attrs tree))])])) class-actions))
 
-;; Assignment of an attribute of a node based on the value of the parent node
-(define (find-parent-and-assign node_attr entire-tree parent-name assignment-rhs)
+;; Assignment of an attribute of a node based on the rhs node
+(define (find-node-and-assign node_attr entire-tree parent-name assignment-rhs)
   (cond
   [(equal? parent-name (parse_tree-name entire-tree))
    (map(λ(i)
          (cond
            [(equal? (attribute-name i) assignment-rhs)
-            (set-attr! node_attr (attribute-value i))
-            (display (attribute-value node_attr))])) (parse_tree-attrs entire-tree))]
+            (set-attr! node_attr (attribute-value i))])) (parse_tree-attrs entire-tree))]
   [(not (equal? parent-name (parse_tree-name entire-tree)))
    (map (λ(j)
           (unless null? j)
-          (find-parent-and-assign node_attr j parent-name assignment-rhs)) (parse_tree-children entire-tree))]))
+          (find-node-and-assign node_attr j parent-name assignment-rhs)) (parse_tree-children entire-tree))]))
 
 
-;; Assignment of an attribute of a node based on the value of some node not a parent
-(define (find-nonparent-and-assign node_attr entire-tree nonparent-name assignment-rhs)
-  (cond
-  [(equal? nonparent-name (parse_tree-name entire-tree))
-   (map(λ(i)
-         (cond
-           [(equal? (attribute-name i) assignment-rhs)
-            (set-attr! node_attr (attribute-value i))
-            (display (attribute-value node_attr))])) (parse_tree-attrs entire-tree))]
-  [(not (equal? nonparent-name (parse_tree-name entire-tree)))
-   (map (λ(j)
-          (unless null? j)
-          (find-nonparent-and-assign node_attr j nonparent-name assignment-rhs)) (parse_tree-children entire-tree))]))
 
+example-tree
 
 ;; Entry point
 (define codegen (gen-code example-schedule parsed-example-grammar example-tree))
+
+example-tree
