@@ -125,11 +125,6 @@
                         label))))))
     (list self indexed current)))
 
-; constrain the symbolic values for assigned attributes and intermediate
-; accumulators at each step of an iteration
-(define (constrain-iter tree child-sequence iteration)
-  (void))
-
 ; constrain output attributes by symbolic evaluation and assertion
 (define (constrain runtime grammar tree) ; constrain angelic values
   (let* ([recurse (curry constrain runtime grammar)]
@@ -195,12 +190,14 @@
                                                       child-sequence
                                                       init
                                                       step))])
-            ; assert equalities of final accumulator values and self attributes
+            ; assert equalities of final accumulator values and attributes on
+            ; unindexed nodes
             (for ([binding accum])
-              (match-let ([(cons (cons object label) value) binding])
-                (when (eq? object 'self)
-                  (assert (eq? value
-                               (assoc-lookup attributes label))))))))
+              (match-let* ([(cons (cons object label) value) binding]
+                           [dep (ftl-ir-dependency object 'none label)])
+                (unless (eq? object child)
+                  (assert (eq? (load-dependency self (void) null null dep)
+                               value)))))))
     ; recurse into children
     (for ([subtrees (ftl-tree-children tree)])
       (for-each recurse (listify (cdr subtrees)))))))
