@@ -4,70 +4,154 @@
 ; Derivation
 
 (require xml
-         "../utility.rkt"
-         "translate.rkt")
+         "translate.rkt"
+         "runtime.rkt"
+         "../utility.rkt")
 
-(provide (struct-out ftl-derivation)
-         xml-derive
-         derive*
+(provide (struct-out ftl-tree)
+         ftl-tree-verify
+         ftl-tree-verify-input
+         ftl-tree-verify-output
+         ftl-tree-evaluate
+         ftl-tree-iterate
+         load-dependency
          example-deriv)
 
-(struct ftl-derivation
-  (symbol ; nonterminal symbol from vocabulary
-   option ; identifier of production alternative for this nonterminal
-   attributes ; list associating labels with values, such that an attribute is defined initially iff it is an input
-   children ; list associating child names with (lists of) derivations (all objects except 'self)
-   ) #:transparent)
+; derivations should _definitely_ be treated imperatively, using mutation
 
-; TODO: read derivation from XML
-(define (xml-derive xml-string)
-  ; XML tags are option names and attributes are inputs
-  ; children are expected to be in order, and sequences are consumed greedily
-  (define (derive grammar tree)
-    (void))
-  (derive (string->xexpr xml-string)))
+; (sub)derivation of an FTL attribute grammar
+(struct ftl-tree
+  (; nonterminal symbol from vocabulary
+   symbol
+   ; identifier of production alternative for this node
+   option
+   ; list associating labels with values, such that an attribute is defined
+   ; initially iff it is an input attribute
+   attributes
+   ; list associating child names with (lists of) derivations (all objects
+   ; except 'self)
+   children
+   ) #:mutable #:transparent)
 
-; TODO: generate symbolic derivation (derivation oracle)
-(define (derive* grammar height)
-  (let* ([symbol (choose* (hash-keys grammar))]
-         [option (choose* (hash-keys (hash-ref grammar symbol)))])
-    (ftl-derivation symbol
-                    option
-                    (void)
-                    (void))))
+; ------------------------------------------
+; Generation and Verification of Derivations
+; ------------------------------------------
 
-; -------------------------
-; Traversals of derivations
-; -------------------------
+; assert that the derivation is valid w.r.t. the given derivation, depending on
+; whether the derivation is input (unevaluated) or output (evaluated)
+(define (ftl-tree-verify runtime grammar derivation input)
+  (let* ([vocab (ftl-ir-grammar-vocabulary grammar)]
+         [symbol (ftl-tree-symbol derivation)]
+         [option (ftl-tree-option derivation)]
+         [attributes (ftl-tree-attributes derivation)]
+         [children (ftl-tree-children derivation)]
+         [production (assoc-lookup (assoc-lookup vocab symbol) option)]
+         [labels (ftl-ir-production-labels production)]
+         [inputs (ftl-ir-production-inputs production)]
+         [singletons (ftl-ir-production-singletons production)]
+         [sequences (ftl-ir-production-sequences production)])
+    ; validate the quantity of attributes
+    (assert (eq? (length attributes)
+                 (length (if input
+                             inputs
+                             labels))))
+    ; validate presence and types of given attributes
+    (for ([attribute attributes])
+      (match-let* ([(cons label value) attribute]
+                   [type (assoc-lookup labels label)]
+                   [type? (ftl-type-predicate
+                           (assoc-lookup (ftl-runtime-types runtime) type))])
+        (when input
+          (assert (not (memq label inputs))))
+        (assert (type? value))))
+    ; validate presence and types of given singleton children
+    (for ([child singletons])
+      (assert (associated? children (car child)))
+      (let ([child-tree (assoc-lookup children (car child))])
+        (assert (not (list? child-tree)))
+        (assert (eq? (ftl-tree-symbol child-tree)
+                     (cdr child)))))
+    ; validate presence and types of given sequence children
+    (for ([child sequences])
+      (assert (associated? children (car child)))
+      (let ([child-trees (assoc-lookup children (car child))])
+        (assert (list? child-trees))
+        (for-each (λ (child-tree)
+                    (assert (eq? (ftl-tree-symbol child-tree)
+                                 (cdr child))))
+                  child-trees)))
+    ; now recursively validate each child subtree
+    (for ([child-binding children])
+      (let ([child (cdr child-binding)])
+        (if (list? child)
+            (for-each (λ (subchild)
+                        (ftl-tree-verify runtime grammar subchild input))
+                      child)
+            (ftl-tree-verify runtime grammar child input))))))
 
-; FIXME: how to control or specify "short-circuited" traversals?
-; Pertaining to the above, is the conservative method of aborting a
-; traversal if the subtree is a certain nonterminal sufficient? How
-; about including an 'abort'/'short-circuit'/'guard' parameter to the
-; traversal functions below, to decide whether to continue the traversal
-; as a function of the current node (usually the nonterminal and the
-; production)?
+(define (ftl-tree-verify-input runtime grammar derivation)
+  (ftl-tree-verify runtime grammar derivation #t))
 
-; child must be a sequence
-; accumulator is list associating $- attributes to values
-; initial : accumulator
-; visit-parent : accumulator * node -> accumulator
-; visit-child : accumulator * node * node -> accumulator
-; TODO: in-order (i.e., "recursive") traversal
-(define (inorder tree child initial visit-parent visit-child)
-  (void))
+(define (ftl-tree-verify-output runtime grammar derivation)
+  (ftl-tree-verify runtime grammar derivation #f))
 
-; visit-parent : node -> void
-; visit-child : node * node -> void
-; TODO: pre-order traversal
-(define (preorder tree child visit-parent visit-child)
-  (void))
+; ------------------------
+; Evaluation of attributes
+; ------------------------
 
-; visit-parent : node -> void
-; visit-child : node * node -> void
-; TODO: post-order traversal
-(define (postorder tree child visit-parent visit-child)
-  (void))
+; load a dependency using the current node, the indexed node, the previous
+; accumulator, and the current accumulator (an association list)
+; TODO: really need both previous and current? For angelic, it'll be fully
+; filled with symbolic attributes, but scheduled will just fold it along
+; the iterated evaluations.
+(define (load-dependency self indexed previous current dependency)
+  (match dependency
+    [(ftl-ir-dependency 'self 'none label)
+     (assoc-lookup (ftl-tree-attributes self) label)]
+    [(ftl-ir-dependency object 'none label)
+     (assoc-lookup (ftl-tree-attributes
+                    (assoc-lookup (ftl-tree-children self) object))
+                   label)]
+    [(ftl-ir-dependency object 'previous label)
+     (assoc-lookup previous (cons object label))]
+    [(ftl-ir-dependency object 'first label)
+     (assoc-lookup (ftl-tree-attributes
+                    (first (assoc-lookup (ftl-tree-children self) object)))
+                   label)]
+    [(ftl-ir-dependency object 'current label)
+     ; TODO: assert that object actually is indexed?
+     (assoc-lookup current
+                   label
+                   (assoc-lookup (ftl-tree-attributes indexed) label))]
+    [(ftl-ir-dependency object 'last label)
+     (assoc-lookup (ftl-tree-attributes
+                    (last (assoc-lookup (ftl-tree-children self) object)))
+                   label)]))
+
+; perform an IR evaluation
+(define (ftl-tree-evaluate self indexed previous current evaluation)
+  (match-let* ([(ftl-ir-evaluation function dependencies) evaluation]
+               [arguments (vector-map (curry load-dependency
+                                             self
+                                             indexed
+                                             previous
+                                             current)
+                                      dependencies)])
+    (function arguments)))
+
+; self : node
+; children : [node]
+; init : node -> [(k, v)]
+; step : node * node * [(k, v)] -> node * node * [(k, v)]
+; iterate : self * children * init * step -> node * [node]
+; iterate over a child sequence, invoking a function at each step
+(define (ftl-tree-iterate self children init step)
+  (car (foldl (λ (child result)
+                (match-let* ([(list self new-children accum) result]
+                             [(list new-self new-child new-accum) (step self child accum)])
+                  (list new-self (cons new-child new-children) new-accum)))
+              (list self null (init self))
+              children)))
 
 ; -------------------------------------
 ; Example derivation of example grammar
@@ -85,26 +169,17 @@
 
 ; an example derivation of the example FTL string (example-ftl from parse.rkt)
 (define example-deriv
-  (ftl-derivation 'Root
-                  'Origin
-                  (let ([symtab (make-symtab '(x y) (void))])
-                    (symtab-set! symtab 'x 1)
-                    (symtab-set! symtab 'y 17)
-                    symtab)
-                  (hasheq 'p
-                          (list (ftl-derivation 'Point
-                                                'Endpoint
-                                                (make-symtab '(x y bx by) (void))
-                                                (hasheq))
-                                (ftl-derivation 'Point
-                                                'Relative
-                                                (let ([symtab (make-symtab '(x y bx by dx dy)
-                                                                           (void))])
-                                                  (symtab-set! symtab 'dx 3)
-                                                  (symtab-set! symtab 'dy 7)
-                                                  symtab)
-                                                (hasheq 'p
-                                                        (list (ftl-derivation 'Point
-                                                                              'Endpoint
-                                                                              (make-symtab '(x y bx by) (void))
-                                                                              (hasheq)))))))))
+  (ftl-tree 'Root
+            'Origin
+            '((x . 7) (y . 10))
+            `((p . (,(ftl-tree 'Point
+                               'Endpoint
+                               '()
+                               '())
+                    ,(ftl-tree 'Point
+                               'Relative
+                               '((dx . 3) (dy . 7))
+                               `((p . (,(ftl-tree 'Point
+                                                  'Endpoint
+                                                  '()
+                                                  '()))))))))))

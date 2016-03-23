@@ -2,13 +2,7 @@
 
 (require "../utility.rkt")
 
-(provide ftl-ast-conflicts?
-         ftl-ast-partition
-         ftl-ast-inline
-         ftl-ast-validate
-         ftl-ast-expr-depends
-         ftl-ast-body-merge
-         (struct-out ftl-ast-interface)
+(provide (struct-out ftl-ast-interface)
          (struct-out ftl-ast-trait)
          (struct-out ftl-ast-class)
          (struct-out ftl-ast-body)
@@ -21,7 +15,16 @@
          (struct-out ftl-ast-expr-call)
          (struct-out ftl-ast-expr-unary)
          (struct-out ftl-ast-expr-binary)
-         (struct-out ftl-ast-expr-cond))
+         (struct-out ftl-ast-expr-cond)
+         ftl-ast-refer->pair
+         ftl-ast-expr-depends
+         ftl-ast-body-merge
+         ftl-ast-conflicts?
+         ftl-ast-partition
+         ftl-ast-inline
+         ftl-ast-validate
+         ftl-ast-map-class
+         ftl-ast-for-each-class)
 
 ; Note that identifiers are symbols
 
@@ -144,12 +147,15 @@
 ; Check for conflicts in the top-level namespace of interfaces, traits, and
 ; classes.
 (define (ftl-ast-conflicts? ast-list)
-  (let ([pr (λ (ast)
-              (match ast
-                [(ftl-ast-interface name _) name]
-                [(ftl-ast-trait name _) name]
-                [(ftl-ast-class name _ _ _) name]))])
-    (pr (check-duplicates ast-list eq? #:key pr))))
+  (let* ([pr (λ (ast)
+               (match ast
+                 [(ftl-ast-interface name _) name]
+                 [(ftl-ast-trait name _) name]
+                 [(ftl-ast-class name _ _ _) name]))]
+         [dup (check-duplicates ast-list eq? #:key pr)])
+    (if dup
+        (pr dup)
+        (void))))
 
 ; Partition the list of top-level ASTs into [a list of] three lists of ASTs:
 ; interfaces, traits, and classes.
@@ -158,11 +164,11 @@
                 [(class-list iface-list) (partition ftl-ast-class? other-list)])
     (list iface-list trait-list class-list)))
 
-; Given a (conflict-free) list of top-level AST nodes, produce a hash(eq) table
-; mapping each symbol of the grammar's implicit alphabet (i.e., interface names)
-; with the interface as a body AST paired with another list associating each
+; Given a (conflict-free) list of top-level AST nodes, produce an list
+; associating each symbol of the grammar's implicit alphabet (i.e., interface
+; names) with the interface as a body AST paired with another list associating each
 ; production option (i.e., class name) with its inlined body AST. The output of
-; this function is often referred to as an AST vocabulary or an AST hash.
+; this function is often referred to as an AST vocabulary or an AST map.
 (define (ftl-ast-inline ast-list)
   (define (undefined kind name)
     (thunk (raise-arguments-error 'inline (string-append "undefined " kind)
@@ -179,24 +185,22 @@
                              (ftl-ast-body null
                                            (ftl-ast-interface-fields iface)
                                            null)))]
-         [trait-hash (make-immutable-hasheq
-                      (map pair-trait trait-list))]
-         [iface-hash (make-immutable-hasheq
-                      (map pair-iface iface-list))]
+         [trait-map (map pair-trait trait-list)]
+         [iface-map (map pair-iface iface-list)]
          [inline (λ (class)
                    (let* ([iface-name (ftl-ast-class-interface class)]
-                          [iface-body (hash-ref iface-hash
-                                                iface-name
-                                                (undefined "interface"
-                                                           iface-name))]
+                          [iface-body (assoc-lookup iface-map
+                                                    iface-name
+                                                    (undefined "interface"
+                                                               iface-name))]
                           [class-name (ftl-ast-class-name class)]
                           [class-body (ftl-ast-class-body class)]
                           [trait-names (ftl-ast-class-traits class)]
                           [trait-bodies (map (λ (trait-name)
-                                               (hash-ref trait-hash
-                                                         trait-name
-                                                         (undefined "trait"
-                                                                    trait-name)))
+                                               (assoc-lookup trait-map
+                                                             trait-name
+                                                             (undefined "trait"
+                                                                        trait-name)))
                                              trait-names)]
                           [bodies (list* class-body iface-body trait-bodies)])
                      (cons iface-name
@@ -204,51 +208,51 @@
                                  (apply ftl-ast-body-merge bodies)))))]
          [inlined (map inline class-list)]
          [grouped (group-by car inlined eq?)] ; requires Racket v6.3+
-         ; to transform each grouping into an association, pull a copy of the
-         ; symbol (interface name) out front, cons with a list of the interface
-         ; "body" followed by the inlined class bodies of that interface in no
-         ; particular order.
+         ; transform the list of groupings into a list associating each
+         ; interface name to a list of inlined class bodies (that implement said
+         ; interface)
          [assoced (map (λ (group)
-                           (list* (caar group)
-                                  (hash-ref iface-hash (caar group))
-                                  (map cdr group)))
-                       grouped)]
-         [hashed (make-hasheq assoced)])
-    ; make sure all unimplemented interfaces are included (I guess?)
-    (hash-for-each iface-hash
-                   (λ (symbol iface)
-                     (unless (hash-has-key? hashed symbol)
-                       (hash-set! hashed (list* symbol iface null)))))
-    hashed))
+                         (cons (caar group)
+                               (map cdr group)))
+                       grouped)])
+    ; include
+    ; make sure all unimplemented interfaces are included
+    ; TODO: is this actually an error?
+    (map (λ (mapping)
+           (match-let ([(cons symbol iface) mapping])
+             (list* symbol
+                    iface
+                    (assoc-lookup assoced symbol null))))
+         iface-map)))
 
-(define (for-each-class proc ast-hash)
-  (hash-for-each ast-hash
-                 (λ (symbol production)
-                   (let ([classes (rest production)])
-                     (cdrmap proc classes)))))
+(define (ftl-ast-for-each-class proc ast-map)
+  (for-each (λ (mapping)
+              (let ([classes (rest (cdr mapping))])
+                (cdrmap proc classes)))
+            ast-map))
 
-(define (map-class proc ast-hash)
-  (make-immutable-hasheq
-   (hash-map ast-hash
-             (λ (symbol production)
-               (let ([iface (first production)]
-                     [classes (rest production)])
-                 (list* symbol
-                       iface
-                       (cdrmap proc classes)))))))
+(define (ftl-ast-map-class proc ast-map)
+  (map (λ (mapping)
+         (match-let ([(list-rest symbol iface classes) mapping])
+           (list* symbol
+                  iface
+                  (cdrmap proc classes))))
+       ast-map))
 
-; Check for certain semantic errors in an inlined AST hash:
+; Check for certain semantic errors in an inlined AST map:
 ;  * duplicate declarations among a class, its trait(s), and its interface
 ;  * duplicate definitions among a class and its trait(s)
 ;  * definitions of undeclared traits among a class and its trait(s)
 ;  * the existence of traits inherited by a class
-(define (ftl-ast-validate ast-hash)
+; Additionally, "deloopify" the actions of all body ASTs, by wrapping each
+; attribute definition in its own AST loop node if applicable.
+(define (ftl-ast-validate ast-map)
   (let* ([deloopify (λ (act)
                       (if (ftl-ast-loop? act)
                           (ftl-ast-loop-actions act)
                           act))]
          [check-duplicate-fields (λ (access identify equal has-duplicate)
-                                   (for-each-class
+                                   (ftl-ast-for-each-class
                                     (λ (class)
                                       ; check-duplicates requires Racket v6.3+
                                       (let ([duplicate (check-duplicates
@@ -257,7 +261,7 @@
                                                         #:key identify)])
                                         (when duplicate
                                           (has-duplicate class duplicate))))
-                                    ast-hash))]
+                                    ast-map))]
          [has-duplicate (λ (part class name)
                           (raise-arguments-error
                            'ftl-ast-validate
@@ -301,4 +305,4 @@
                             ftl-ast-child-name
                             eq?
                             has-duplicate-child)
-    ast-hash))
+    ast-map))

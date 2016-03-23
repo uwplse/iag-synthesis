@@ -2,9 +2,11 @@
 
 (require racket/dict)
 
-(provide lookup
-         defined
-         unique?
+(provide assoc-lookup
+         associated?
+         assoc-unique?
+         assoc-group
+         assoc-map-keys
          carmap
          cdrmap
          domain
@@ -19,20 +21,37 @@
 ; --------------------------
 
 ; whether each key in an association list has been uniquely assigned
-(define (unique? alist)
+(define (assoc-unique? alist)
   (not (not (check-duplicates alist eq? #:key car))))
 
-(define (defined alist symbol)
-  (not (not (member (cons symbol (void))
-                    alist
-                    (λ (b0 b1) ; equate two bindings
-                      (eq? (car b0) (car b1)))))))
+; whether a given symbol bound to (associated with) some value
+(define (associated? alist symbol)
+  (not (not (memf (λ (binding)
+                    (eq? symbol (car binding)))
+                  alist))))
 
-; lookup the value of a symbol in an association list or void
-(define (lookup alist symbol)
+; lookup the value of a symbol in an association list; if the symbol is unbound,
+; then return the value of failure-result (or its invocation if a procedure)
+(define (assoc-lookup alist symbol [failure-result void])
   (match (assoc symbol alist eq?)
     [(cons _ value) value]
-    [#f (void)]))
+    [#f (if (procedure? failure-result)
+            (failure-result)
+            failure-result)]))
+
+; transform a list into a list associating symbols with sublists using the given
+; key projection function
+(define (assoc-group key list)
+  (map (λ (group)
+         (cons (key (car group))
+               group))
+       (group-by key list eq?)))
+
+(define (assoc-map-keys f alist)
+  (map (λ (p)
+         (let ([k (car p)])
+           (cons k (f k))))
+         alist))
 
 ; ------------------------
 ; Random utility functions
