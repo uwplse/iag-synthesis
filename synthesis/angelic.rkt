@@ -77,18 +77,18 @@
 ; constrain the symbolic values of a loop's initial accumulator
 (define (constrain-init actions accum* self)
   (let ([current (accum*)]) ; generate a symbolic accumulator
-    (for ([binding current])
-      (match-let* ([(cons name defn) binding]
+    (for ([action actions])
+      (match-let* ([(cons name defn) action]
                    [action (assoc-lookup actions name)]
                    [eval (ftl-ir-reduction-init
                           (ftl-ir-definition-evaluate
                            defn))]
-                   [sym (cdr binding)]
-                   [val (evaluate self
-                                  (void)
-                                  null
-                                  null
-                                  eval)])
+                   [sym (assoc-lookup current name)]
+                   [val (ftl-tree-evaluate self
+                                           (void)
+                                           null
+                                           null
+                                           eval)])
         (assert (eq? val sym))))
     current))
 
@@ -166,16 +166,17 @@
     (for ([iteration iterations])
       (if (void? (car iteration))
           ; iterate over nothing
-          (for-each (λ (action)
-                      (match-let* ([(cons (cons object label) defn) action]
-                                   [dep (ftl-ir-dependency object
-                                                           'none
-                                                           label)]
-                                   [sym (load-dependency tree (void) null null dep)]
-                                   [eval (ftl-ir-definition-evaluate defn)]
-                                   [val (ftl-tree-evaluate tree (void) null null eval)])
-                        (assert (eq? sym val))))
-                    (cdr iteration))
+          (for ([action (cdr iteration)])
+            (match-let* ([(cons (cons object label) defn) action]
+                         [dep (ftl-ir-dependency object
+                                                 'none
+                                                 label)]
+                         [sym (load-dependency tree (void) null null dep)]
+                         [eval (ftl-ir-definition-evaluate defn)]
+                         [val (ftl-tree-evaluate tree (void) null null eval)])
+              ; assert equality of attribute to its value
+              (assert (eq? sym val))))
+
           ; iterate over child sequence
           (match-let* ([(cons child actions) iteration]
                        [child-sequence (assoc-lookup children child)]
@@ -187,11 +188,19 @@
                                                              typeof)
                                                     folds)]
                        [accum* (thunk (cdrmap (λ (oracle) (oracle))
-                                              accum*-list))])
-            (ftl-tree-iterate tree
-                              child-sequence
-                              (curry constrain-init folds accum*)
-                              (curry constrain-step actions accum* child)))))
+                                              accum*-list))]
+                       [init (curry constrain-init folds accum*)]
+                       [step (curry constrain-step actions accum* child)]
+                       [accum (last (ftl-tree-iterate tree
+                                                      child-sequence
+                                                      init
+                                                      step))])
+            ; assert equalities of final accumulator values and self attributes
+            (for ([binding accum])
+              (match-let ([(cons (cons object label) value) binding])
+                (when (eq? object 'self)
+                  (assert (eq? value
+                               (assoc-lookup attributes label))))))))
     ; recurse into children
     (for ([subtrees (ftl-tree-children tree)])
-      (for-each recurse (listify (cdr subtrees))))))
+      (for-each recurse (listify (cdr subtrees)))))))

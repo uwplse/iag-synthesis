@@ -143,15 +143,15 @@
 ; children : [node]
 ; init : node -> [(k, v)]
 ; step : node * node * [(k, v)] -> node * node * [(k, v)]
-; iterate : self * children * init * step -> node * [node]
+; iterate : self * children * init * step -> node * [node] * [(k, v)]
 ; iterate over a child sequence, invoking a function at each step
 (define (ftl-tree-iterate self children init step)
-  (car (foldl (λ (child result)
-                (match-let* ([(list self new-children accum) result]
-                             [(list new-self new-child new-accum) (step self child accum)])
-                  (list new-self (cons new-child new-children) new-accum)))
-              (list self null (init self))
-              children)))
+  (foldl (λ (child result)
+           (match-let* ([(list self new-children accum) result]
+                        [(list new-self new-child new-accum) (step self child accum)])
+             (list new-self (cons new-child new-children) new-accum)))
+         (list self null (init self))
+         children))
 
 ; -------------------------------------
 ; Example derivation of example grammar
