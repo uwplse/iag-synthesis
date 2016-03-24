@@ -23,10 +23,8 @@
                (ftl-tree-symbol input)))
   ; let all output attribute values be symbolic
   (let ([output (symbolize runtime grammar input)])
-    ; assert that the symbolic derivation is valid
-    ;(ftl-tree-verify-output runtime grammar output)
     ; assert the actions' assignments in whatever order
-    (constrain runtime grammar output) ; yeah we'd like to read the actual errors, thanks
+    (constrain runtime grammar output)
     ; request that Rosette solve for the attributes' concrete values
     (define solution (solve #t))
     (displayln "solution: ")
@@ -196,7 +194,7 @@
               (match-let* ([(cons (cons object label) value) binding]
                            [dep (ftl-ir-dependency object 'none label)])
                 (unless (eq? object child)
-                  (assert (eq? (load-dependency self (void) null null dep)
+                  (assert (eq? (load-dependency tree (void) null null dep)
                                value)))))))
     ; recurse into children
     (for ([subtrees (ftl-tree-children tree)])
