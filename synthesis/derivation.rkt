@@ -38,7 +38,9 @@
 ; ------------------------------------------
 
 ; assert that the derivation is valid w.r.t. the given derivation, depending on
-; whether the derivation is input (unevaluated) or output (evaluated)
+; whether the derivation is input (unevaluated) or output (evaluated); note that
+; this does not work with symbolic derivations, as symbolic numbers fail fixnum?
+; and the association list utility functions need to be symbolically lifted.
 (define (ftl-tree-verify runtime grammar derivation input)
   (let* ([vocab (ftl-ir-grammar-vocabulary grammar)]
          [symbol (ftl-tree-symbol derivation)]
@@ -62,7 +64,7 @@
                    [type? (ftl-type-predicate
                            (assoc-lookup (ftl-runtime-types runtime) type))])
         (when input
-          (assert (not (memq label inputs))))
+          (assert (memq label inputs)))
         (assert (type? value))))
     ; validate presence and types of given singleton children
     (for ([child singletons])
@@ -73,20 +75,19 @@
                      (cdr child)))))
     ; validate presence and types of given sequence children
     (for ([child sequences])
-      (assert (associated? children (car child)))
-      (let ([child-trees (assoc-lookup children (car child))])
-        (assert (list? child-trees))
-        (for-each (λ (child-tree)
-                    (assert (eq? (ftl-tree-symbol child-tree)
-                                 (cdr child))))
-                  child-trees)))
+      (match-let ([(cons child-name child-symbol) child])
+        (assert (associated? children child-name))
+        (let ([child-trees (assoc-lookup children child-name)])
+          (assert (list? child-trees))
+          (for ([child-tree child-trees])
+            (assert (eq? (ftl-tree-symbol child-tree)
+                         child-symbol))))))
     ; now recursively validate each child subtree
     (for ([child-binding children])
       (let ([child (cdr child-binding)])
         (if (list? child)
-            (for-each (λ (subchild)
-                        (ftl-tree-verify runtime grammar subchild input))
-                      child)
+            (for ([subchild child])
+              (ftl-tree-verify runtime grammar subchild input))
             (ftl-tree-verify runtime grammar child input))))))
 
 (define (ftl-tree-verify-input runtime grammar derivation)
