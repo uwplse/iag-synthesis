@@ -9,6 +9,7 @@
          "../utility.rkt")
 
 (provide (struct-out ftl-tree)
+         ftl-tree*
          ftl-tree-verify
          ftl-tree-verify-input
          ftl-tree-verify-output
@@ -36,6 +37,39 @@
 ; ------------------------------------------
 ; Generation and Verification of Derivations
 ; ------------------------------------------
+
+; derive a symbolic FTL tree of an IR grammar bounded by the given height
+(define (ftl-tree* runtime grammar width height input)
+  (let* ([vocabulary (ftl-ir-grammar-vocabulary grammar)]
+         [sentence (ftl-ir-grammar-sentence grammar)]
+         [types (ftl-runtime-types runtime)])
+    (define (recurse symbol bound)
+      (match-let* ([(cons option production) (apply choose* (assoc-lookup vocabulary symbol))]
+                   [singletons (ftl-ir-production-singletons production)]
+                   [sequences (ftl-ir-production-sequences production)]
+                   [inputs (ftl-ir-production-inputs production)]
+                   [input? (λ (label) (memq label inputs))]
+                   [labels (ftl-ir-production-labels production)]
+                   [value* (λ (type)
+                             ((ftl-type-generate (assoc-lookup types type))))])
+        ; tell Rosette to ensure that terminals are chosen at the appropriate
+        ; point(s)
+        (assert (>= bound 0))
+        ; construct the symbolically filled-out node
+        (ftl-tree symbol
+                  option
+                  (cdrmap value*
+                          (if input
+                              (filter (compose input? car) labels)
+                              labels))
+                  (append (cdrmap (λ (child-symbol)
+                                    (recurse child-symbol (- bound 1)))
+                                  singletons)
+                          (cdrmap (λ (child-symbol)
+                                    (for/list ([_ (in-range width)])
+                                      (recurse child-symbol (- bound 1))))
+                                  sequences)))))
+    (recurse sentence height)))
 
 ; assert that the derivation is valid w.r.t. the given derivation, depending on
 ; whether the derivation is input (unevaluated) or output (evaluated); note that
