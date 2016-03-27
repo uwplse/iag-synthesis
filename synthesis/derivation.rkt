@@ -11,6 +11,7 @@
 (provide (struct-out ftl-tree)
          xexpr->ftl-tree
          ftl-tree*
+         ftl-tree-symbolize!
          ftl-tree-verify
          ftl-tree-verify-input
          ftl-tree-verify-output
@@ -76,6 +77,31 @@
                                       (recurse child-symbol (- bound 1))))
                                   sequences)))))
     (recurse sentence height)))
+
+; bind any missing attributes of the given tree to symbolic values
+(define (ftl-tree-symbolize! runtime grammar tree)
+  (match-let* ([listify (λ (l)
+                          (if (list? l)
+                              l
+                              (list l)))]
+               [vocab (ftl-ir-grammar-vocabulary grammar)]
+               [(ftl-tree symbol option bindings children) tree]
+               [production (assoc-lookup (assoc-lookup vocab symbol) option)]
+               [labels (ftl-ir-production-labels production)]
+               [value* (λ (type)
+                         ((ftl-type-generate
+                           (assoc-lookup (ftl-runtime-types runtime) type))))])
+
+    ; bind all unbound attributes to symbolic values
+    (for ([label-type labels])
+      (match-let ([(cons label type) label-type])
+        (unless (associated? bindings label)
+          (ftl-tree-bind! tree 'self label (value* type)))))
+
+    ; recursively do the same on each child tree
+    (for ([child children])
+      (for ([subchild (listify (cdr child))])
+        (ftl-tree-symbolize! runtime grammar subchild)))))
 
 ; assert that the derivation is valid w.r.t. the given derivation, depending on
 ; whether the derivation is input (unevaluated) or output (evaluated); note that

@@ -9,71 +9,34 @@
          "runtime.rkt"
          "derivation.rkt")
 
+(provide ftl-angelic-interpret
+         ftl-angelic-evaluate)
+
 ; interpret : L(G_FTL) * L([[L(G_FTL)]]) -> L([[L(G_FTL)]])
-(define (ftl-interpret-angelic runtime ftl root tree)
+(define (ftl-angelic-interpret runtime ftl root tree)
   (current-bitwidth 6)
-  (ftl-evaluate-angelic runtime (ftl-ir-translate (parse-ftl ftl) root runtime) tree))
+  (ftl-angelic-evaluate runtime (ftl-ir-translate (parse-ftl ftl) root runtime) tree))
 
 (define (interpret-example)
-  (ftl-evaluate-angelic ftl-base-runtime example-ir example-deriv))
+  (ftl-angelic-evaluate ftl-base-runtime example-ir example-deriv))
 
-(define (ftl-evaluate-angelic runtime grammar input)
+(define (ftl-angelic-evaluate runtime grammar derivation)
   ; assert that we actually were given a root
   (assert (eq? (ftl-ir-grammar-sentence grammar)
-               (ftl-tree-symbol input)))
+               (ftl-tree-symbol derivation)))
   ; let all output attribute values be symbolic
-  (let ([output (symbolize runtime grammar input)])
-    ; assert the actions' assignments in whatever order
-    (constrain runtime grammar output)
-    ; request that Rosette solve for the attributes' concrete values
-    (define solution (solve #t))
-    (displayln "solution: ")
-    (displayln solution)
-    ; substitute the solved concrete values in for the symbolic attribute values
-    (evaluate output solution)))
-
-; generate a version of the given derivation with symbolic output attributes
-(define (symbolize runtime grammar derivation)
-  (let ([oracle (λ (type)
-                  (ftl-type-generate
-                   (assoc-lookup (ftl-runtime-types runtime) type)))]
-        [vocab (ftl-ir-grammar-vocabulary grammar)])
-
-    ; recurse on either a child tree or list of child trees
-    (define (traverse child)
-      (if (list? child)
-          (map recurse child)
-          (recurse child)))
-    
-    (define (recurse tree)
-      (let* ([symbol (ftl-tree-symbol tree)]
-             [option (ftl-tree-option tree)]
-             [bindings (ftl-tree-attributes tree)]
-             [children (ftl-tree-children tree)]
-             [production (assoc-lookup (assoc-lookup vocab symbol) option)]
-             [labels (ftl-ir-production-labels production)]
-             [noninputs (filter (λ (label)
-                                  (not (associated? bindings (car label))))
-                                labels)])
-        ; bind all output attributes to symbolic values
-        (define (bind* label-type bindings)
-          (match-let* ([(cons label type) label-type]
-                       [oracle (ftl-type-generate
-                                (assoc-lookup
-                                 (ftl-runtime-types runtime)
-                                 type))])
-            (cons (cons label (oracle))
-                  bindings)))
-        
-        (ftl-tree symbol
-                  option
-                  (foldl bind* bindings noninputs)
-                  (cdrmap traverse children))))
-
-    (recurse derivation)))
+  (ftl-tree-symbolize! runtime grammar derivation)
+  ; assert the actions' assignments in whatever order
+  (ftl-angelic-constrain runtime grammar derivation)
+  ; request that Rosette solve for the attributes' concrete values
+  (define solution (solve #t)) ; putting constraints here hides error details
+  (displayln "solution: ")
+  (displayln solution)
+  ; substitute the solved concrete values in for the symbolic attribute values
+  (evaluate derivation solution))
 
 ; constrain the symbolic values of a loop's initial accumulator
-(define (constrain-init actions self current)
+(define (ftl-angelic-constrain-init actions self current)
   (for ([action actions])
     (match-let* ([(cons name defn) action]
                  [action (assoc-lookup actions name)]
@@ -87,7 +50,7 @@
 
 ; constrain the symbolic values of an intermediate step in a loop (i.e., assert
 ; equalities for assignments to the indexed node and/or the next accumulator)
-(define (constrain-step actions child self indexed previous current)
+(define (ftl-angelic-constrain-step actions child self indexed previous current)
   (for ([action actions])
     (match-let* ([(cons name defn) action]
                  [(cons object label) name]
@@ -114,8 +77,8 @@
   current)
 
 ; constrain output attributes by symbolic evaluation and assertion
-(define (constrain runtime grammar tree) ; constrain angelic values
-  (let* ([recurse (curry constrain runtime grammar)]
+(define (ftl-angelic-constrain runtime grammar tree) ; constrain angelic values
+  (let* ([recurse (curry ftl-angelic-constrain runtime grammar)]
          [vocab (ftl-ir-grammar-vocabulary grammar)]
          [symbol (ftl-tree-symbol tree)]
          [option (ftl-tree-option tree)]
@@ -172,14 +135,16 @@
                        [accum* (thunk (cdrmap (λ (oracle) (oracle))
                                               accum*-list))]
                        [final-accum
-                        (for/fold ([accum (constrain-init folds tree (accum*))])
+                        (for/fold ([accum (ftl-angelic-constrain-init folds
+                                                                      tree
+                                                                      (accum*))])
                                   ([child (assoc-lookup children child-name)])
-                          (constrain-step actions
-                                          child-name
-                                          tree
-                                          child
-                                          accum
-                                          (accum*)))])
+                          (ftl-angelic-constrain-step actions
+                                                      child-name
+                                                      tree
+                                                      child
+                                                      accum
+                                                      (accum*)))])
             ; assert equalities of final accumulator values and attributes on
             ; unindexed nodes
             (for ([binding final-accum])
