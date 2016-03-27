@@ -28,9 +28,6 @@
 ; Intermediate Representation
 ; ---------------------------
 
-; FIXME: attributes defined by a fold should be treated as pseudo-vectors, such
-; that both 'first, 'previous, 'current, and 'last are all allowed.
-
 ; Attribute dependencies with 'previous indices (e.g., object$-.alpha) valid if
 ; and only if the referenced attribute is defined by a fold in some loop context
 ; and the reference occurs in the context of a loop over the same child
