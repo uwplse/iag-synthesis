@@ -9,13 +9,13 @@
          "../utility.rkt")
 
 (provide (struct-out ftl-tree)
+         xexpr->ftl-tree
          ftl-tree*
          ftl-tree-verify
          ftl-tree-verify-input
          ftl-tree-verify-output
-         ftl-tree-evaluate
-         ftl-tree-iterate
-         load-dependency
+         ftl-tree-load
+         ftl-tree-bind!
          example-deriv)
 
 ; derivations should _definitely_ be treated imperatively, using mutation
@@ -37,6 +37,12 @@
 ; ------------------------------------------
 ; Generation and Verification of Derivations
 ; ------------------------------------------
+
+; derive an FTL tree of a grammar in IR form given an X-expression
+(define (xexpr->ftl-tree grammar xexpr)
+  ; XML tags are option names, attributes are attributes, and identifiers are
+  ; child names (duplicated for sequences)
+  (void))
 
 ; derive a symbolic FTL tree of an IR grammar bounded by the given height
 (define (ftl-tree* runtime grammar width height input)
@@ -130,16 +136,23 @@
 (define (ftl-tree-verify-output runtime grammar derivation)
   (ftl-tree-verify runtime grammar derivation #f))
 
-; ------------------------
-; Evaluation of attributes
-; ------------------------
+; -----------------------------
+; Loading and Binding Attribute
+; -----------------------------
 
-; load a dependency using the current node, the indexed node, the previous
-; accumulator, and the current accumulator (an association list)
-; TODO: really need both previous and current? For angelic, it'll be fully
-; filled with symbolic attributes, but scheduled will just fold it along
-; the iterated evaluations.
-(define (load-dependency self indexed previous current dependency)
+; bind a value to a label on the specified object relative to the given node by
+; functionally extending the attribute association list and destructively
+; updating the tree
+(define (ftl-tree-bind! self object label value)
+  (let ([node (if (eq? object 'self)
+                  self
+                  (assoc-lookup (ftl-tree-children self) object))]
+        [binding (cons label value)])
+    (set-ftl-tree-attributes! node (cons binding (ftl-tree-attributes node)))))
+
+; load a dependency from the current node, the indexed node, the previous
+; accumulator, or the current accumulator
+(define (ftl-tree-load self indexed previous current dependency)
   (match dependency
     [(ftl-ir-dependency 'self 'none label)
      (assoc-lookup (ftl-tree-attributes self) label)]
@@ -154,7 +167,7 @@
                     (first (assoc-lookup (ftl-tree-children self) object)))
                    label)]
     [(ftl-ir-dependency object 'current label)
-     ; TODO: assert that object actually is indexed?
+     ; TODO: (assert (eq? object child-name))?
      (assoc-lookup current
                    label
                    (assoc-lookup (ftl-tree-attributes indexed) label))]
@@ -162,31 +175,6 @@
      (assoc-lookup (ftl-tree-attributes
                     (last (assoc-lookup (ftl-tree-children self) object)))
                    label)]))
-
-; perform an IR evaluation
-(define (ftl-tree-evaluate self indexed previous current evaluation)
-  (match-let* ([(ftl-ir-evaluation function dependencies) evaluation]
-               [arguments (vector-map (curry load-dependency
-                                             self
-                                             indexed
-                                             previous
-                                             current)
-                                      dependencies)])
-    (function arguments)))
-
-; self : node
-; children : [node]
-; init : node -> [(k, v)]
-; step : node * node * [(k, v)] -> node * node * [(k, v)]
-; iterate : self * children * init * step -> node * [node] * [(k, v)]
-; iterate over a child sequence, invoking a function at each step
-(define (ftl-tree-iterate self children init step)
-  (foldl (λ (child result)
-           (match-let* ([(list self new-children accum) result]
-                        [(list new-self new-child new-accum) (step self child accum)])
-             (list new-self (cons new-child new-children) new-accum)))
-         (list self null (init self))
-         children))
 
 ; -------------------------------------
 ; Example derivation of example grammar
