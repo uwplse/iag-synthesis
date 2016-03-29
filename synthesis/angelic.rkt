@@ -82,7 +82,6 @@
          [vocab (ftl-ir-grammar-vocabulary grammar)]
          [symbol (ftl-tree-symbol tree)]
          [option (ftl-tree-option tree)]
-         [attributes (ftl-tree-attributes tree)]
          [children (ftl-tree-children tree)]
          [production (assoc-lookup (assoc-lookup vocab symbol) option)]
          [labels (ftl-ir-production-labels production)]
