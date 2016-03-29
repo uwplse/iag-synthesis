@@ -1,17 +1,20 @@
 #lang racket
+(require rosette/lib/meta/meta)
+(require 2htdp/batch-io)
+(require "parse.rkt")
 
-(require rosette/lib/meta/meta
-         2htdp/batch-io
-         parser-tools/lex
-         "parse.rkt")
+; ------------------
+; Example FTL grammar
+; ------------------
 
-;; Consider the following attribute grammar:
 (define example-grammar "
- interface Top {
-     var x: int;
+   interface Top {
+     input a: int ;
    }
-   interface Node {
+
+   interface Node {     
      var a: int ;
+     var b: int ;
    }
 
    class Root: Top {
@@ -20,152 +23,209 @@
      }
 
      actions{
-       x := 5;
-       child.a := x;     
+       child.a := a;
      }
    }
 
    class MidNode: Node {
      children {
-       left:  Node;
-       right: Node;
+       child: Node;
      }
      actions {
-       left.a  := a;
-       right.a := a;
+       child.a := a;
+       b := child.b;
      }
-   }")
+   }
 
+   class Leaf: Node {
+     actions {
+       b := b_input;
+     }
+   }
+")
 
-;; The above grammar is parsed as: 
-(define parsed-example-grammar (parse-ftl (open-input-string example-grammar)))
+(define parsed-grammar (parse-ftl (open-input-string example-grammar)))
 
-;; FTL generates a schedule file for the above grammar which is represented in racket as a data structure as shown below
-;; (later, this should be read from a sched file, parsed and stored in a racket data structure automatically):
-(define example-schedule '([TD (Root child a) (Midnode left a) (Midnode right a)]))
-
-;; For representing derivation trees : each node has a name, class, interface, and zero or more attributes and children
-(struct parse_tree
+; Represents derivation trees : each node has a name, class, interface, and zero or more attributes and children
+(struct document
   (name
-   parent_name
    class
    interface
    attrs
    children) #:mutable #:transparent)
 
-;; For representing the attributes in a node
+;; Represents the attributes in a node
 (struct attribute
   (name
    (value #:mutable)
    ) #:transparent)
 
-;; Example derivation tree
-(define example-tree (parse_tree
-                      'root
-                      'none
-                      'Root
-                      'Top
-                      (list (attribute 'x 5))
-                      (list
-                       (parse_tree
-                        'child
-                        'root
-                        'Midnode
-                        'Node
-                        (list (attribute 'a 0))
-                        (list
-                         (parse_tree
-                           'left
-                           'child
-                           'Midnode
-                           'Node
-                           (list(attribute 'a 0))
-                           '())
-                          (parse_tree
-                           'right
-                           'child
-                           'Midnode
-                           'Node
-                           (list(attribute 'a 0))
-                           '()))))))
+(define code-container '())
 
-;; To update the attribute values 
-(define (set-attr! att val)
-  (set-attribute-value! att val))
+; pass 1 of schedule gives numbered visitors.
+(define (generate-general-visitors schedule)
+  (let ([counter 0])
+    (for/hash ([sched schedule])
+      (begin0
+        (values counter (string-append "visit-" (number->string counter)))
+      (set! counter (+ 1 counter))))))
 
-;; Go through the schedule and get the attributes assigned in TD or BU manner. Then call another method to actually do the assignment.
-(define (gen-code schedule grammar tree)
- (map (λ(x)
-       (cond
-         [(equal? (car x) 'TD)
-          (let ([node-attr (cdr x)]) (do-td-assignment node-attr grammar tree))] 
-         [(equal? (car x) 'BU)
-          (let ([node-attr (cdr x)]) (do-bu-assignment node-attr grammar tree))])) schedule) (void))
+; pass 2 of schedule gives concrete node visitors.
+(define (generate-node-visitors schedule)
+  (let ([counter 0])
+    (for/hash ([sched schedule])
+      (begin0
+        (letrec ([concrete-visitors '()]
+                 [traversal (car sched)]
+                 [actions (cdr sched)])
+          (for/list ([action actions])
+            (let ([node-type (car action)])
+              (set! concrete-visitors
+              (cons (string-append
+                     (string-downcase(symbol->string traversal)) "-visit-"
+                     (symbol->string node-type) "-"
+                     (number->string counter)) concrete-visitors))))
+          (values counter concrete-visitors))
+        (set! counter (+ 1 counter))))))
 
-;; Top-down algorithm
-(define (do-td-assignment attr grammar tree)
- (map (λ(x)
-        (cond
-          [(and (not (null? tree))(equal? (parse_tree-name tree) (cadr x))) 
-           (cond
-             [(not (null? (parse_tree-attrs tree)))
-              (assign (caddr x) grammar tree)])]
-          [(not (equal? (parse_tree-name tree) (cadr x)))
-           (map (λ(y) (do-td-assignment attr grammar y)) (parse_tree-children tree))])) attr))
+; pass 3 of schedule maps traversals to attributes assigned in that traversal such as ((0 . (a)) (1 . (b)))
+(define (attribute-traversal-map schedule)
+  (let ([counter 0])
+    (for/hash ([sched schedule])      
+      (begin0
+        (letrec ([attributes '()] [actions (cdr sched)])
+          (for/list ([action actions])
+            (let ([attribute (caddr action)])
+              (set! attributes (cons attribute attributes))))   
+          (values counter (remove-duplicates attributes)))
+      (set! counter (+ 1 counter))))))
 
-;; Bottom-up algorithm
-(define (do-bu-assignment attr grammar tree)
-  (map (λ(x)
-         ((map (λ(y) (do-bu-assignment attr grammar y)) (parse_tree-children tree))
-          (cond
-            [(and (not (null? tree)) (equal? (parse_tree-name tree) (cadr x)))
-             (cond
-               [(not (null?(parse_tree-attrs tree)))
-                (assign (caddr x) grammar tree)])]))) attr))
+; maps a node visitor to the class of the node it visits
+(define (visitor-class-map node-visitors)
+  (for/hash ([node-visitor node-visitors])
+    (begin0
+      (let ([class-name (caddr (regexp-split #rx"-" node-visitor))])
+        (values node-visitor class-name)))))
 
-;; Traverse the grammar and if an element is a class, go through the list of actions and invoke another method to analyse the actions
-(define (assign attr-name grammar tree)
-  (map (λ(x)
-         (cond
-           [(ftl-ast-class? x)
-            (traverse-actions attr-name (ftl-ast-body-actions (ftl-ast-class-body x)) tree)])) grammar))
+; maps concrete node visitors to general visitors
+(define (match-concrete-general-visitors schedule)
+  (letrec ([general-visitors (generate-general-visitors schedule)]
+           [node-visitors (generate-node-visitors schedule)])
+    (for ([general-visitor-key (hash-keys general-visitors)])
+      (for ([node-visitor-key (hash-keys node-visitors)])
+        (if (equal? general-visitor-key node-visitor-key)
+            (letrec ([general-visitor (hash-ref general-visitors general-visitor-key)]
+                     [concrete-node-visitors (hash-ref node-visitors node-visitor-key)])
+              (general-visitor-codegen general-visitor concrete-node-visitors)
+              (concrete-visitor-codegen general-visitor concrete-node-visitors)) (void))))))
 
-;; Depending on the lhs and rhs of an action, do the assignment of attributes accordingly
-(define (traverse-actions attr-name class-actions tree)
-  (map(λ(x)
-        (cond
-          [(and (equal? (parse_tree-name tree) (ftl-ast-refer-object (ftl-ast-define-lhs x))) (equal? attr-name (ftl-ast-refer-label (ftl-ast-define-lhs x))))              
-           (cond 
-             [(equal? (ftl-ast-refer-object (ftl-ast-define-rhs x)) 'self)
-              (map (λ(y)
-                     (cond
-                       [(equal? (attribute-name y) attr-name)
-                        (find-node-and-assign y example-tree (parse_tree-parent_name tree) (ftl-ast-refer-label(ftl-ast-define-rhs x)))])) (parse_tree-attrs tree))]
-             [(not (equal? (ftl-ast-refer-object (ftl-ast-define-rhs x)) 'self))
-              (map (λ(y)
-                     (cond
-                       [(equal? (attribute-name y) attr-name)
-                        (find-node-and-assign y example-tree (ftl-ast-refer-object (ftl-ast-define-rhs x)) (ftl-ast-refer-label(ftl-ast-define-rhs x)))]))
-                   (parse_tree-attrs tree))])])) class-actions))
+(define (general-visitor-codegen general-visitor node-visitors)
+  (let ([node-visitor-class-list (hash->list (visitor-class-map node-visitors))])
+    (switch-case general-visitor node-visitor-class-list))) ;; TODO: problem is that this list is not being expanded. How to fix this?
+                                                                         ;; figure out why eval-syntax complains the following
+                                                                         ;; node-visitor-class-list: identifier used out of context in: node-visitor-class-list
+                                                                         ;; also the value of general-visitor is not used.  
+(define-syntax switch-case
+ (syntax-rules(document-class node)
+   [(switch-case general-visitor visitor-class-pair ...)
+    (begin #'(define (general-visitor node)
+               (cond [(equal? (cdr visitor-class-pair)(document-class node))
+                      ((car visitor-class-pair) node)]...)))]))
 
-;; Assignment of an attribute of a node based on the rhs node
-(define (find-node-and-assign node_attr entire-tree parent-name assignment-rhs)
-  (cond
-  [(equal? parent-name (parse_tree-name entire-tree))
-   (map(λ(i)
-         (cond
-           [(equal? (attribute-name i) assignment-rhs)
-            (set-attr! node_attr (attribute-value i))])) (parse_tree-attrs entire-tree))]
-  [(not (equal? parent-name (parse_tree-name entire-tree)))
-   (map (λ(j)
-          (unless null? j)
-          (find-node-and-assign node_attr j parent-name assignment-rhs)) (parse_tree-children entire-tree))]))
+(define (concrete-visitor-codegen general-visitor node-visitors)
+  (for ([node-visitor node-visitors])
+    (cond [(equal? (car (regexp-split #rx"-" node-visitor)) "td")
+           (td-codegen general-visitor node-visitor)]
+          [(equal? (car (regexp-split #rx"-" node-visitor)) "bu")
+           (bu-codegen general-visitor node-visitor)])))
+
+(define (td-codegen general-visitor node-visitor)
+  (let ([class-name (caddr (regexp-split #rx"-" node-visitor))])
+    (for ([element (attribute-lookup(parse-ftl (open-input-string example-grammar)))])
+      (cond [(hash? element)
+             (if (equal? class-name (hash-keys element))
+                 (let([attributes (hash-values element)])
+                   (for ([attribute attributes])
+                     (letrec ([rhs-attribute (caar attribute)]
+                              [rhs-object (cadar attribute)]
+                              [lhs-attribute (caddar attribute)]
+                              [lhs-object (cdddar attribute)])
+                       (display(td-attribute-assignment general-visitor node-visitor lhs-attribute rhs-attribute)))))
+                 (void))])))) 
+
+(define-syntax td-attribute-assignment
+  (syntax-rules (attribute-value attribute-name node document-attrs)
+    [(td-attribute-assignment general-visitor node-visitor lhs-label rhs-label)
+     (begin
+       #'(define (general-visitor node)
+           (for ([attribute (document-attrs node)])
+             (if (equal? (attribute-name attribute) (lhs-label))
+                 (set! (attribute-value attribute)(rhs-label))))
+           (general-visitor (document-children node))))]))
+
+;; remove later due to repetition, but keeping for now in case other types of traversals have something vastly different.
+(define (bu-codegen general-visitor node-visitor)
+  (let ([class-name (caddr (regexp-split #rx"-" node-visitor))])
+    (for ([element (attribute-lookup(parse-ftl (open-input-string example-grammar)))])
+      (cond [(hash? element)
+          (if (equal? class-name (hash-keys element))
+              (let([attributes (hash-values element)])
+                (for ([attribute attributes])
+                  (letrec ([rhs-attribute (caar attribute)]
+                           [rhs-object (cadar attribute)]
+                           [lhs-attribute (caddar attribute)]
+                           [lhs-object (cdddar attribute)])
+                    (bu-attribute-assignment general-visitor node-visitor lhs-attribute rhs-attribute))))
+              (void))]))))
+
+(define-syntax bu-attribute-assignment
+  (syntax-rules (attribute-value attribute-name node document-attrs)
+    [(bu-attribute-assignment general-visitor node-visitor lhs-label rhs-label)
+     (begin
+       #'(define (general-visitor node)
+           (general-visitor (document-children node))
+           (for ([attribute (document-attrs node)])
+             (if (equal? (attribute-name attribute) (lhs-label))
+                 (set! (attribute-value attribute)(rhs-label))))))]))
+
+(define (attribute-lookup grammar)
+  (for/list([grammar-element grammar])
+    (begin0
+      (if (ftl-ast-class? grammar-element)
+          (traverse-actions (ftl-ast-class-name grammar-element) (ftl-ast-body-actions (ftl-ast-class-body grammar-element)))))))
+
+; only unary operators at the moment
+(define (traverse-actions class-name actions)
+  (let ([assignment-actions '()])
+   (for/hash ([action actions])
+    (let ([action-list '()])
+     (begin0
+      (letrec ([lhs-object (ftl-ast-refer-object (ftl-ast-define-lhs action))]
+               [lhs-attribute (ftl-ast-refer-label (ftl-ast-define-lhs action))]
+               [rhs-object (ftl-ast-refer-object (ftl-ast-define-rhs action))]
+               [rhs-attribute (ftl-ast-refer-label (ftl-ast-define-rhs action))])
+        (set! action-list (cons lhs-object action-list))
+        (set! action-list (cons lhs-attribute action-list))
+        (set! action-list (cons rhs-object action-list))
+        (set! action-list (cons rhs-attribute action-list))
+        (set! assignment-actions (cons action-list assignment-actions))
+        (values class-name assignment-actions)))))))
+
+;--------------------
+; Example document
+;--------------------
+(define example-document
+  (document 'root 'Root 'Top '(attribute 'a 0)
+            '(document 'midnode 'Midnode 'Node '((attribute 'a 0) (attribute 'b 0))
+                      '(document 'leaf 'Leaf 'Node '((attribute 'a 0) (attribute 'b 7))
+                                '()))))
+;---------------------
+;Example schedule
+;---------------------
+;; FTL generates a schedule file for the above grammar which is represented in racket as a data structure as shown below
+;; The semantics of every schedule element is: [<traversal> (<class-name> <child-name> <child-attribute>)+]
+;; (later, this should be read from a sched file, parsed and stored in a racket data structure automatically):
+(define example-schedule '([TD (Root child a) (Midnode child a)]
+                           [BU (Leaf () b) (Midnode () b)]))
 
 
-
-example-tree
-
-;; Entry point
-(define codegen (gen-code example-schedule parsed-example-grammar example-tree))
-
-example-tree
