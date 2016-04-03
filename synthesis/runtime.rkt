@@ -1,4 +1,4 @@
-#lang s-exp rosette
+#lang rosette
 
 ; Functional Tree Language (FTL) synthesis engine
 ; Runtime (library and types)
@@ -71,8 +71,8 @@
 ; minimal, interpreted runtime environment (basic arithmetic with no external functions)
 (define ftl-base-runtime
   (ftl-runtime 'bool
-               `((int . ,(ftl-type fixnum? hole* = < arithmetic-unary arithmetic-binary))
-                 (float . ,(ftl-type flonum? hole* = < arithmetic-unary arithmetic-binary))
-                 (bool . ,(ftl-type boolean? decide* = void logic-unary logic-binary))
+               `((int . ,(ftl-type fixnum? integer* = < arithmetic-unary arithmetic-binary))
+                 (float . ,(ftl-type flonum? number* = < arithmetic-unary arithmetic-binary))
+                 (bool . ,(ftl-type boolean? boolean* = void logic-unary logic-binary))
                  (string . ,(ftl-type string? void string=? string<? null `((+ . ,string-append)))))
                `((length . ((string int) . ,string-length)))))

@@ -1,10 +1,9 @@
-#lang s-exp rosette
+#lang rosette
 
 ; Functional Tree Language (FTL) synthesis engine
 ; Translation (AST to IR with closed lambdas)
 
-(require racket/dict
-         "syntax.rkt"
+(require "syntax.rkt"
          "parse.rkt"
          "typecheck.rkt"
          "runtime.rkt"

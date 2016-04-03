@@ -1,4 +1,4 @@
-#lang s-exp rosette
+#lang rosette
 
 ; Functional Tree Language (FTL) synthesis engine
 ; Incrementality

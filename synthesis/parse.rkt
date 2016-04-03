@@ -1,4 +1,4 @@
-#lang s-exp rosette
+#lang rosette
 
 ; Functional Tree Language (FTL) synthesis engine
 ; Parser and Serializer
@@ -465,10 +465,16 @@ trait InheritBase {
     children {
         p : [Point];
     }
+    attributes {
+        var w : int;
+        var h : int;
+    }
     actions {
         loop p {
             p.bx := x;
             p.by := y;
+            w := fold -x .. p$i.x;
+            h := fold -y .. p$i.y;
         }
     }
 }
