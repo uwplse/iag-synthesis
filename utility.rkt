@@ -88,17 +88,19 @@
   (λ ys (apply f (append xs ys))))
 
 (define (mapthunk f n)
-    (letrec ([rec (lambda (i) (if (= i 0)
-                                  null
-                                  (cons (f)
-                                        (rec (- i 1)))))])
-      (rec n)))
+    (letrec ([rec (λ (i)
+                    (if (= i 0)
+                        null
+                        (cons (f)
+                              (rec (- i 1)))))])
+      (rec n)))=
 
 (define (repeat x n)
-    (letrec ([rec (λ (i) (if (= i 0)
-                             null
-                             (cons x
-                                   (rec (- i 1)))))])
+    (letrec ([rec (λ (i)
+                    (if (= i 0)
+                        null
+                        (cons x
+                              (rec (- i 1)))))])
       (rec n)))
 
 ; -------------------------
