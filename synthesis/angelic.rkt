@@ -20,6 +20,7 @@
 (define (ftl-angelic-interpret-example)
   (ftl-angelic-evaluate ftl-base-runtime (open-input-string example-ftl) example-deriv))
 
+; fully annotate the given derivation of the given grammar by angelic evaluation
 (define (ftl-angelic-evaluate runtime grammar derivation)
   ; let all output attribute values be symbolic
   (ftl-tree-symbolize! runtime grammar derivation)
