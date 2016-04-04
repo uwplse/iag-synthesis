@@ -93,7 +93,7 @@
                         null
                         (cons (f)
                               (rec (- i 1)))))])
-      (rec n)))=
+      (rec n)))
 
 (define (repeat x n)
     (letrec ([rec (λ (i)
