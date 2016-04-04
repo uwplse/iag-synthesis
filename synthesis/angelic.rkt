@@ -13,17 +13,14 @@
          ftl-angelic-evaluate)
 
 ; interpret : L(G_FTL) * L([[L(G_FTL)]]) -> L([[L(G_FTL)]])
-(define (ftl-angelic-interpret runtime ftl root tree)
+(define (ftl-angelic-interpret runtime ftl tree)
   (current-bitwidth 6)
-  (ftl-angelic-evaluate runtime (ftl-ir-translate (parse-ftl ftl) root runtime) tree))
+  (ftl-angelic-evaluate runtime (ftl-ir-translate (parse-ftl ftl) runtime) tree))
 
-(define (interpret-example)
-  (ftl-angelic-evaluate ftl-base-runtime example-ir example-deriv))
+(define (ftl-angelic-interpret-example)
+  (ftl-angelic-evaluate ftl-base-runtime (open-input-string example-ftl) example-deriv))
 
 (define (ftl-angelic-evaluate runtime grammar derivation)
-  ; assert that we actually were given a root
-  (assert (eq? (ftl-ir-grammar-sentence grammar)
-               (ftl-tree-symbol derivation)))
   ; let all output attribute values be symbolic
   (ftl-tree-symbolize! runtime grammar derivation)
   ; assert the actions' assignments in whatever order
@@ -79,11 +76,10 @@
 ; constrain output attributes by symbolic evaluation and assertion
 (define (ftl-angelic-constrain runtime grammar tree) ; constrain angelic values
   (let* ([recurse (curry ftl-angelic-constrain runtime grammar)]
-         [vocab (ftl-ir-grammar-vocabulary grammar)]
          [symbol (ftl-tree-symbol tree)]
          [option (ftl-tree-option tree)]
          [children (ftl-tree-children tree)]
-         [production (assoc-lookup (assoc-lookup vocab symbol) option)]
+         [production (assoc-lookup (assoc-lookup grammar symbol) option)]
          [labels (ftl-ir-production-labels production)]
          [singletons (ftl-ir-production-sequences production)]
          [sequences (ftl-ir-production-sequences production)]
@@ -98,7 +94,7 @@
                                             (assoc-lookup singletons object))]
                                 ; note that this may err if an interface has
                                 ; no class implementations
-                                [production (car (assoc-lookup vocab symbol))]
+                                [production (car (assoc-lookup grammar symbol))]
                                 [labels (ftl-ir-production-labels production)])
                            (assoc-lookup labels label)))))]
          ; symbolic value of, that is

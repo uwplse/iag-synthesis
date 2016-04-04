@@ -14,9 +14,7 @@
          (struct-out ftl-ir-reduction)
          (struct-out ftl-ir-definition)
          (struct-out ftl-ir-production)
-         (struct-out ftl-ir-grammar)
-         ftl-ir-translate ; AST -> IR
-         example-ir)
+         ftl-ir-translate)
 
 ; Open questions:
 ; 1. Must a child sequence be non-empty? Thinking NO (cf. of fold semantics)
@@ -28,12 +26,11 @@
 ; ---------------------------
 
 ; Attribute dependencies with 'previous indices (e.g., object$-.alpha) valid if
-; and only if the referenced attribute is defined by a fold in some loop context
-; and the reference occurs in the context of a loop over the same child
-; sequence. However, this condition is not currently currently checked along with
-; most other index reference checks and must be delt with at interpretation time.
-; The only check performed is whether an indexed attribute dependency happens in
-; a proper loop context and is not recursive (except for 'previous, of course).
+; and only if the referenced attribute is defined by a fold in the same loop and
+; However, this condition is not currently currently checked and must be dealt
+; with at interpretation time. The only check performed is whether an indexed
+; attribute dependency happens in a proper loop context and is not recursive
+; (except for 'previous, of course).
 
 ; attribute definition dependency
 (struct ftl-ir-dependency
@@ -44,11 +41,6 @@
    ; name of attribute on object
    label
    ) #:transparent)
-
-; So the interpreters need a way to get ahold of the collection of all definitions that
-; may need to iterate in lockstep, i.e., all definitions in identical loop contexts.
-; Inherited definitions of attributes on the child sequence in question are easy to
-; identify, but what about synthesized definitions on singleton objects? This is tricky...
 
 ; attribute evaluation
 (struct ftl-ir-evaluation
@@ -91,25 +83,15 @@
    sequences
    ) #:transparent)
 
-; grammar descriptor
-(struct ftl-ir-grammar
-  (; list associating each symbol [of the implicit alphabet] to a list
-   ; associating each option name to its production
-   vocabulary
-   ; starting symbol from the vocabulary
-   sentence
-   ) #:transparent)
-
 ; -------------------------------
 ; Grammar translation (AST -> IR)
 ; -------------------------------
-(define (id x) x)
+
 ; Driver: translate parsed abstract syntax tree into intermediate representation
-(define (ftl-ir-translate ast-list root runtime)
+(define (ftl-ir-translate ast-list runtime)
   (if (void? (ftl-ast-conflicts? ast-list))
     (ftl-ast-compile (ftl-ast-typecheck (ftl-ast-validate (ftl-ast-inline ast-list))
-                                        runtime)
-                     root)
+                                        runtime))
     (error "top-level namespace conflict")))
 
 ; -------------------
@@ -152,7 +134,7 @@
     (let ([depv (apply vector-immutable (ftl-ast-expr-depends rhs))])
       (ftl-ir-evaluation (ftl-ast-expr-compile depv rhs)
                          (vector-map ftl-ast-refer->ftl-ir-dependency depv))))
-  
+
   (match action
     [(ftl-ast-loop child (ftl-ast-define lhs rhs))
      (cons (ftl-ast-refer->pair lhs)
@@ -196,17 +178,11 @@
                        singletons
                        sequences)))
 
-(define (ftl-ast-compile ast-map root)
+(define (ftl-ast-compile ast-map)
   (let* ([vocabulary (map (λ (mapping)
                             (match-let* ([(cons symbol production) mapping])
                               (cons symbol
                                     (cdrmap ftl-ast-body-compile
                                             (rest production)))))
                           ast-map)])
-    (ftl-ir-grammar vocabulary root)))
-
-; --------------------------
-; Example Grammar in IR Form
-; --------------------------
-
-(define example-ir (ftl-ir-translate example-ast 'Root ftl-base-runtime))
+    vocabulary))

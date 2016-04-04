@@ -46,12 +46,10 @@
   (void))
 
 ; derive a symbolic FTL tree of an IR grammar bounded by the given height
-(define (ftl-tree* runtime grammar width height input)
-  (let* ([vocabulary (ftl-ir-grammar-vocabulary grammar)]
-         [sentence (ftl-ir-grammar-sentence grammar)]
-         [types (ftl-runtime-types runtime)])
+(define (ftl-tree* runtime grammar sentence width height input)
+  (let* ([types (ftl-runtime-types runtime)])
     (define (recurse symbol bound)
-      (match-let* ([(cons option production) (apply choose* (assoc-lookup vocabulary symbol))]
+      (match-let* ([(cons option production) (apply choose* (assoc-lookup grammar symbol))]
                    [singletons (ftl-ir-production-singletons production)]
                    [sequences (ftl-ir-production-sequences production)]
                    [inputs (ftl-ir-production-inputs production)]
@@ -84,9 +82,8 @@
                           (if (list? l)
                               l
                               (list l)))]
-               [vocab (ftl-ir-grammar-vocabulary grammar)]
                [(ftl-tree symbol option bindings children) tree]
-               [production (assoc-lookup (assoc-lookup vocab symbol) option)]
+               [production (assoc-lookup (assoc-lookup grammar symbol) option)]
                [labels (ftl-ir-production-labels production)]
                [value* (λ (type)
                          ((ftl-type-generate
@@ -108,12 +105,11 @@
 ; this does not work with symbolic derivations, as symbolic numbers fail fixnum?
 ; and the association list utility functions need to be symbolically lifted.
 (define (ftl-tree-verify runtime grammar derivation input)
-  (let* ([vocab (ftl-ir-grammar-vocabulary grammar)]
-         [symbol (ftl-tree-symbol derivation)]
+  (let* ([symbol (ftl-tree-symbol derivation)]
          [option (ftl-tree-option derivation)]
          [attributes (ftl-tree-attributes derivation)]
          [children (ftl-tree-children derivation)]
-         [production (assoc-lookup (assoc-lookup vocab symbol) option)]
+         [production (assoc-lookup (assoc-lookup grammar symbol) option)]
          [labels (ftl-ir-production-labels production)]
          [inputs (ftl-ir-production-inputs production)]
          [singletons (ftl-ir-production-singletons production)]
