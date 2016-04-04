@@ -19,7 +19,77 @@
          ftl-tree-bind!
          example-deriv)
 
-; derivations should _definitely_ be treated imperatively, using mutation
+; -----------------------
+; Equality of Derivations
+; -----------------------
+
+; whether two derivations are equivalent, which requires eq? symbols and options,
+; equal? attributes, and ftl-tree-equal? child derivations (ignoring redundant
+; associations)
+(define (ftl-tree-equal? first-tree second-tree rec-equal?)
+  (match-let* ([(ftl-tree first-symbol
+                          first-option
+                          first-attributes
+                          first-children) first-tree]
+               [(ftl-tree second-symbol
+                          second-option
+                          second-attributes
+                          second-children) second-tree]
+               [first-labels (assoc-symbols first-attributes)]
+               [second-labels (assoc-symbols second-attributes)]
+               [first-names (assoc-symbols first-children)]
+               [second-names (assoc-symbols second-children)]
+               [listify (λ (l) (if (list? l) l (list l)))])
+    (and (eq? first-symbol second-symbol)
+         (eq? first-option second-option)
+         (eq? (length first-labels) (length second-labels))
+         (andmap (λ (label)
+                   (equal? (assoc-lookup first-attributes label)
+                           (assoc-lookup second-attributes label)))
+                 first-labels)
+         (eq? (length first-names) (length second-names))
+         (andmap (λ (name)
+                   (let ([first-child-list
+                          (listify (cdr (assoc-lookup first-children name)))]
+                         [second-child-list
+                          (listify (cdr (assoc-lookup second-children name)))])
+                     (and (eq? (length first-child-list)
+                               (length second-child-list))
+                          (andmap (λ (child-pair)
+                                    (rec-equal? (car child-pair)
+                                                (cdr child-pair)))
+                                  (zip first-child-list
+                                       second-child-list)))))
+                   first-names))))
+
+(define (ftl-tree-hash hash-field tree rec-hash)
+  (match-let* ([(ftl-tree symbol
+                          option
+                          attributes
+                          children) tree]
+               [labels (assoc-symbols attributes)]
+               [names (assoc-symbols children)]
+               [listify (λ (l) (if (list? l) l (list l)))])
+    (+ (* 17 (hash-field symbol))
+       (* 31 (hash-field option))
+       (* 101 (foldl (λ (sum label)
+                       (+ sum (hash-field (assoc-lookup attributes label))))
+                     0
+                     labels))
+       (* 89 (foldl (λ (sum name)
+                      (+ sum
+                         (* 7
+                            (foldl (λ (sum child)
+                                     (+ sum (rec-hash child)))
+                                   0
+                                   (listify
+                                    (cdr (assoc-lookup children name)))))))
+                    0
+                    names)))))
+
+; -------------------------
+; Derivation Tree Structure
+; -------------------------
 
 ; (sub)derivation of an FTL attribute grammar
 (struct ftl-tree
@@ -33,11 +103,20 @@
    ; list associating child names with (lists of) derivations (all objects
    ; except 'self)
    children
-   ) #:mutable #:transparent)
+   ) #:mutable
+     #:transparent
+     #:methods gen:equal+hash
+     [(define equal-proc ftl-tree-equal?)
+      (define hash-proc (curry ftl-tree-hash equal-hash-code))
+      (define hash2-proc (curry ftl-tree-hash equal-secondary-hash-code))])
 
 ; ------------------------------------------
 ; Generation and Verification of Derivations
 ; ------------------------------------------
+
+; derive an FTL tree of a grammar in IR form given an XML string
+(define (xml->ftl-tree grammar xml-string)
+  (xexpr->ftl-tree grammar (string->xexpr xml-string)))
 
 ; derive an FTL tree of a grammar in IR form given an X-expression
 (define (xexpr->ftl-tree grammar xexpr)
