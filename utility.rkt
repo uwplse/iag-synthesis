@@ -107,18 +107,18 @@
 
 ; Dynamically create a symbolic boolean
 (define (boolean*)
-  (define-symbolic* b boolean?)
-  b)
+  (define-symbolic* boolean boolean?)
+  boolean)
 
 ; Dynamically create a symbolic integer
 (define (integer*)
-  (define-symbolic* n integer?)
-  n)
+  (define-symbolic* integer integer?)
+  integer)
 
 ; Dynamically create a symbolic ("real") number
 (define (number*)
-  (define-symbolic* n real?)
-  n)
+  (define-symbolic* number real?)
+  number)
 
 ; Return the "domain" of the solver
 (define domain
