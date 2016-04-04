@@ -4,9 +4,11 @@
 
 (provide assoc-lookup
          associated?
+         assoc-symbols
          assoc-unique?
          assoc-group
          assoc-map-keys
+         zip
          carmap
          cdrmap
          domain
@@ -29,6 +31,10 @@
   (not (not (memf (λ (binding)
                     (eq? symbol (car binding)))
                   alist))))
+
+; get the list of all associated symbols
+(define (assoc-symbols alist)
+  (remove-duplicates (map car alist) eq?))
 
 ; lookup the value of a symbol in an association list; if the symbol is unbound,
 ; then return the value of failure-result (or its invocation if a procedure)
