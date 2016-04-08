@@ -17,7 +17,8 @@
          ftl-tree-verify-output
          ftl-tree-load
          ftl-tree-bind!
-         example-deriv)
+         example-deriv
+         example-large-deriv)
 
 ; -----------------------
 ; Equality of Derivations
@@ -67,25 +68,22 @@
                           option
                           attributes
                           children) tree]
-               [labels (assoc-symbols attributes)]
-               [names (assoc-symbols children)]
                [listify (λ (l) (if (list? l) l (list l)))])
-    (+ (* 17 (hash-field symbol))
-       (* 31 (hash-field option))
-       (* 101 (foldl (λ (sum label)
-                       (+ sum (hash-field (assoc-lookup attributes label))))
+    (+ (* 101 (hash-field symbol))
+       (* 311 (hash-field option))
+       (* 701 (foldl (λ (attribute sum)
+                       (+ sum (hash-field attribute)))
                      0
-                     labels))
-       (* 89 (foldl (λ (sum name)
-                      (+ sum
-                         (* 7
-                            (foldl (λ (sum child)
-                                     (+ sum (rec-hash child)))
-                                   0
-                                   (listify
-                                    (cdr (assoc-lookup children name)))))))
-                    0
-                    names)))))
+                     attributes))
+       (* 997 (foldl (λ (child-list sum)
+                       (+ sum
+                          (* 7
+                             (foldl (λ (child sum)
+                                      (+ sum (rec-hash child)))
+                                    0
+                                    child-list))))
+                     0
+                     (map (compose listify cdr) children))))))
 
 ; -------------------------
 ; Derivation Tree Structure
@@ -117,6 +115,9 @@
 ; derive an FTL tree of a grammar in IR form given an XML string
 (define (xml->ftl-tree grammar xml-string)
   (xexpr->ftl-tree grammar (string->xexpr xml-string)))
+
+; TODO: add from-string procedure to ftl-type so that input attributes may be
+; parsed from an XML document
 
 ; derive an FTL tree of a grammar in IR form given an X-expression
 (define (xexpr->ftl-tree grammar xexpr)
@@ -300,6 +301,45 @@
                                'Endpoint
                                '()
                                '())
+                    ,(ftl-tree 'Point
+                               'Relative
+                               '((dx . 3) (dy . 7))
+                               `((p . (,(ftl-tree 'Point
+                                                  'Endpoint
+                                                  '()
+                                                  '()))))))))))
+
+(define example-large-deriv
+  (ftl-tree 'Root
+            'Origin
+            '((x . 7) (y . 10))
+            `((p . (,(ftl-tree 'Point
+                               'Endpoint
+                               '()
+                               '())
+                    ,(ftl-tree 'Point
+                               'Relative
+                               '((dx . 3) (dy . 7))
+                               `((p . (,(ftl-tree 'Point
+                                                  'Relative
+                                                  '((dx . 3) (dy . 7))
+                                                  `((p . (,(ftl-tree 'Point
+                                                                     'Relative
+                                                                     '((dx . 3) (dy . 7))
+                                                                     `((p . (,(ftl-tree 'Point
+                                                                                        'Endpoint
+                                                                                        '()
+                                                                                        '())))))
+
+                                                          ,(ftl-tree 'Point
+                                                                     'Endpoint
+                                                                     '()
+                                                                     '())))))
+
+                                       ,(ftl-tree 'Point
+                                                  'Endpoint
+                                                  '()
+                                                  '())))))
                     ,(ftl-tree 'Point
                                'Relative
                                '((dx . 3) (dy . 7))
