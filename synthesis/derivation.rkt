@@ -129,7 +129,12 @@
 (define (ftl-tree* runtime grammar sentence width height input)
   (let* ([types (ftl-runtime-types runtime)])
     (define (recurse symbol bound)
-      (match-let* ([(cons option production) (apply choose* (assoc-lookup grammar symbol))]
+      ; tell Rosette to ensure that terminals are chosen at the appropriate
+      ; point(s)
+      (assert (>= bound 0))
+      (match-let* ([(cons option production) (apply choose*
+                                                    (assoc-lookup grammar
+                                                                  symbol))]
                    [singletons (ftl-ir-production-singletons production)]
                    [sequences (ftl-ir-production-sequences production)]
                    [inputs (ftl-ir-production-inputs production)]
@@ -137,10 +142,6 @@
                    [labels (ftl-ir-production-labels production)]
                    [value* (λ (type)
                              ((ftl-type-generate (assoc-lookup types type))))])
-        ; tell Rosette to ensure that terminals are chosen at the appropriate
-        ; point(s)
-        (assert (>= bound 0))
-        ; construct the symbolically filled-out node
         (ftl-tree symbol
                   option
                   (cdrmap value*
@@ -185,15 +186,12 @@
 ; this does not work with symbolic derivations, as symbolic numbers fail fixnum?
 ; and the association list utility functions need to be symbolically lifted.
 (define (ftl-tree-verify runtime grammar derivation input)
-  (let* ([symbol (ftl-tree-symbol derivation)]
-         [option (ftl-tree-option derivation)]
-         [attributes (ftl-tree-attributes derivation)]
-         [children (ftl-tree-children derivation)]
-         [production (assoc-lookup (assoc-lookup grammar symbol) option)]
-         [labels (ftl-ir-production-labels production)]
-         [inputs (ftl-ir-production-inputs production)]
-         [singletons (ftl-ir-production-singletons production)]
-         [sequences (ftl-ir-production-sequences production)])
+  (match-let* ([(ftl-tree symbol option attributes children)
+                derivation]
+               [production (assoc-lookup (assoc-lookup grammar symbol)
+                                         option)]
+               [(ftl-ir-production inputs labels _ singletons sequences)
+                production])
     ; validate the quantity of attributes
     (assert (eq? (length attributes)
                  (length (if input
