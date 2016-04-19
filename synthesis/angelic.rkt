@@ -22,7 +22,7 @@
                         (ftl-ir-translate (parse-ftl ftl-port) runtime)
                         tree))
 
-(define (ftl-angelic-interpret-file filename)
+(define (ftl-angelic-interpret-file runtime filename)
   (let* ([ftl-port (open-input-file filename #:mode 'text)]
          [example example-large-deriv]
          [solved (ftl-angelic-interpret ftl-base-runtime ftl-port example)])
@@ -88,79 +88,79 @@
 
 ; constrain output attributes by symbolic evaluation and assertion
 (define (ftl-angelic-constrain runtime grammar tree) ; constrain angelic values
-  (let* ([recurse (curry ftl-angelic-constrain runtime grammar)]
-         [symbol (ftl-tree-symbol tree)]
-         [option (ftl-tree-option tree)]
-         [children (ftl-tree-children tree)]
-         [production (assoc-lookup (assoc-lookup grammar symbol) option)]
-         [labels (ftl-ir-production-labels production)]
-         [singletons (ftl-ir-production-sequences production)]
-         [sequences (ftl-ir-production-sequences production)]
-         [iterations (assoc-group (compose ftl-ir-definition-iterate cdr)
-                                  (ftl-ir-production-definitions production))]
-         [listify (λ (l) (if (list? l) l (list l)))]
-         [typeof (λ (object-label)
-                   (match-let ([(cons object label) object-label])
-                     (if (eq? object 'self)
-                         (assoc-lookup labels label)
-                         (let* ([symbol (or (assoc-lookup sequences object)
-                                            (assoc-lookup singletons object))]
-                                ; note that this may err if an interface has
-                                ; no class implementations
-                                [production (car (assoc-lookup grammar symbol))]
-                                [labels (ftl-ir-production-labels production)])
-                           (assoc-lookup labels label)))))]
-         ; symbolic value of, that is
-         [valueof (λ (typename)
-                    (ftl-type-generate
-                     (assoc-lookup (ftl-runtime-types runtime)
-                                   typename)))])
-    ; handle definitions (note that we can completely ignore node mutation, as
-    ; we only care that all necessary assertions are performed)
-    (for ([iteration iterations])
-      (if (void? (car iteration))
-          ; iterate over nothing
-          (for ([action (cdr iteration)])
-            (match-let* ([(cons (cons object label)
-                                (ftl-ir-definition _ eval)) action]
-                         [get (curry ftl-tree-load tree (void) null null)]
-                         [(ftl-ir-evaluation fun deps) eval]
-                         [val (fun (vector-map get deps))]
-                         [dep (ftl-ir-dependency object 'none label)]
-                         [sym (get dep)])
-              ; assert equality of attribute to its value
-              (assert (eq? sym val))))
+  (for/all ([tree tree])
+    (let* ([recurse (curry ftl-angelic-constrain runtime grammar)]
+           [symbol (ftl-tree-symbol tree)]
+           [option (ftl-tree-option tree)]
+           [children (ftl-tree-children tree)]
+           [production (assoc-lookup (assoc-lookup grammar symbol) option)]
+           [labels (ftl-ir-production-labels production)]
+           [singletons (ftl-ir-production-sequences production)]
+           [sequences (ftl-ir-production-sequences production)]
+           [iterations (assoc-group (compose ftl-ir-definition-iterate cdr)
+                                    (ftl-ir-production-definitions production))]
+           [typeof (λ (object-label)
+                     (match-let ([(cons object label) object-label])
+                       (if (eq? object 'self)
+                           (assoc-lookup labels label)
+                           (let* ([symbol (or (assoc-lookup sequences object)
+                                              (assoc-lookup singletons object))]
+                                  ; note that this may err if an interface has
+                                  ; no class implementations
+                                  [production (car (assoc-lookup grammar symbol))]
+                                  [labels (ftl-ir-production-labels production)])
+                             (assoc-lookup labels label)))))]
+           ; symbolic value of, that is
+           [valueof (λ (typename)
+                      (ftl-type-generate
+                       (assoc-lookup (ftl-runtime-types runtime)
+                                     typename)))])
+      ; handle definitions (note that we can completely ignore node mutation, as
+      ; we only care that all necessary assertions are performed)
+      (for ([iteration iterations])
+        (if (void? (car iteration))
+            ; iterate over nothing
+            (for ([action (cdr iteration)])
+              (match-let* ([(cons (cons object label)
+                                  (ftl-ir-definition _ eval)) action]
+                           [get (curry ftl-tree-load tree (void) null null)]
+                           [(ftl-ir-evaluation fun deps) eval]
+                           [val (fun (vector-map get deps))]
+                           [dep (ftl-ir-dependency object 'none label)]
+                           [sym (get dep)])
+                ; assert equality of attribute to its value
+                (assert (eq? sym val))))
 
-          ; iterate over child sequence
-          (match-let* ([(cons child-name actions) iteration]
-                       [folds (filter (compose ftl-ir-reduction?
-                                               ftl-ir-definition-evaluate
-                                               cdr)
-                                      actions)]
-                       [accum*-list (assoc-map-keys (compose valueof
-                                                             typeof)
-                                                    folds)]
-                       [accum* (thunk (cdrmap (λ (oracle) (oracle))
-                                              accum*-list))]
-                       [final-accum
-                        (for/fold ([accum (ftl-angelic-constrain-init folds
-                                                                      tree
-                                                                      (accum*))])
-                                  ([child (assoc-lookup children child-name)])
-                          (ftl-angelic-constrain-step actions
-                                                      child-name
-                                                      tree
-                                                      child
-                                                      accum
-                                                      (accum*)))])
-            ; assert equalities of final accumulator values and attributes on
-            ; unindexed nodes
-            (for ([binding final-accum])
-              (match-let* ([(cons (cons object label) value) binding]
-                           [dep (ftl-ir-dependency object 'none label)])
-                (unless (eq? object child-name)
-                  (assert (eq? (ftl-tree-load tree (void) null null dep)
-                               value)))))))
-    ; recurse into children
-    (for ([subtrees (ftl-tree-children tree)])
-      (for-each recurse (listify (cdr subtrees)))))))
+            ; iterate over child sequence
+            (match-let* ([(cons child-name actions) iteration]
+                         [folds (filter (compose ftl-ir-reduction?
+                                                 ftl-ir-definition-evaluate
+                                                 cdr)
+                                        actions)]
+                         [accum*-list (assoc-map-keys (compose valueof
+                                                               typeof)
+                                                      folds)]
+                         [accum* (thunk (cdrmap (λ (oracle) (oracle))
+                                                accum*-list))]
+                         [final-accum
+                          (for/fold ([accum (ftl-angelic-constrain-init folds
+                                                                        tree
+                                                                        (accum*))])
+                                    ([child (assoc-lookup children child-name)])
+                            (ftl-angelic-constrain-step actions
+                                                        child-name
+                                                        tree
+                                                        child
+                                                        accum
+                                                        (accum*)))])
+              ; assert equalities of final accumulator values and attributes on
+              ; unindexed nodes
+              (for ([binding final-accum])
+                (match-let* ([(cons (cons object label) value) binding]
+                             [dep (ftl-ir-dependency object 'none label)])
+                  (unless (eq? object child-name)
+                    (assert (eq? (ftl-tree-load tree (void) null null dep)
+                                 value)))))))
+        ; recurse into children
+        (for ([subtrees (ftl-tree-children tree)])
+          (for-each recurse (listify (cdr subtrees))))))))

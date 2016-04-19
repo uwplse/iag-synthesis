@@ -40,11 +40,12 @@
 ; lookup the value of a symbol in an association list; if the symbol is unbound,
 ; then return the value of failure-result (or its invocation if a procedure)
 (define (assoc-lookup alist symbol [failure-result void])
-  (match (assoc symbol alist eq?)
-    [(cons _ value) value]
-    [#f (if (procedure? failure-result)
-            (failure-result)
-            failure-result)]))
+  (for/all ([value (assoc symbol alist eq?)])
+    (match value
+      [(cons _ value) value]
+      [#f (if (procedure? failure-result)
+              (failure-result)
+              failure-result)])))
 
 ; transform a list into a list associating symbols with sublists using the given
 ; key projection function
