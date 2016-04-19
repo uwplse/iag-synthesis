@@ -1,7 +1,7 @@
 #lang rosette
 
 ; Functional Tree Language (FTL) synthesis engine
-; Translation (AST to IR with closed lambdas)
+; Translation (AST to IR)
 
 (require "syntax.rkt"
          "parse.rkt"
@@ -83,12 +83,12 @@
    sequences
    ) #:transparent)
 
-; -------------------------------
-; Grammar translation (AST -> IR)
-; -------------------------------
+; -------------------
+; Grammar translation
+; -------------------
 
-; Driver: translate parsed abstract syntax tree into intermediate representation
-(define (ftl-ir-translate ast-list runtime)
+; translate parsed abstract syntax tree into intermediate representation
+(define (ftl-ir-translate runtime ast-list)
   (if (void? (ftl-ast-conflicts? ast-list))
     (ftl-ast-compile (ftl-ast-typecheck (ftl-ast-validate (ftl-ast-inline ast-list))
                                         runtime))
@@ -179,10 +179,9 @@
                        sequences)))
 
 (define (ftl-ast-compile ast-map)
-  (let* ([vocabulary (map (λ (mapping)
-                            (match-let* ([(cons symbol production) mapping])
-                              (cons symbol
-                                    (cdrmap ftl-ast-body-compile
-                                            (rest production)))))
-                          ast-map)])
-    vocabulary))
+  (map (λ (mapping)
+         (match-let* ([(cons symbol production) mapping])
+           (cons symbol
+                 (cdrmap ftl-ast-body-compile
+                         (rest production)))))
+       ast-map))
