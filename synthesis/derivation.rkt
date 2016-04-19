@@ -17,9 +17,7 @@
          ftl-tree-verify-input
          ftl-tree-verify-output
          ftl-tree-load
-         ftl-tree-bind!
-         example-deriv
-         example-large-deriv)
+         ftl-tree-bind!)
 
 ; -------------------------
 ; Derivation Tree Structure

@@ -10,30 +10,17 @@
          "derivation.rkt")
 
 (provide ftl-angelic-interpret
-         ftl-angelic-interpret-file
          ftl-angelic-evaluate)
-
-; TODO: symbolically lift angelic evaluator
 
 ; interpret : L(G_FTL) * L([[L(G_FTL)]]) -> L([[L(G_FTL)]])
 (define (ftl-angelic-interpret runtime ftl-port tree)
-  (current-bitwidth 6) ; consider setting to #f in some instances
   (ftl-angelic-evaluate runtime
                         (ftl-ir-translate (parse-ftl ftl-port) runtime)
                         tree))
 
-(define (ftl-angelic-interpret-file runtime filename)
-  (let* ([ftl-port (open-input-file filename #:mode 'text)]
-         [example example-large-deriv]
-         [solved (ftl-angelic-interpret ftl-base-runtime ftl-port example)])
-    (close-input-port ftl-port)
-    solved))
-
-(define (ftl-angelic-interpret-example)
-  (ftl-angelic-interpret-file "../examples/points.ftl"))
-
 ; fully annotate the given derivation of the given grammar by angelic evaluation
 (define (ftl-angelic-evaluate runtime grammar derivation)
+  (current-bitwidth #f) ; consider setting to #f in some instances
   ; let all output attribute values be symbolic
   (ftl-tree-symbolize! runtime grammar derivation)
   ; assert the actions' assignments in whatever order
@@ -105,9 +92,10 @@
                            (assoc-lookup labels label)
                            (let* ([symbol (or (assoc-lookup sequences object)
                                               (assoc-lookup singletons object))]
-                                  ; note that this may err if an interface has
+                                  ; note that this may fail if an interface has
                                   ; no class implementations
-                                  [production (car (assoc-lookup grammar symbol))]
+                                  [production (cdar (assoc-lookup grammar
+                                                                  symbol))]
                                   [labels (ftl-ir-production-labels production)])
                              (assoc-lookup labels label)))))]
            ; symbolic value of, that is
