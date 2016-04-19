@@ -8,6 +8,7 @@
          assoc-unique?
          assoc-group
          assoc-map-keys
+         listify
          zip
          carmap
          cdrmap
@@ -72,6 +73,11 @@
   (if (hash-has-key? hash key)
       (hash-update hash key modifier)
       (hash-set hash key (modifier default))))
+
+(define (listify l)
+  (if (list? l)
+      l
+      (list l)))
 
 (define (carmap f xs)
   (map (λ (p)
