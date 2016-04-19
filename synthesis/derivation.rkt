@@ -9,6 +9,7 @@
          "../utility.rkt")
 
 (provide (struct-out ftl-tree)
+         xml->ftl-tree
          xexpr->ftl-tree
          ftl-tree*
          ftl-tree-symbolize!
@@ -135,7 +136,7 @@
                    ([singleton singletons])
            (match-let* ([(cons xchild xchildren) xchildren]
                         [(cons label symbol) singleton]
-                        [child (xexpr->ftl-tree grammar symbol xchild)])
+                        [child (xexpr->ftl-tree runtime grammar symbol xchild)])
              (values (cons (cons label child) children) xchildren))))
 
        (define children
@@ -324,16 +325,6 @@
 ; -------------------------------------
 ; Example derivation of example grammar
 ; -------------------------------------
-
-(define example-xml
-"
-<Origin x='1' y='17'>
-  <Endpoint />
-  <Relative dx='3' dy='7'>
-    <Endpoint />
-  </Relative/>
-</Origin>
-")
 
 ; an example derivation of the example FTL string (example-ftl from parse.rkt)
 (define example-deriv
