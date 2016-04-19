@@ -40,8 +40,6 @@
    binary
    ) #:transparent)
 
-; FIXME: just use an association list for type mapping
-
 ; description of an FTL runtime environment
 (struct ftl-runtime
   (; name of boolean type (symbol)
