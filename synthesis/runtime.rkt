@@ -26,6 +26,8 @@
    predicate
    ; generate symbolic value, i.e., oracle for angelic evaluation; may be void
    generate
+   ; string -> t
+   parse
    ; t*t -> boolean
    equal?
    ; t*t -> boolean
@@ -68,11 +70,40 @@
     (* . ,*)
     (/ . ,/)))
 
+(define (string->boolean s)
+  (match s
+    [(or "true" "#t" "yes") #t]
+    [(or "false" "#f" "no") #f]))
+
 ; minimal, interpreted runtime environment (basic arithmetic with no external functions)
 (define ftl-base-runtime
   (ftl-runtime 'bool
-               `((int . ,(ftl-type fixnum? integer* = < arithmetic-unary arithmetic-binary))
-                 (float . ,(ftl-type flonum? number* = < arithmetic-unary arithmetic-binary))
-                 (bool . ,(ftl-type boolean? boolean* = void logic-unary logic-binary))
-                 (string . ,(ftl-type string? void string=? string<? null `((+ . ,string-append)))))
+               `((int . ,(ftl-type fixnum?
+                                   integer*
+                                   string->number
+                                   =
+                                   <
+                                   arithmetic-unary
+                                   arithmetic-binary))
+                 (float . ,(ftl-type flonum?
+                                     number*
+                                     string->number
+                                     =
+                                     <
+                                     arithmetic-unary
+                                     arithmetic-binary))
+                 (bool . ,(ftl-type boolean?
+                                    boolean*
+                                    string->boolean
+                                    =
+                                    void
+                                    logic-unary
+                                    logic-binary))
+                 (string . ,(ftl-type string?
+                                      void
+                                      (λ (x) x)
+                                      string=?
+                                      string<?
+                                      null
+                                      `((+ . ,string-append)))))
                `((length . ((string int) . ,string-length)))))
