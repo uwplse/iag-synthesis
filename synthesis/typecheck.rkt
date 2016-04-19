@@ -180,7 +180,7 @@
                                   (eq? index 'last)))]
                 [folding (and (eq? fold 'step)
                               (eq? index 'previous))])
-           
+
            ; either return index-normalized attribute reference or raise an
            ; error, dumping relevant info
            (if (or regular extrema looping folding)
@@ -197,11 +197,11 @@
         [else
          ; search for matching type predicate
          (let* ([types (ftl-runtime-types runtime)]
-                [type (findf (λ (typename)
-                               ((ftl-type-predicate (assoc-lookup types typename)) expr))
-                             (map cdr types))])
+                [type (findf (λ (type)
+                               ((ftl-type-predicate (cdr type)) expr))
+                             types)])
            (if type
-               (cons expr type)
+               (cons expr (car type))
                (raise-arguments-error 'typecheck "unknown literal value"
                                       "given" expr)))]))
 
@@ -289,6 +289,6 @@
                                               [context (ftl-ast-declare-context attributes)])
                                    (cons symbol context)))
                                ast-map))])
-    (ftl-ast-map-class (λ (body-ast) 
+    (ftl-ast-map-class (λ (body-ast)
                          (ftl-ast-body-typecheck body-ast iface-contexts runtime))
                        ast-map)))
