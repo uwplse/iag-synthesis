@@ -1,7 +1,7 @@
 #lang rosette
 
 ; Functional Tree Language (FTL) synthesis engine
-; Derivation
+; Trees
 
 (require xml
          "translate.rkt"
@@ -13,9 +13,9 @@
          xexpr->ftl-tree
          ftl-tree*
          ftl-tree-symbolize!
-         ftl-tree-verify
-         ftl-tree-verify-input
-         ftl-tree-verify-output
+         ftl-tree-check
+         ftl-tree-check-input
+         ftl-tree-check-output
          ftl-tree-load
          ftl-tree-bind!)
 
@@ -38,17 +38,17 @@
    ) #:mutable
      #:transparent)
 
-; -----------------------
-; Equality of Derivations
-; -----------------------
+; -----------------
+; Equality of Trees
+; -----------------
 
 ; Note that we intentionally do not implement the equal+hash generic interface
 ; because Racket makes assumptions that are unsafe with regard to Rosette
 ; semantics (e.g., expecting concrete hashes for symbolic values). Besides, the
 ; below function really implements an equivalence relation, not equality.
 
-; whether two derivations are equivalent, which requires labels (of both
-; attributes and children) to be eq? and their values to be equal?
+; whether two trees are equivalent, which requires labels (of both attributes and
+; children) to be eq? and their values to be equal? or ftl-tree-equal?
 (define (ftl-tree-equal? tree1 tree2)
   (or (eq? tree1 tree2) ; short-circuit on identity
       (match-let* ([(ftl-tree symbol1
@@ -107,9 +107,9 @@
  ;;                     0
  ;;                     (map (compose listify cdr) children))))))
 
-; ------------------------------------------
-; Generation and Verification of Derivations
-; ------------------------------------------
+; ----------------
+; Parsing of Trees
+; ----------------
 
 ; derive an FTL tree of a grammar in IR form given an XML string
 (define (xml->ftl-tree runtime grammar sentence xml-string)
@@ -164,6 +164,10 @@
      (raise-arguments-error 'xexpr->ftl-tree
                             "could not convert X-expression to tree"
                             'xexpr xexpr)]))
+
+; -----------
+; Tree Oracle
+; -----------
 
 ; derive a symbolic FTL tree of an IR grammar bounded by the given height
 (define (ftl-tree* runtime grammar sentence width height input)
@@ -223,23 +227,25 @@
         (for ([subchild (listify (cdr child))])
           (ftl-tree-symbolize! runtime grammar subchild))))))
 
-; assert that the derivation is valid w.r.t. the given derivation, depending on
-; whether the derivation is input (unevaluated) or output (evaluated); note that
-; this does not work with symbolic derivations, as symbolic numbers fail fixnum?
-; and the association list utility functions need to be symbolically lifted.
-(define (ftl-tree-verify runtime grammar derivation input)
-  (for/all ([derivation derivation])
-    (match-let* ([(ftl-tree symbol option attributes children)
-                  derivation]
-                 [production (assoc-lookup (assoc-lookup grammar symbol)
-                                           option)]
+; -----------------
+; Checking of Trees
+; -----------------
+
+; check (by assertion) that the concrete tree is correctly annotated w.r.t.
+; the grammar, depending on whether the tree is input (unevaluated) or output
+; (evaluated)
+(define (ftl-tree-check runtime grammar tree input)
+  (for/all ([tree tree])
+    (match-let* ([(ftl-tree symbol option attributes children) tree]
+                 [production
+                  (assoc-lookup (assoc-lookup grammar symbol) option)]
                  [(ftl-ir-production inputs labels _ singletons sequences)
                   production])
+
       ; validate the quantity of attributes
       (assert (eq? (length attributes)
-                   (length (if input
-                               inputs
-                               labels))))
+                   (length (if input inputs labels))))
+
       ; validate presence and types of given attributes
       (for ([attribute attributes])
         (match-let* ([(cons label value) attribute]
@@ -249,6 +255,7 @@
           (when input
             (assert (memq label inputs)))
           (assert (type? value))))
+
       ; validate presence and types of given singleton children
       (for ([child singletons])
         (assert (associated? children (car child)))
@@ -256,6 +263,7 @@
           (assert (not (list? child-tree)))
           (assert (eq? (ftl-tree-symbol child-tree)
                        (cdr child)))))
+
       ; validate presence and types of given sequence children
       (for ([child sequences])
         (match-let ([(cons child-name child-symbol) child])
@@ -265,22 +273,23 @@
             (for ([child-tree child-trees])
               (assert (eq? (ftl-tree-symbol child-tree)
                            child-symbol))))))
+
       ; now recursively validate each child subtree
       (for ([child-binding children])
         (let ([child (cdr child-binding)])
           (if (list? child)
               (for ([subchild child])
-                (ftl-tree-verify runtime grammar subchild input))
-              (ftl-tree-verify runtime grammar child input)))))))
+                (ftl-tree-check runtime grammar subchild input))
+              (ftl-tree-check runtime grammar child input)))))))
 
-(define (ftl-tree-verify-input runtime grammar derivation)
-  (ftl-tree-verify runtime grammar derivation #t))
+(define (ftl-tree-check-input runtime grammar tree)
+  (ftl-tree-check runtime grammar tree #t))
 
-(define (ftl-tree-verify-output runtime grammar derivation)
-  (ftl-tree-verify runtime grammar derivation #f))
+(define (ftl-tree-check-output runtime grammar tree)
+  (ftl-tree-check runtime grammar tree #f))
 
 ; -----------------------------
-; Loading and Binding Attribute
+; Attribute Loading and Binding
 ; -----------------------------
 
 ; bind a value to a label on the specified object relative to the given node by
