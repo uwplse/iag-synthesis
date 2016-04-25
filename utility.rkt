@@ -1,6 +1,7 @@
 #lang rosette
 
-(require rosette/lib/angelic)
+(require rosette/lib/angelic
+         racket/struct)
 
 (provide assoc-lookup
          associated?
@@ -17,7 +18,8 @@
          choose*
          boolean*
          integer*
-         number*)
+         number*
+         free)
 
 ; --------------------------
 ; Association list functions
@@ -142,3 +144,22 @@
      (list
       (- n)
       (- n 1)))))
+
+; Get a list of all "free" symbolic variables (constants) in a symbolic value.
+; Note that opaque structures or structure fields will be skipped. The resulting
+; list may have duplicates.
+(define (free v)
+  (match v
+    [(? constant?)
+     (list v)]
+    [(expression _ vs ...)
+     (append-map free vs)]
+    [(? union?)
+     (append-map (λ (p)
+                   (append (free (car p))
+                           (free (cdr p))))
+                 (union-contents v))]
+    [(? struct?)
+     (append-map free (struct->list v #:on-opaque 'skip))]
+    [else
+     null]))
