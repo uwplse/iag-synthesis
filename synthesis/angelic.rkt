@@ -23,8 +23,10 @@
   (current-bitwidth #f) ; consider setting to #f in some instances
   ; let all output attribute values be symbolic
   (ftl-tree-symbolize! runtime grammar derivation)
+  (displayln "traversing the tree")
   ; assert the actions' assignments in whatever order
   (ftl-angelic-constrain runtime grammar derivation)
+  (displayln "querying the solver")
   ; request that Rosette solve for the attributes' concrete values
   (define solution (solve #t)) ; putting constraints here hides error details
   (displayln "solution: ")
@@ -148,7 +150,7 @@
                              [dep (ftl-ir-dependency object 'none label)])
                   (unless (eq? object child-name)
                     (assert (eq? (ftl-tree-load tree (void) null null dep)
-                                 value)))))))
-        ; recurse into children
-        (for ([subtrees (ftl-tree-children tree)])
-          (for-each recurse (listify (cdr subtrees))))))))
+                                 value))))))))
+      ; recurse into children
+      (for ([subtrees (ftl-tree-children tree)])
+        (for-each recurse (listify (cdr subtrees)))))))
