@@ -42,10 +42,10 @@
 ; Equality of Trees
 ; -----------------
 
-; Note that we intentionally do not implement the equal+hash generic interface
-; because Racket makes assumptions that are unsafe with regard to Rosette
-; semantics (e.g., expecting concrete hashes for symbolic values). Besides, the
-; below function really implements an equivalence relation, not equality.
+; Intentionally do not implement the equal+hash generic interface because Racket
+; makes assumptions that are unsafe with regard to Rosette semantics (e.g.,
+; expecting concrete hashes for symbolic values). Besides, the below function
+; really implements an equivalence relation, not equality.
 
 ; whether two trees are equivalent, which requires labels (of both attributes and
 ; children) to be eq? and their values to be equal? or ftl-tree-equal?
@@ -84,28 +84,6 @@
                                                          (cdr child-pair)))
                                       (zip child-list1 child-list2)))))
                      idents1)))))
-
- ;; (define (ftl-tree-hash hash-field tree rec-hash)
- ;;  (match-let* ([(ftl-tree symbol
- ;;                          option
- ;;                          attributes
- ;;                          children) tree]
- ;;               [listify (λ (l) (if (list? l) l (list l)))])
- ;;    (+ (* 101 (hash-field symbol))
- ;;       (* 311 (hash-field option))
- ;;       (* 701 (foldl (λ (attribute sum)
- ;;                       (+ sum (hash-field attribute)))
- ;;                     0
- ;;                     attributes))
- ;;       (* 997 (foldl (λ (child-list sum)
- ;;                       (+ sum
- ;;                          (* 7
- ;;                             (foldl (λ (child sum)
- ;;                                      (+ sum (rec-hash child)))
- ;;                                    0
- ;;                                    child-list))))
- ;;                     0
- ;;                     (map (compose listify cdr) children))))))
 
 ; ----------------
 ; Parsing of Trees

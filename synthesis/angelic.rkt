@@ -7,7 +7,7 @@
          "parse.rkt"
          "translate.rkt"
          "runtime.rkt"
-         "derivation.rkt")
+         "tree.rkt")
 
 (provide ftl-angelic-interpret
          ftl-angelic-evaluate)
