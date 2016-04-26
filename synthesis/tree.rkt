@@ -212,27 +212,22 @@
 ; check (by assertion) that the concrete tree is correctly annotated w.r.t.
 ; the grammar, depending on whether the tree is input (unevaluated) or output
 ; (evaluated)
-(define (ftl-tree-check runtime grammar tree input)
+(define (ftl-tree-check grammar tree input)
   (for/all ([tree tree])
     (match-let* ([(ftl-tree symbol option attributes children) tree]
                  [production
                   (assoc-lookup (assoc-lookup grammar symbol) option)]
                  [(ftl-ir-production inputs labels _ singletons sequences)
-                  production])
+                  production]
+                 [labels (if input inputs labels)])
 
       ; validate the quantity of attributes
-      (assert (eq? (length attributes)
-                   (length (if input inputs labels))))
+      (assert (eq? (length attributes) (length labels)))
 
-      ; validate presence and types of given attributes
+      ; validate the presence of attributes
       (for ([attribute attributes])
-        (match-let* ([(cons label value) attribute]
-                     [type (assoc-lookup labels label)]
-                     [type? (ftl-type-predicate
-                             (assoc-lookup (ftl-runtime-types runtime) type))])
-          (when input
-            (assert (memq label inputs)))
-          (assert (type? value))))
+        (match-let ([(cons label value) attribute])
+          (assert (memq label labels))))
 
       ; validate presence and types of given singleton children
       (for ([child singletons])
@@ -257,14 +252,14 @@
         (let ([child (cdr child-binding)])
           (if (list? child)
               (for ([subchild child])
-                (ftl-tree-check runtime grammar subchild input))
-              (ftl-tree-check runtime grammar child input)))))))
+                (ftl-tree-check grammar subchild input))
+              (ftl-tree-check grammar child input)))))))
 
-(define (ftl-tree-check-input runtime grammar tree)
-  (ftl-tree-check runtime grammar tree #t))
+(define (ftl-tree-check-input grammar tree)
+  (ftl-tree-check grammar tree #t))
 
-(define (ftl-tree-check-output runtime grammar tree)
-  (ftl-tree-check runtime grammar tree #f))
+(define (ftl-tree-check-output grammar tree)
+  (ftl-tree-check grammar tree #f))
 
 ; -----------------------------
 ; Attribute Loading and Binding
