@@ -135,6 +135,54 @@
          [visit (curry ftl-visit! grammar visit-steps)])
      (traverse visit tree))])
 
+; To better understand the desired semantics of incremental/partial tree
+; traversal, keep in mind these two theorems, which can be used to reason about
+; the affected region of propagation of any single change throughout the tree.
+;
+; Theorem: For any attribute grammar given in the semantics of FTL, a post-order
+; (bottom-up) traversal can propagate information from any particular attribute
+; on any particular node at most one level down the tree and any number of levels
+; up the tree.
+; Theorem: For any attribute grammar given in the semantics of FTL, a pre-order
+; (top-down) traversal can propagate information from any particular attribute on
+; any particular node at most one level up the tree and any number of levels down
+; the tree.
+; Corollary: For any attribute grammar given in the semantics of FTL, the effect,
+; or collection of all transitive outgoing dependencies, of any particular
+; attribute on any particular node is encapsulated by a static region on any
+; particular tree, such that every node in the region has a dependent attribute
+; or the attribute itself.
+
+; What if we could synthesize specialized incremental traversals according to
+; the specification of equivalence between executions with the candidate and
+; normal traversal functions on the same initial tree, update, and update
+; schedule.
+
+; TODO
+; 1. dirtiness predicates in incremental attribute grammar
+; 2. schedule fast-forward to first traversal dependent on some attribute
+; 3. explore partitioning of input attributes for synthesis of specialized
+;    update schedules, perhaps such that their dependency graphs share no
+;    vertices (i.e., exhibit orthogonality)
+
+; evaluate the attributes requiring updates on a fully annotated tree of the
+; grammar according to the schedule, with implicit but naive incrementality
+(define (ftl-schedule-incremental-evaluate grammar tree schedule)
+  (match schedule
+    [(ftl-sched-par left right)
+     (ftl-schedule-evaluate grammar tree (ftl-sched-seq left right))]
+    [(ftl-sched-seq left right)
+     (ftl-schedule-evaluate grammar tree left)
+     (ftl-schedule-evaluate grammar tree right)]
+    ; TODO: nested schedules
+    [(ftl-sched-trav order visit-steps)
+     (let ([traverse (match order
+                       ['pre ftl-tree-partial-preorder]
+                       ['post ftl-tree-partial-postorder])]
+           [visit (curry ftl-visit! grammar visit-steps)])
+       ; TODO: recursive traversals
+       (traverse visit tree))]))
+
 ; ---------------
 ; Tree Traversals
 ; ---------------
@@ -154,6 +202,45 @@
         (for-each (curry ftl-tree-postorder visit) (cdr child))
         (ftl-tree-postorder visit (cdr child))))
   (visit tree))
+
+; partial pre-order traversal of a tree, returns new affected region
+(define (ftl-tree-partial-preorder ascend? descend? depth visit tree)
+  ; TODO: actually ascend to parent if necessary and return new root+depth
+  ; (when (ascend? tree)
+  ;     (visit parent))
+  ; pseudocode:
+  ;   if parent dirty:
+  ;      ascend to parent, expanding affected region
+  ;   if depth >= 0:
+  ;      incrementally visit self
+  ;      for child in children:
+  ;          if depth > 0 or child dirty:
+  ;             recurse down to child
+  ;   return new root and relative depth of affected region
+  (when (>= depth 0)
+    (visit tree)
+    (let ([listify (λ (l) (if (list? l) l (list l)))]
+          [depth (- depth 1)]
+          [ascend? (λ (_) #f)])
+      (for ([child (map listify (ftl-tree-children tree))])
+        (ftl-tree-partial-preorder ascend? depth visit child)))))
+
+; partial post-order traversal of a tree, returns new affected region
+(define (ftl-tree-partial-postorder ascend? descend? depth visit tree)
+  ; TODO: actually ascend to parent if necessary and return new root+depth
+  ; pseudocode:
+  ;   if depth >= 0:
+  ;      incrementally visit self
+  ;      for child in children:
+  ;          if depth > 0 or child dirty:
+  ;             descend to child
+  ;   if parent dirty:
+  ;      ascend to parent, expanding affected region
+  ;   return new root and relative depth of affected region
+  (for ([child (ftl-tree-children tree)])
+    (if (list? (cdr child))
+        (for-each (curry ftl-tree-postorder visit) (cdr child))
+        (ftl-tree-postorder visit (cdr child)))))
 
 ; ---------------------
 ; Tree Traversal Visits
@@ -376,13 +463,29 @@
 
   (ftl-tree-check-output val-grammar val-tree))
 
+; -------------------
+; Schedule cost model
+; -------------------
+
+; weight the approximate cost of a schedule, paramterized by number of
+; occurrences of each class (or perhaps parent-child class relationship), on
+; which the polymorphic visit function is dispatched, in the actual input
+(define (ftl-schedule-weight grammar schedule)
+  (match schedule
+    [(ftl-sched-par left right)
+     (void)]
+    [(ftl-sched-seq left right)
+     (void)]
+    [(ftl-sched-trav order steps)
+     (void)]))
+
 ; ---------------
 ; Schedule oracle
 ; ---------------
 
 ; generate a symbolic m-step n-traversal schedule
 ; TODO
-;  1.actually generate VALID schedules
+;  1. actually generate valid schedules
 ;  2. fix crazy symbolic unions
 ; parameterize by number of traversals and number of steps per traversal, then
 ; color each attribute with its traversal and step indices, but asserting (in
