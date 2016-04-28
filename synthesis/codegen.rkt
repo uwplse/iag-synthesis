@@ -1,6 +1,8 @@
 #lang racket
+
 (require rosette/lib/meta/meta)
 (require 2htdp/batch-io)
+(require "syntax.rkt")
 (require "parse.rkt")
 
 ; ------------------
@@ -12,7 +14,7 @@
      input a: int ;
    }
 
-   interface Node {     
+   interface Node {
      var a: int ;
      var b: int ;
    }
@@ -91,12 +93,12 @@
 ; pass 3 of schedule maps traversals to attributes assigned in that traversal such as ((0 . (a)) (1 . (b)))
 (define (attribute-traversal-map schedule)
   (let ([counter 0])
-    (for/hash ([sched schedule])      
+    (for/hash ([sched schedule])
       (begin0
         (letrec ([attributes '()] [actions (cdr sched)])
           (for/list ([action actions])
             (let ([attribute (caddr action)])
-              (set! attributes (cons attribute attributes))))   
+              (set! attributes (cons attribute attributes))))
           (values counter (remove-duplicates attributes)))
       (set! counter (+ 1 counter))))))
 
@@ -124,7 +126,7 @@
     (switch-case general-visitor node-visitor-class-list))) ;; TODO: problem is that this list is not being expanded. How to fix this?
                                                                          ;; figure out why eval-syntax complains the following
                                                                          ;; node-visitor-class-list: identifier used out of context in: node-visitor-class-list
-                                                                         ;; also the value of general-visitor is not used.  
+                                                                         ;; also the value of general-visitor is not used.
 (define-syntax switch-case
  (syntax-rules(document-class node)
    [(switch-case general-visitor visitor-class-pair ...)
@@ -151,7 +153,7 @@
                               [lhs-attribute (caddar attribute)]
                               [lhs-object (cdddar attribute)])
                        (display(td-attribute-assignment general-visitor node-visitor lhs-attribute rhs-attribute)))))
-                 (void))])))) 
+                 (void))]))))
 
 (define-syntax td-attribute-assignment
   (syntax-rules (attribute-value attribute-name node document-attrs)
@@ -227,5 +229,3 @@
 ;; (later, this should be read from a sched file, parsed and stored in a racket data structure automatically):
 (define example-schedule '([TD (Root child a) (Midnode child a)]
                            [BU (Leaf () b) (Midnode () b)]))
-
-
