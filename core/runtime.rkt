@@ -3,11 +3,15 @@
 ; Functional Tree Language (FTL) synthesis engine
 ; Runtime (library and types)
 
-(require "../utility.rkt")
+(require "utility.rkt")
 
 (provide (struct-out ftl-type)
          (struct-out ftl-runtime)
          ftl-base-runtime)
+
+; TODO: target Typed Racket as an intermediate representation, and centralize
+;       supporting data structures that control the FTL-to-Racket mapping in here
+;       without going through a formal parameter everywhere
 
 ; FTL has a monomorphic type system with operator overloading
 

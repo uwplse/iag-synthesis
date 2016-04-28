@@ -4,9 +4,9 @@
 ; Trees
 
 (require xml
-         "translate.rkt"
+         "grammar.rkt"
          "runtime.rkt"
-         "../utility.rkt")
+         "utility.rkt")
 
 (provide (struct-out ftl-tree)
          xml->ftl-tree

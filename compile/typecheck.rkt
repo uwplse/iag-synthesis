@@ -1,9 +1,9 @@
 #lang rosette
 
-(require "../utility.rkt"
-         "parse.rkt"
-         "syntax.rkt"
-         "runtime.rkt")
+(require "../core/utility.rkt"
+         "../core/parse.rkt"
+         "../core/syntax.rkt"
+         "../core/runtime.rkt")
 
 (provide ftl-ast-typecheck)
 
@@ -17,14 +17,15 @@
 ; Create an error thunk to say that the given name of the given kind was
 ; undefined. The name argument is assumed to be either a symbol or a pair of
 ; symbols. Useful for association list lookups.
-(define (undefined kind name)
-  (thunk (let ([occ (if (pair? name)
-                        (string-append (symbol->string (car name))
-                                       "."
-                                       (symbol->string (cdr name)))
-                        (symbol->string name))])
-           (raise-arguments-error 'typecheck (string-append "undefined " kind)
-                                  "occurrence" occ))))
+(define ((undefined kind name))
+  (define occurrence
+    (if (pair? name)
+        (string-append (symbol->string (car name))
+                       "."
+                       (symbol->string (cdr name)))
+        (symbol->string name)))
+  (raise-arguments-error 'typecheck (string-append "undefined " kind)
+                         "occurrence" occurrence))
 
 ; Resolve a unary operator to the proper presumably monomorphic definition
 (define (resolve-unary runtime operator typename)
@@ -166,11 +167,13 @@
                 [regular (and (not recursive)
                               (eq? index 'none)
                               (not (iterable? object)))]
+                ; TODO: are these allowed outside a loop context over object?
                 [extrema (and (not recursive)
-                              (or (eq? index 'first) ; are these allowed outside a loop context over object?
+                              (or (eq? index 'first)
                                   (eq? index 'last))
                               (iterable? object))]
-                [looping (and (not recursive) ; normally indexed attribute references relative to loop context
+                ; normally indexed attribute references relative to loop context
+                [looping (and (not recursive)
                               (eq? loop object)
                               (or (eq? fold 'none)
                                   (eq? fold 'step))
@@ -246,35 +249,33 @@
 
 ; Typecheck, index-normalize, and symbol-resolve a body AST
 (define (ftl-ast-body-typecheck body-ast iface-contexts runtime)
-  (match-let* ([(ftl-ast-body children attributes actions) body-ast]
-               [environ (ftl-ast-body-environ body-ast iface-contexts)]
-               [iterable? (λ (object)
-                            (car (hash-ref environ
-                                           object
-                                           (undefined "child" object))))]
-               [typeof (λ (object label)
-                         (let ([context (cdr (hash-ref environ
-                                                       object
-                                                       (undefined "child" object)))])
-                           (hash-ref context
-                                     label
-                                     (undefined "attribute" (cons object label)))))]
-               [check-def (curry ftl-ast-define-typecheck
-                                 runtime
-                                 typeof
-                                 iterable?)]
-               [check-act (λ (action)
-                            (match action
-                              [(? ftl-ast-define?)
-                               (list (check-def (void) action))]
-                              [(ftl-ast-loop child actions)
-                               (if (iterable? child)
-                                   (map (λ (def)
-                                          (ftl-ast-loop child
-                                                        (check-def child def)))
-                                        actions)
-                                   (raise-arguments-error 'typecheck
-                                                          "loop over non-sequence child"))]))])
+  (match-let ([(ftl-ast-body children attributes actions) body-ast]
+              [environ (ftl-ast-body-environ body-ast iface-contexts)])
+    (define (iterable? object)
+      (car (hash-ref environ
+                     object
+                     (undefined "child" object))))
+    (define (typeof object label)
+      (let ([context (cdr (hash-ref environ
+                                    object
+                                    (undefined "child" object)))])
+        (hash-ref context
+                  label
+                  (undefined "attribute" (cons object label)))))
+    (define check-def
+      (curry ftl-ast-define-typecheck runtime typeof iterable?))
+    (define (check-act action)
+      (match action
+        [(? ftl-ast-define?)
+         (list (check-def (void) action))]
+        [(ftl-ast-loop child actions)
+         (if (iterable? child)
+             (map (λ (def)
+                    (ftl-ast-loop child
+                                  (check-def child def)))
+                  actions)
+             (raise-arguments-error 'typecheck
+                                    "loop over non-sequence child"))]))
     (ftl-ast-body children
                   attributes
                   (apply append (map check-act actions)))))
@@ -282,13 +283,14 @@
 ; Check for type and loop errors in each inlined class, returning the
 ; index-normalized, symbol-resolved form of the AST if it is well-typed
 (define (ftl-ast-typecheck ast-map runtime)
-  (let* ([iface-contexts (make-immutable-hasheq
-                          (map (λ (mapping)
-                                 (match-let* ([(list-rest symbol interface _) mapping]
-                                              [attributes (ftl-ast-body-attributes interface)]
-                                              [context (ftl-ast-declare-context attributes)])
-                                   (cons symbol context)))
-                               ast-map))])
-    (ftl-ast-map-class (λ (body-ast)
-                         (ftl-ast-body-typecheck body-ast iface-contexts runtime))
-                       ast-map)))
+  (define iface-contexts
+    (make-immutable-hasheq
+     (for/list ([ast-mapping ast-map])
+       (map (λ (mapping)
+              (match-let* ([(list-rest symbol interface _) mapping]
+                           [attributes (ftl-ast-body-attributes interface)]
+                           [context (ftl-ast-declare-context attributes)])
+                (cons symbol context)))))))
+  (define (typecheck body-ast)
+    (ftl-ast-body-typecheck body-ast iface-contexts runtime))
+  (ftl-ast-map-class typecheck ast-map))

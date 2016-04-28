@@ -1,0 +1,19 @@
+<Root a="101">
+  <HBox visible="true">
+    <HBox visible="true">
+      <HBox visible="true">
+	<HBox visible="true">
+	  <HBox visible="true">
+	    <HBox visible="true">
+	      <HBox visible="true">
+		<HBox visible="true">
+		  <Leaf visible="false" width_in="2" height_in="4" />
+		</HBox>
+	      </HBox>
+	    </HBox>
+	  </HBox>
+	</HBox>
+      </HBox>
+    </HBox>
+  </HBox>
+</Root>

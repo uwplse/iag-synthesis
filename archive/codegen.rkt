@@ -2,8 +2,8 @@
 
 (require rosette/lib/meta/meta)
 (require 2htdp/batch-io)
-(require "syntax.rkt")
-(require "parse.rkt")
+(require "../core/syntax.rkt")
+(require "../compile/parse.rkt")
 
 ; ------------------
 ; Example FTL grammar

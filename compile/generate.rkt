@@ -1,102 +1,36 @@
 #lang rosette
 
 ; Functional Tree Language (FTL) synthesis engine
-; Translation (AST to IR)
+; Intermediate Representation Generation
 
-(require "syntax.rkt"
-         "parse.rkt"
-         "typecheck.rkt"
-         "runtime.rkt"
-         "../utility.rkt")
+(require "../core/utility.rkt"
+         "../core/syntax.rkt"
+         "../core/runtime.rkt"
+         "typecheck.rkt")
 
-(provide (struct-out ftl-ir-dependency)
-         (struct-out ftl-ir-evaluation)
-         (struct-out ftl-ir-reduction)
-         (struct-out ftl-ir-definition)
-         (struct-out ftl-ir-production)
-         ftl-ir-translate)
+(provide ftl-ir-generate)
+
+; TODO: generate Typed Racket syntax instead of lambdas
 
 ; Open questions:
 ; 1. Must a child sequence be non-empty? Thinking NO (cf. of fold semantics)
 ; 2. Can FTL grammars define an attribute outside of a loop in terms of first or
 ;    last children in a child sequence? Thinking NO (due to above)
 
-; ---------------------------
-; Intermediate Representation
-; ---------------------------
-
-; Attribute dependencies with 'previous indices (e.g., object$-.alpha) valid if
-; and only if the referenced attribute is defined by a fold in the same loop and
-; However, this condition is not currently currently checked and must be dealt
-; with at interpretation time. The only check performed is whether an indexed
-; attribute dependency happens in a proper loop context and is not recursive
-; (except for 'previous, of course).
-
-; attribute definition dependency
-(struct ftl-ir-dependency
-  (; singleton child name, sequence child name, or 'self
-   object
-   ; 'first, 'previous, 'current, 'last, or 'none
-   index
-   ; name of attribute on object
-   label
-   ) #:transparent)
-
-; attribute evaluation
-(struct ftl-ir-evaluation
-  (; accepts dependency values packed in an argument vector
-   function
-   ; vector of IR dependencies
-   dependencies ; TODO: maybe rename parameters? or inputs?
-   ) #:transparent)
-
-; attribute definition for a reduction (fold)
-(struct ftl-ir-reduction
-  (; IR evaluation for initial accumulator value
-   init
-   ; IR evaluation for next accumulator value
-   step
-   ) #:transparent)
-
-; attribute definition
-(struct ftl-ir-definition
-  (; name of sequence child to iterate/reduce over or (void) if not applicable
-   iterate
-   ; IR evaluation or reduction to compute attribute
-   evaluate
-   ) #:transparent)
-
-; production descriptor
-(struct ftl-ir-production
-  (; list of labels that must be supplied by the input derivation
-   inputs
-   ; list associating each label to its type (as a symbol)
-   labels
-   ; list associating each object-label pair to its IR definition; an individual
-   ; association (pair) is sometimes referred to as an action
-   definitions
-   ; list associating each singleton child name with its symbol [in the implicit
-   ; alphabet]
-   singletons
-   ; list associating each sequence child name with its symbol [in the implicit
-   ; alphabet]
-   sequences
-   ) #:transparent)
-
-; -------------------
-; Grammar translation
-; -------------------
+; -------------------------------------
+; Intermediate Representation Generator
+; -------------------------------------
 
 ; translate parsed abstract syntax tree into intermediate representation
-(define (ftl-ir-translate runtime ast-list)
+(define (ftl-ir-generate runtime ast-list)
   (if (void? (ftl-ast-conflicts? ast-list))
     (ftl-ast-compile (ftl-ast-typecheck (ftl-ast-validate (ftl-ast-inline ast-list))
                                         runtime))
     (error "top-level namespace conflict")))
 
-; -------------------
-; Closure compilation
-; -------------------
+; -------------------------------------------------
+; Closure Compilation (Syntax-Directed Translation)
+; -------------------------------------------------
 
 ; turn an AST attribute reference into an IR attribute dependency
 (define (ftl-ast-refer->ftl-ir-dependency ref)
