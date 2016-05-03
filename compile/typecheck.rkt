@@ -1,7 +1,7 @@
 #lang rosette
 
 (require "../core/utility.rkt"
-         "../core/parse.rkt"
+         "../compile/parse.rkt"
          "../core/syntax.rkt"
          "../core/runtime.rkt")
 
@@ -270,10 +270,9 @@
          (list (check-def (void) action))]
         [(ftl-ast-loop child actions)
          (if (iterable? child)
-             (map (λ (def)
-                    (ftl-ast-loop child
-                                  (check-def child def)))
-                  actions)
+             (for/list ([def actions])
+               (ftl-ast-loop child
+                             (check-def child def)))
              (raise-arguments-error 'typecheck
                                     "loop over non-sequence child"))]))
     (ftl-ast-body children
@@ -286,11 +285,10 @@
   (define iface-contexts
     (make-immutable-hasheq
      (for/list ([ast-mapping ast-map])
-       (map (λ (mapping)
-              (match-let* ([(list-rest symbol interface _) mapping]
-                           [attributes (ftl-ast-body-attributes interface)]
-                           [context (ftl-ast-declare-context attributes)])
-                (cons symbol context)))))))
+       (match-let* ([(list-rest symbol interface _) ast-mapping]
+                    [attributes (ftl-ast-body-attributes interface)]
+                    [context (ftl-ast-declare-context attributes)])
+         (cons symbol context)))))
   (define (typecheck body-ast)
     (ftl-ast-body-typecheck body-ast iface-contexts runtime))
   (ftl-ast-map-class typecheck ast-map))

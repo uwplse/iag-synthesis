@@ -1,7 +1,7 @@
 #lang rosette
 
 ; Functional Tree Language (FTL) synthesis engine
-; Parser and Serializer
+; Grammar DSL Parser and Serializer
 
 (require "../core/syntax.rkt"
          parser-tools/lex
@@ -179,6 +179,7 @@
     (decl-list
      ((decl decl-list) (cons $1 $2))
      (() null))
+
     (decl
      ((iface-decl) $1)
      ((trait-decl) $1)
@@ -322,7 +323,7 @@
 ; -----------------
 
 (define (ftl-ast-serialize ftl-ast-list)
-  (string-join (for/list ([ftl-ast ftl-ast-list])
+  (string-join (for/list ([decl ftl-ast-list])
                  (cond
                    [(ftl-ast-interface? decl)
                     (ftl-ast-interface-serialize decl)]

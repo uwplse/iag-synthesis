@@ -276,6 +276,17 @@
     (set-ftl-tree-attributes! node
                               (cons binding (ftl-tree-attributes node)))))
 
+; bind a value to a label on the specified object relative to the given node by
+; symbolically asserting the equality of the attribute's symbolic constant and
+; the given value
+(define (ftl-tree-bind* self object label value)
+  (let* ([node (if (eq? object 'self)
+                   self
+                   (assoc-lookup (ftl-tree-children self) object))]
+         [dependency (ftl-ir-dependency object 'current label)]
+         [symbolic (ftl-tree-load node (void) null null dependency)])
+    (assert (eq? symbolic value))))
+
 ; load a dependency from the current node, the indexed node, the previous
 ; accumulator, or the current accumulator
 (define (ftl-tree-load self indexed previous current dependency)

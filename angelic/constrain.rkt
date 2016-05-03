@@ -3,7 +3,7 @@
 ; Functional Tree Language (FTL) synthesis engine
 ; Angelic Evaluation (Interpretation)
 
-(require "../utility.rkt"
+(require "../core/utility.rkt"
          "../core/syntax.rkt"
          "../core/grammar.rkt"
          "../core/runtime.rkt"

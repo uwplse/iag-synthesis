@@ -5,6 +5,7 @@
 
 (require "../core/utility.rkt"
          "../core/syntax.rkt"
+         "../core/grammar.rkt"
          "../core/runtime.rkt"
          "typecheck.rkt")
 

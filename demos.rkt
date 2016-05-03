@@ -1,16 +1,17 @@
 #lang rosette
 
 (require rosette/lib/synthax
-         "../core/runtime.rkt"
-         "../core/tree.rkt"
-         "../compile/parse.rkt"
-         "../compile/generate.rkt"
-         "../schedule/evaluate.rkt"
-         "../angelic/constrain.rkt")
+         "core/runtime.rkt"
+         "core/tree.rkt"
+         "compile/parse.rkt"
+         "compile/generate.rkt"
+         "schedule/evaluate.rkt"
+         "schedule/syntax.rkt"
+         "angelic/constrain.rkt")
 
 (define (read-grammar filename)
   (let* ([port (open-input-file filename #:mode 'text)]
-         [grammar (ftl-ir-translate ftl-base-runtime (parse-ftl port))])
+         [grammar (ftl-ir-generate ftl-base-runtime (ftl-ast-parse port))])
     (close-input-port port)
     grammar))
 
@@ -21,10 +22,10 @@
                  (port->string (open-input-file filename #:mode 'text))))
 
 (define hvbox-grammar
-  (read-grammar "../examples/hvbox.ftl"))
+  (read-grammar "examples/hvbox.ftl"))
 
 (define hvbox-tree
-  (read-tree hvbox-grammar 'Top "../examples/hvbox.xml"))
+  (read-tree hvbox-grammar 'Top "examples/hvbox.xml"))
 
 (define hvbox-sched
   (ftl-sched-seq
@@ -83,10 +84,10 @@
 
 
 (define points-grammar
-  (read-grammar "../examples/points.ftl"))
+  (read-grammar "examples/points.ftl"))
 
 (define points-tree
-  (read-tree points-grammar 'Root "../examples/points.xml"))
+  (read-tree points-grammar 'Root "examples/points.xml"))
 
 (define points-sched
   (ftl-sched-seq

@@ -1,6 +1,9 @@
 #lang rosette
 
-(require "core/utility.rkt")
+; Functional Tree Language (FTL) synthesis engine
+; Grammar DSL Abstract Syntax Tree
+
+(require "utility.rkt")
 
 (provide (struct-out ftl-ast-interface)
          (struct-out ftl-ast-trait)
