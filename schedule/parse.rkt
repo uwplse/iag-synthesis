@@ -25,7 +25,7 @@
                              RBRACE
                              ARROW
                              IDENT
-                             PERIOD
+                             DOT
                              SEQ
                              PAR
                              EOF))
@@ -60,7 +60,7 @@
    ["}" (token-RBRACE)]
    ["recur" (token-RECUR)]
    ["->" (token-ARROW)]
-   ["." (token-PERIOD)]
+   ["." (token-DOT)]
    [";;" (token-SEQ)]
    ["||" (token-PAR)]
    [(ident) (token-IDENT lexeme)]
@@ -98,7 +98,7 @@
      ((attr) $1))
 
     (attr
-     ((ident PERIOD ident) (cons $1 $3))))))
+     ((ident DOT ident) (cons $1 $3))))))
 
 (define (ftl-sched-parse input)
   (sched-parse (λ () (sched-lex input))))
