@@ -23,8 +23,8 @@
                              RBRACKET
                              LBRACE
                              RBRACE
-                             ARROW
-                             IDENT
+                             COLON
+                             COMMA
                              DOT
                              SEQ
                              PAR
@@ -59,17 +59,18 @@
    ["{" (token-LBRACE)]
    ["}" (token-RBRACE)]
    ["recur" (token-RECUR)]
-   ["->" (token-ARROW)]
+   [":" (token-COLON)]
+   ["," (token-COMMA)]
    ["." (token-DOT)]
    [";;" (token-SEQ)]
    ["||" (token-PAR)]
-   [(ident) (token-IDENT lexeme)]
-   [whitespace (ftl-lex input-port)]
+   [(ident) (token-IDENT (string->symbol lexeme))]
+   [whitespace (sched-lex input-port)]
    [(eof) (token-EOF)]))
 
 (define sched-parse
   (parser
-   (start decl-list)
+   (start trav-comp)
    (tokens tkns e-tkns)
    (end EOF)
    (error (thunk (display "Error: could not parse schedule source")))
@@ -83,28 +84,75 @@
      ((PAR) ftl-sched-par))
 
     (trav
-     ((trav-type LBRACE visit-list RBRACE) (ftl-sched-trav $1
-                                                           $3)))
+     ((trav-type LBRACE visit-list RBRACE) (ftl-sched-trav $1 $3)))
 
     (trav-type
      ((PRE) 'pre)
      ((POST) 'post))
 
-    (visit
-     ((ident ARROW ident LBRACE attr-list RBRACE) (cons (cons $1 $3) $5)))
+    (visit-list
+     ((visit visit-list) (cons $1 $2))
+     ((visit) (list $1)))
 
-    (attr-list
-     ((attr attr-list) (cons $1 $2))
+    (visit
+     ((IDENT COLON IDENT LBRACE RBRACE) (cons (cons $3 $1) null))
+     ((IDENT COLON IDENT LBRACE step-list RBRACE) (cons (cons $3 $1) $5)))
+
+    (step-list
+     ((step COMMA step-list) (cons $1 $3))
+     ((step) (list $1)))
+
+    (step
+     ((LBRACKET attr-list RBRACKET) $2)
      ((attr) $1))
 
+    (attr-list
+     ((attr COMMA attr-list) (cons $1 $3))
+     ((attr) (list $1)))
+
     (attr
-     ((ident DOT ident) (cons $1 $3))))))
+     ((IDENT DOT IDENT) (cons $1 $3))))))
 
 (define (ftl-sched-parse input)
   (sched-parse (λ () (sched-lex input))))
 
-(define example-sched "
-pre {
-HVBox -> HBox { node.attr }
-}
-")
+(define/match (ftl-sched-serialize sched)
+  [((ftl-sched-seq left right))
+   (string-append (ftl-sched-serialize left)
+                  ";;"
+                  (ftl-sched-serialize right))]
+  [((ftl-sched-par left right))
+   (string-append (ftl-sched-serialize left)
+                  "||"
+                  (ftl-sched-serialize right))]
+  [((ftl-sched-trav order visits))
+   (string-append (symbol->string order)
+                  " {\n"
+                  (string-join (map ftl-sched-serialize-visit visits) "\n")
+                  "\n}")])
+
+(define/match (ftl-sched-serialize-visit visit)
+  [((cons (cons iface class) steps))
+   (string-append "  "
+                  (symbol->string class)
+                  ":"
+                  (symbol->string iface)
+                  " {\n"
+                  (string-join (map ftl-sched-serialize-step steps) ",\n")
+                  "\n  }")])
+
+(define (ftl-sched-serialize-step step)
+  (string-append "    "
+                 (if (list? step)
+                     (string-append "["
+                                    (string-join (map ftl-sched-serialize-attr
+                                                      step)
+                                                 ", ")
+                                    "]")
+                     (ftl-sched-serialize-attr step))))
+
+(define/match (ftl-sched-serialize-attr attr)
+  [((cons object label))
+   (string-append (symbol->string object)
+                  "."
+                  (symbol->string label))])
