@@ -1,71 +1,60 @@
 #lang rosette
 
 (require rosette/lib/synthax
+         racket/pretty
          "core/runtime.rkt"
          "core/tree.rkt"
          "compile/parse.rkt"
          "compile/generate.rkt"
-         "schedule/evaluate.rkt"
          "schedule/syntax.rkt"
-         "angelic/constrain.rkt")
+         "schedule/parse.rkt"
+         "schedule/evaluate.rkt"
+         "angelic/constrain.rkt"
+         "draw.rkt")
 
-(define hvbox-grammar
-  (let* ([port (open-input-file "examples/hvbox.ftl" #:mode 'text)]
-         [grammar (ftl-ir-generate ftl-base-runtime
-                                   (ftl-ast-parse port))])
-    (close-input-port port)
-    grammar))
+; parse the HVBox layout spec from our attribute grammar DSL
+(define grammar
+  (ftl-ir-generate ftl-base-runtime
+                   (ftl-ast-parse (open-input-file "examples/hvbox.ftl"
+                                                   #:mode 'text))))
 
-(define hvbox-tree
-  (let* ([port (open-input-file "examples/hvbox.xml" #:mode 'text)]
-         [tree (xml->ftl-tree ftl-base-runtime
-                              hvbox-grammar
-                              'Top
-                              (port->string port))])
-    (close-input-port port)
-    tree))
+; parse a small tree that matches the HVBox attribute grammar
+(define tree
+  (xml->ftl-tree ftl-base-runtime
+                 grammar
+                 'Top
+                 (port->string (open-input-file "examples/hvbox-small.xml"
+                                                #:mode 'text))))
 
-; QUESTION: do we want to parse ftl + xml files interactively?
 ; show input tree
-; > hvbox-tree
+;(pretty-print tree)
+
 ; solve output tree
-; > (define output-hvbox-tree
-; >   (ftl-angelic-evaluate ftl-base-runtime hvbox-grammar hvbox-tree))
+;(define output-tree
+;  (ftl-angelic-evaluate ftl-base-runtime grammar tree))
+
 ; show symbolically annotated output tree
-; > hvbox-tree
+;(pretty-print tree)
+
 ; show evaluation constraints
-; > (asserts)
+;(pretty-print (asserts))
+
 ; show concretely annotated output tree
-; > output-hvbox-tree
+;(pretty-print output-tree)
 
-; TODO: parse the below schedule from pretty sched file
+; parse a schedule for HVBox from our schedule DSL
+(define schedule
+  (ftl-sched-parse (open-input-file "examples/hvbox.sched"
+                                    #:mode 'text)))
+
 ; evaluate the same tree with a static schedule
-; > (define output-hvbox-tree
-; >   (ftl-schedule-evaluate hvbox-grammar hvbox-tree hvbox-sched))
+;(ftl-schedule-evaluate! grammar tree schedule)
+; show output tree
+;(pretty-print tree)
 
-(define hvbox-sched
-  (ftl-sched-seq
-   (ftl-sched-trav 'post
-                   `(((Top . Root) . ())
-                     ((HVBox . HBox) . (,(ftl-visit-iter 'childs
-                                                         '((self . childsWidth)
-                                                           (self . childsHeight)))
-                                        ,(ftl-visit-eval '((self . width)
-                                                           (self . height)))))
-                     ((HVBox . VBox) . (,(ftl-visit-iter 'childs
-                                                         '((self . childsWidth)
-                                                           (self . childsHeight)))
-                                        ,(ftl-visit-eval '((self . width)
-                                                           (self . height)))))
-                     ((HVBox . Leaf) . (,(ftl-visit-eval '((self . width)
-                                                           (self . height)))))))
-   (ftl-sched-trav 'pre
-                   `(((Top . Root) . (,(ftl-visit-eval '((root . right)
-                                                         (root . bottom)))))
-                     ((HVBox . HBox) . (,(ftl-visit-iter 'childs
-                                                         '((childs . right)
-                                                           (childs . bottom)))))
-                     ((HVBox . VBox) . (,(ftl-visit-iter 'childs
-                                                         '((childs . right)
-                                                           (childs . bottom)))))
-                     ((HVBox . Leaf) . ())))))
+; assert the validity of a schedule sketch on our example tree
+;(ftl-schedule-validate ftl-base-runtime grammar sketch tree)
+; take a peek at the constraints
+;(asserts)
+; synthesize a concrete schedule from the sketch
+;(display (ftl-sched-serialize (evaluate sketch (solve #t))))
