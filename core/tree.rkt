@@ -17,6 +17,7 @@
          ftl-tree-check-input
          ftl-tree-check-output
          ftl-tree-load
+         ftl-tree-bind*
          ftl-tree-bind!)
 
 ; -------------------------
@@ -219,7 +220,7 @@
                   (assoc-lookup (assoc-lookup grammar symbol) option)]
                  [(ftl-ir-production inputs labels _ singletons sequences)
                   production]
-                 [labels (if input inputs labels)])
+                 [labels (if input inputs (map car labels))])
 
       ; validate the quantity of attributes
       (assert (eq? (length attributes) (length labels)))
@@ -280,11 +281,8 @@
 ; symbolically asserting the equality of the attribute's symbolic constant and
 ; the given value
 (define (ftl-tree-bind* self object label value)
-  (let* ([node (if (eq? object 'self)
-                   self
-                   (assoc-lookup (ftl-tree-children self) object))]
-         [dependency (ftl-ir-dependency object 'current label)]
-         [symbolic (ftl-tree-load node (void) null null dependency)])
+  (let* ([dependency (ftl-ir-dependency object 'none label)]
+         [symbolic (ftl-tree-load self (void) null null dependency)])
     (assert (eq? symbolic value))))
 
 ; load a dependency from the current node, the indexed node, the previous
