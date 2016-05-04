@@ -1,9 +1,9 @@
-<Root a="101">
+<Root a="0">
   <HBox visible="true">
-    <Leaf visible="true" width_in="64" height_in="32" />
-    <Leaf visible="true" width_in="256" height_in="128" />
-    <HBox visible="true">
-      <Leaf visible="false" width_in="2" height_in="4" />
-    </HBox>
+    <Leaf visible="true" width_in="48" height_in="16" />
+    <VBox visible="true">
+      <Leaf visible="true" width_in="64" height_in="32" />
+      <Leaf visible="true" width_in="64" height_in="32" />
+    </VBox>
   </HBox>
 </Root>
