@@ -392,8 +392,7 @@
                (ftl-visit-eval '(root . bottom)))]
         [hvbox-steps
          (list (ftl-visit-eval '(self . width))
-               (ftl-visit-eval '(self . height))
-               (void))])
+               (ftl-visit-eval '(self . height)))])
     (ftl-sched-seq
      (ftl-sched-trav 'post
                      `(((Top . Root))
