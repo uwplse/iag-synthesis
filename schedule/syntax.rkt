@@ -8,6 +8,7 @@
 
 (provide (struct-out ftl-visit-eval)
          (struct-out ftl-visit-iter)
+         (struct-out ftl-visit-recur)
          (struct-out ftl-sched-trav)
          (struct-out ftl-sched-par)
          (struct-out ftl-sched-seq)
@@ -26,15 +27,23 @@
   (; list of object-label pairs, lacking indexed dependencies and not defining
    ; inherited attributes for sequence children, to compute
    attributes
-   ) #:transparent)
+   ) #:mutable
+     #:transparent)
 
 ; a visit step of attribute evaluations to be iterated in lockstep
 (struct ftl-visit-iter
   (; name of child sequence
-   sequence
+;   sequence
    ; list of object-label pairs to compute in lock-step iteration of child
    ; sequence
    attributes
+   ) #:mutable
+     #:transparent)
+
+; a visit step of a recursive visit
+(struct ftl-visit-recur
+  (; name of child (singleton or sequence) to recursively visit
+   child
    ) #:transparent)
 
 ; traversal descriptor

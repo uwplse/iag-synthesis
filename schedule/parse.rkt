@@ -49,11 +49,13 @@
      (:or (:: "//" (:* (char-complement (:or "\r" "\n"))) (:? "\r") "\n")
           (:: "/*" (complement (:: any-string "*/" any-string)) "*/")))))
 
+; TODO: use identifiers for keywords?
 (define sched-lex
   (lexer
    [(comment) (sched-lex input-port)]
    ["pre" (token-PRE)]
    ["post" (token-POST)]
+   ["rec" (token-REC)]
    ["[" (token-LBRACKET)]
    ["]" (token-RBRACKET)]
    ["{" (token-LBRACE)]
@@ -88,7 +90,8 @@
 
     (trav-type
      ((PRE) 'pre)
-     ((POST) 'post))
+     ((POST) 'post)
+     ((REC) 'rec))
 
     (visit-list
      ((visit visit-list) (cons $1 $2))
@@ -103,8 +106,9 @@
      ((step) (list $1)))
 
     (step
-     ((LBRACKET attr-list RBRACKET) $2)
-     ((attr) $1))
+     ((LBRACKET attr-list RBRACKET) (ftl-visit-iter $2))
+     ((RECUR IDENT) (ftl-visit-recur $2))
+     ((attr) (ftl-visit-eval $1)))
 
     (attr-list
      ((attr COMMA attr-list) (cons $1 $3))
@@ -137,19 +141,22 @@
                   (symbol->string class)
                   ":"
                   (symbol->string iface)
-                  " {\n"
-                  (string-join (map ftl-sched-serialize-step steps) ",\n")
+                  " {\n    "
+                  (string-join (map ftl-sched-serialize-step steps) ",\n    ")
                   "\n  }")])
 
 (define (ftl-sched-serialize-step step)
-  (string-append "    "
-                 (if (list? step)
-                     (string-append "["
-                                    (string-join (map ftl-sched-serialize-attr
-                                                      step)
-                                                 ", ")
-                                    "]")
-                     (ftl-sched-serialize-attr step))))
+  (match step
+    [(ftl-visit-iter attributes)
+     (string-append "["
+                    (string-join (map ftl-sched-serialize-attr
+                                      attributes)
+                                 ", ")
+                    "]")]
+    [(ftl-visit-eval attribute)
+     (ftl-sched-serialize-attr attribute)]
+    [(ftl-visit-recur step)
+     (string-append "recur" (symbol->string step))]))
 
 (define/match (ftl-sched-serialize-attr attr)
   [((cons object label))
