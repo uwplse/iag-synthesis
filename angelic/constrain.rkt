@@ -16,14 +16,10 @@
   (current-bitwidth #f) ; consider setting to #f in some instances
   ; let all output attribute values be symbolic
   (ftl-tree-symbolize! runtime grammar derivation)
-  (displayln "traversing the tree")
   ; assert the actions' assignments in whatever order
   (ftl-angelic-constrain runtime grammar derivation)
-  (displayln "querying the solver")
   ; request that Rosette solve for the attributes' concrete values
   (define solution (solve #t)) ; putting constraints here hides error details
-  (displayln "solution: ")
-  (displayln solution)
   ; substitute the solved concrete values in for the symbolic attribute values
   (evaluate derivation solution))
 
