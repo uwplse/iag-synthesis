@@ -3,16 +3,18 @@
 ; Functional Tree Language (FTL) intepreter
 ; Schedules
 
-(require "../core/utility.rkt"
+(require rosette/lib/angelic
+         "../core/utility.rkt"
          "../core/grammar.rkt"
          "../core/tree.rkt"
          "../compile/parse.rkt"
          "../compile/generate.rkt"
          "syntax.rkt")
 
-(provide ftl-schedule-interpret
-         ftl-schedule-evaluate
-         ftl-schedule-validate)
+(provide ftl-schedule-interpret!
+         ftl-schedule-evaluate!
+         ftl-schedule-validate
+         sketch)
 
 ; Incremental grammars may simply require the following inference rule in
 ; combination with a dirty bit predicate expression:
@@ -33,26 +35,26 @@
 ; > (ftl-schedule-interpret ftl-base-runtime (open-input-file "../examples/points.ftl") 'Root example-deriv example-sched)
 
 ; interpret : pi_{g:L(G_FTL)} L([[g]]) * L(G_sched) -> L([[g]])
-(define (ftl-schedule-interpret runtime ftl-port root tree schedule)
+(define (ftl-schedule-interpret! runtime ftl-port root tree schedule)
   (current-bitwidth #f)
-  (ftl-schedule-evaluate (ftl-ir-generate (parse-ftl ftl-port) runtime)
-                         tree
-                         schedule))
+  (ftl-schedule-evaluate! (ftl-ir-generate (parse-ftl ftl-port) runtime)
+                          tree
+                          schedule))
 
 ; evaluate the attributes on the tree of the grammar according to the schedule
-(define/match (ftl-schedule-evaluate grammar tree schedule)
+(define/match (ftl-schedule-evaluate! grammar tree schedule)
   [(_ _ (ftl-sched-par left right))
    ; TODO: parallelism
-   (ftl-schedule-evaluate grammar tree (ftl-sched-seq left right))]
+   (ftl-schedule-evaluate! grammar tree (ftl-sched-seq left right))]
   [(_ _ (ftl-sched-seq left right))
-   (ftl-schedule-evaluate grammar tree left)
-   (ftl-schedule-evaluate grammar tree right)]
+   (ftl-schedule-evaluate! grammar tree left)
+   (ftl-schedule-evaluate! grammar tree right)]
   ; TODO: nested schedules
   [(_ _ (ftl-sched-trav order visit-steps))
    (let ([traverse (match order
                      ['pre ftl-tree-preorder]
                      ['post ftl-tree-postorder])]
-         [visit (curry ftl-visit! grammar visit-steps)])
+         [visit (curry ftl-visit! grammar visit-steps ftl-tree-bind!)])
      (traverse visit tree))])
 
 ; To better understand the desired semantics of incremental/partial tree
@@ -90,16 +92,16 @@
 (define (ftl-schedule-incremental-evaluate grammar tree schedule)
   (match schedule
     [(ftl-sched-par left right)
-     (ftl-schedule-evaluate grammar tree (ftl-sched-seq left right))]
+     (ftl-schedule-incremental-evaluate grammar tree (ftl-sched-seq left right))]
     [(ftl-sched-seq left right)
-     (ftl-schedule-evaluate grammar tree left)
-     (ftl-schedule-evaluate grammar tree right)]
+     (ftl-schedule-incremental-evaluate grammar tree left)
+     (ftl-schedule-incremental-evaluate grammar tree right)]
     ; TODO: nested schedules
     [(ftl-sched-trav order visit-steps)
      (let ([traverse (match order
                        ['pre ftl-tree-partial-preorder]
                        ['post ftl-tree-partial-postorder])]
-           [visit (curry ftl-visit! grammar visit-steps)])
+           [visit (curry ftl-visit! grammar visit-steps ftl-tree-bind!)])
        ; TODO: recursive traversals
        (traverse visit tree))]))
 
@@ -168,53 +170,56 @@
 
 ; evaluate some attributes at the each node in the subtree rooted at the given
 ; node
-(define (ftl-visit! grammar visit-steps self)
+; TODO: parameterize with default values for accumulators
+(define (ftl-visit! grammar visit-steps bind self)
   (match-let* ([(ftl-tree symbol option _ _) self]
                [production (assoc-lookup (assoc-lookup grammar symbol) option)]
                [definitions (ftl-ir-production-definitions production)]
-               [steps (assoc-lookup visit-steps (cons symbol option))]
-               [get-action (λ (attribute)
-                             (cons attribute
-                                   (assoc-lookup definitions attribute)))])
+               [steps (assoc-lookup visit-steps (cons symbol option))])
 
     ; perform each step (i.e., sequenced direct evaluation or lockstep
     ; iteration) of the visit in sequence
-    (for ([step steps])
+    (for ([step steps]
+          #:when (not (void? step)))
+      (for/all ([step step])
       (match step
-        [(ftl-visit-eval attributes)
-         (ftl-visit-evaluate! grammar
-                              (map get-action attributes)
-                              self)]
-        [(ftl-visit-iter child-name attributes)
-         (ftl-visit-iterate! grammar
-                             (map get-action attributes)
-                             child-name
-                             self)]))))
+        [(ftl-visit-iter attributes) ; step is list of iterated attributes
+         (ftl-visit-iterate! (for/list ([attribute attributes])
+                               (unless (void? attribute)
+                                 (cons attribute
+                                       (assoc-lookup definitions
+                                                     attribute))))
+                             bind
+                             self)]
+        [(ftl-visit-eval attribute)
+         (ftl-visit-evaluate! attribute
+                              (assoc-lookup definitions attribute)
+                              bind
+                              self)])))))
 
-; perform a visit step of sequenced evaluations
-(define (ftl-visit-evaluate! grammar actions self)
-  (for ([action actions])
-    (match-let* ([(cons (cons object label)
-                        (ftl-ir-definition iter eval)) action]
-                 [(ftl-ir-evaluation fun deps) eval]
-                 [load (curry ftl-tree-load self (void) null null)]
-                 [value (fun (vector-map load deps))])
-      (ftl-tree-bind! self object label value))))
+; perform an attribute evaluation
+(define (ftl-visit-evaluate! attribute rule bind self)
+  (match-let* ([(cons object label) attribute]
+               [(ftl-ir-definition (? void?)
+                                   (ftl-ir-evaluation fun deps)) rule]
+               [load (curry ftl-tree-load self (void) null null)]
+               [value (fun (vector-map load deps))])
+    (bind self object label value)))
 
-; perform a visit step of sequenced evaluations
-; parameterize with: default, bind
-(define (ftl-visit-iterate! grammar actions child-name self)
+; perform one or more iterated attribute evaluations in lockstep
+(define (ftl-visit-iterate! actions bind self)
+  (define iterated
+    (ftl-ir-definition-iterate (cdr (findf (compose not void?) actions))))
   ; let's just double-check that these actions are actually meant to iterate
-  ; over this child sequence
+  ; over the same child sequence
   (for ([action actions])
-    (assert (eq? (ftl-ir-definition-iterate (cdr action))
-                 child-name)))
+    (assert (eq? iterated (ftl-ir-definition-iterate (cdr action)))))
   ; for each folded attribute, compute the initial value
   ; collect initial values into an association list
   ; for each child in sequence, evaluate attribute, bind result if
   ; applicable and accumulate result if applicable
   ; for each final accumulated value, bind it if applicable
-  (let* ([children (assoc-lookup (ftl-tree-children self) child-name)]
+  (let* ([children (assoc-lookup (ftl-tree-children self) iterated)]
          [name-rule-map (cdrmap ftl-ir-definition-evaluate actions)])
 
     (define initial
@@ -245,9 +250,9 @@
                ; either some singleton child or the iterated child
                ; sequence
                (let ([value (fun (vector-map load deps))])
-                 (if (eq? object child-name)
-                     (ftl-tree-bind! child 'self label value)
-                     (ftl-tree-bind! self object label value))
+                 (if (eq? object iterated)
+                     (bind child 'self label value)
+                     (bind self object label value))
                  ; pass through the current accumulator unchanged
                  current)]
               [(ftl-ir-reduction _ (ftl-ir-evaluation fun deps))
@@ -255,8 +260,8 @@
                ; iterated child sequence if necessary, and pass
                ; through new accumulator value
                (let ([value (fun (vector-map load deps))])
-                 (when (eq? object child-name)
-                   (ftl-tree-bind! child 'self label value))
+                 (when (eq? object iterated)
+                   (bind child 'self label value))
                  ; pass through the current accumulator unchanged
                  (cons (cons name (fun (vector-map load deps)))
                        current))])))))
@@ -265,23 +270,12 @@
     ; destination if on a singleton child
     (for ([result final])
       (match-let ([(cons (cons object label) value) result])
-        (unless (eq? object child-name)
-          (ftl-tree-bind! self object label value))))))
+        (unless (eq? object iterated)
+          (bind self object label value))))))
 
 ; -------------------
 ; Schedule validation
 ; -------------------
-
-; count the traversals in a schedule in an embarrassingly inefficient manner
-(define/match (ftl-schedule-length schedule)
-  [((ftl-sched-par left right))
-   (+ (ftl-schedule-length left)
-      (ftl-schedule-length right))]
-  [((ftl-sched-seq left right))
-   (+ (ftl-schedule-length left)
-      (ftl-schedule-length right))]
-  [((ftl-sched-trav order visit-steps))
-   1])
 
 ; functionally update the grammar to invoke a validation evaluation rule
 ; returning an int
@@ -336,48 +330,96 @@
 
 ; check that each attribute's dependencies are satisfied before its evaluation
 ; TODO: lift over symbolic trees
-(define (ftl-schedule-validate grammar schedule tree)
+(define (ftl-schedule-validate runtime grammar schedule tree)
   ; the current index, which is mutated on each successive traversal
-  (define index -1)
-  (define val-tree (make-validation-tree index tree))
-  (set! index 0)
+  (define exclude-min -1) ; exclusive exclusion
+  (define exclude-max -1) ; inclusive exclusion
+  (define index 0)
 
   ; generate the validation grammar
   (define val-grammar
     (make-validation-grammar grammar
                              (λ (dependencies)
+                               (set! index (+ index 1))
                                (for ([dependency dependencies])
-                                 (assert (<= dependency index)))
+                                 (assert (not (and (> dependency exclude-min)
+                                                   (<= dependency exclude-max))))
+                                 (assert (< dependency index)))
                                index)))
+  (define val-tree
+    (make-validation-tree index tree))
+  (ftl-tree-symbolize! runtime val-grammar val-tree)
 
   ; recursively validate the schedule w.r.t. to the validation grammar and tree
   (define (recurse schedule)
     (for/all ([schedule schedule])
       (match schedule
         [(ftl-sched-par left right)
-         (let ([left-size (ftl-schedule-length left)]
-               [right-size (ftl-schedule-length right)])
-           (set! index (+ index left-size))
-           (recurse right)
-           (set! index (- index left-size))
+         (let ([old-min exclude-min]
+               [old-max exclude-max]
+               [new-min index])
            (recurse left)
-           (set! index (+ index left-size right-size)))]
+           (set! exclude-min (if (> old-min 0)
+                                 (min new-min old-min)
+                                 new-min))
+           (set! exclude-max index)
+           (recurse right)
+           (set! exclude-min old-min)
+           (set! exclude-max old-max))]
         [(ftl-sched-seq left right)
          (recurse left)
-         (set! index (+ index (ftl-schedule-length left)))
-         (recurse right)
-         (set! index (+ index (ftl-schedule-length right)))]
+         (recurse right)]
         ; TODO: nested schedules
         [(ftl-sched-trav order visit-steps)
          (let ([traverse (for/all ([order order])
                            (match order
                              ['pre ftl-tree-preorder]
                              ['post ftl-tree-postorder]))]
-               [visit (curry ftl-visit! val-grammar visit-steps)])
+               [visit (curry ftl-visit! val-grammar visit-steps ftl-tree-bind*)])
            ; TODO: recursive traversal
            (traverse visit val-tree))])))
 
   ; evaluate the validation schedule and check the output
   (recurse schedule)
 
+  ; TODO: rename to 'ftl-tree-annotated?'
   (ftl-tree-check-output val-grammar val-tree))
+
+(current-bitwidth #f)
+(define sketch
+  (let ([root-steps
+         (list (ftl-visit-eval '(root . right))
+               (ftl-visit-eval '(root . bottom)))]
+        [hvbox-steps
+         (list (ftl-visit-eval '(self . width))
+               (ftl-visit-eval '(self . height))
+               (void))])
+    (ftl-sched-seq
+     (ftl-sched-trav 'post
+                     `(((Top . Root))
+
+                       ((HVBox . HBox)
+                        ,(ftl-visit-iter '((self . childsWidth) (self . childsHeight)))
+                        ,(apply choose* hvbox-steps)
+                        ,(apply choose* hvbox-steps))
+
+                       ((HVBox . VBox)
+                        ,(ftl-visit-iter '((self . childsWidth) (self . childsHeight)))
+                        ,(apply choose* hvbox-steps)
+                        ,(apply choose* hvbox-steps))
+
+                       ((HVBox . Leaf)
+                        ,(apply choose* hvbox-steps)
+                        ,(apply choose* hvbox-steps))))
+     (ftl-sched-trav 'pre
+                     `(((Top . Root)
+                        ,(apply choose* root-steps)
+                        ,(apply choose* root-steps))
+
+                       ((HVBox . HBox)
+                        ,(ftl-visit-iter '((childs . right) (childs . bottom))))
+
+                       ((HVBox . VBox)
+                        ,(ftl-visit-iter '((childs . right) (childs . bottom))))
+
+                       ((HVBox . Leaf)))))))
