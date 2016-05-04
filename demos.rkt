@@ -9,14 +9,16 @@
          "schedule/syntax.rkt"
          "angelic/constrain.rkt")
 
+(define runtime ftl-base-runtime)
+
 (define (read-grammar filename)
   (let* ([port (open-input-file filename #:mode 'text)]
-         [grammar (ftl-ir-generate ftl-base-runtime (ftl-ast-parse port))])
+         [grammar (ftl-ir-generate runtime (ftl-ast-parse port))])
     (close-input-port port)
     grammar))
 
 (define (read-tree grammar sentence filename)
-  (xml->ftl-tree ftl-base-runtime
+  (xml->ftl-tree runtime
                  grammar
                  sentence
                  (port->string (open-input-file filename #:mode 'text))))
@@ -53,35 +55,6 @@
                                                          '((childs . right)
                                                            (childs . bottom)))))
                      ((HVBox . Leaf) . ())))))
-
-
-(define hvbox-sched-sketch
-  (ftl-sched-seq
-   (ftl-sched-trav (choose 'pre 'post)
-                   `(((Top . Root) . ())
-                     ((HVBox . HBox) . (,(ftl-visit-iter 'childs
-                                                         '((self . childsWidth)
-                                                           (self . childsHeight)))
-                                        ,(ftl-visit-eval '((self . width)
-                                                           (self . height)))))
-                     ((HVBox . VBox) . (,(ftl-visit-iter 'childs
-                                                         '((self . childsWidth)
-                                                           (self . childsHeight)))
-                                        ,(ftl-visit-eval '((self . width)
-                                                           (self . height)))))
-                     ((HVBox . Leaf) . (,(ftl-visit-eval '((self . width)
-                                                           (self . height)))))))
-   (ftl-sched-trav (choose 'pre 'post)
-                   `(((Top . Root) . (,(ftl-visit-eval '((root . right)
-                                                         (root . bottom)))))
-                     ((HVBox . HBox) . (,(ftl-visit-iter 'childs
-                                                         '((childs . right)
-                                                           (childs . bottom)))))
-                     ((HVBox . VBox) . (,(ftl-visit-iter 'childs
-                                                         '((childs . right)
-                                                           (childs . bottom)))))
-                     ((HVBox . Leaf) . ())))))
-
 
 (define points-grammar
   (read-grammar "examples/points.ftl"))
