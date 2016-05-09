@@ -9,8 +9,7 @@
          "schedule/syntax.rkt"
          "schedule/parse.rkt"
          "schedule/evaluate.rkt"
-         "angelic/constrain.rkt"
-         "draw.rkt")
+         "angelic/constrain.rkt")
 
 ; parse the HVBox layout spec from our attribute grammar DSL
 (define grammar
@@ -26,23 +25,22 @@
                  (port->string (open-input-file "examples/hvbox-small.xml"
                                                 #:mode 'text))))
 
-; show input tree
+; input tree
 ;(pretty-print tree)
 
-; solve output tree
+; angelically evaluate
 ;(define output-tree
 ;  (ftl-angelic-evaluate ftl-base-runtime grammar tree))
 
-; show symbolically annotated output tree
+; symbolically annotated tree
 ;(pretty-print tree)
 
-; show evaluation constraints
 ;(pretty-print (asserts))
 
-; show concretely annotated output tree
+; concretely annotated output tree
 ;(pretty-print output-tree)
 
-; parse a schedule for HVBox from our schedule DSL
+; parse a static schedule from our schedule DSL
 (define schedule
   (ftl-sched-parse (open-input-file "examples/hvbox.sched"
                                     #:mode 'text)))
@@ -54,7 +52,9 @@
 
 ; assert the validity of a schedule sketch on our example tree
 ;(ftl-schedule-validate ftl-base-runtime grammar sketch tree)
+
 ; take a peek at the constraints
 ;(asserts)
+
 ; synthesize a concrete schedule from the sketch
 ;(display (ftl-sched-serialize (evaluate sketch (solve #t))))
