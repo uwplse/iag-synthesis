@@ -1,0 +1,27 @@
+pre {
+  Origin:Root {
+    [p.bx, p.by]
+  }
+  Relative:Point {
+    self.x, self.dx, self.y, self.dy,
+    [p.bx, p.by]
+  }
+  Fixed:Point {
+    self.x, self.dx, self.y, self.dy,
+    [p.bx, p.by]
+  }
+  Endpoint:Point {
+    self.x, self.y
+  }
+};;pre {
+  Origin:Root {
+    [self.w, self.h]
+  }
+  Relative:Point {
+    [self.w, self.h]
+  }
+  Fixed:Point {
+    [self.w, self.h]
+  }
+  Endpoint:Point { }
+}
