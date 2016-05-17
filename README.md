@@ -22,17 +22,11 @@ incrementalization with optimal synthesis of change propagation functions, and
 code generation (compilation) targeting a variety of backends (language + tree +
 library).
 
-### Core (`core/`)
+### Attribute Grammar (`grammar/`)
 
-This directory contains generic utility functions and code for creating and
-manipulating the AST of the attribute grammar domain-specific language (DSL),
-which is FTL.
-
-### Compilation (`compile/`)
-
-This directory contains code for parsing, typechecking, serializing, and
-translating to an intermediate representation a program in the attribute grammar
-DSL.
+This directory contains code for parsing, serializing, manipulating,
+typechecking,and translating to an intermediate representation the AST of the
+attribute grammar domain-specific language (DSL), which is FTL.
 
 ### Angelic Evaluator (`angelic/`)
 
