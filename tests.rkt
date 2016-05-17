@@ -2,14 +2,17 @@
 
 (require rosette/lib/synthax
          racket/pretty
-         "core/runtime.rkt"
-         "core/tree.rkt"
-         "compile/parse.rkt"
-         "compile/generate.rkt"
+         "grammar/runtime.rkt"
+         "grammar/tree.rkt"
+         "grammar/parse.rkt"
+         "grammar/generate.rkt"
          "schedule/syntax.rkt"
          "schedule/parse.rkt"
          "schedule/evaluate.rkt"
-         "angelic/constrain.rkt")
+         "angelic/constrain.rkt"
+         "examples/hvbox-sketch.rkt")
+
+(current-bitwidth #f)
 
 (define runtime ftl-base-runtime)
 

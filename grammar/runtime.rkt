@@ -3,7 +3,7 @@
 ; Functional Tree Language (FTL) synthesis engine
 ; Runtime (library and types)
 
-(require "utility.rkt")
+(require "../utility.rkt")
 
 (provide (struct-out ftl-type)
          (struct-out ftl-runtime)

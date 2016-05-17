@@ -3,10 +3,10 @@
 ; Functional Tree Language (FTL) synthesis engine
 ; Intermediate Representation Generation
 
-(require "../core/utility.rkt"
-         "../core/syntax.rkt"
-         "../core/grammar.rkt"
-         "../core/runtime.rkt"
+(require "../utility.rkt"
+         "syntax.rkt"
+         "intermediate.rkt"
+         "runtime.rkt"
          "typecheck.rkt")
 
 (provide ftl-ir-generate)

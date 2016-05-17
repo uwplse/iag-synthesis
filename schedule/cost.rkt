@@ -3,8 +3,8 @@
 ; Functional Tree Language (FTL) intepreter
 ; Schedule DSL Cost Model
 
-(require "../core/utility.rkt"
-         "../core/grammar.rkt"
+(require "../utility.rkt"
+         "../grammar/intermediate.rkt"
          "syntax.rkt")
 
 (provide ftl-sched-weight)

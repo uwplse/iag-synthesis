@@ -3,8 +3,8 @@
 ; Functional Tree Language (FTL) synthesis engine
 ; Angelic Interpreter (End-to-end Evaluator)
 
-(require "../compile/parse.rkt"
-         "../compile/generate.rkt"
+(require "../grammar/parse.rkt"
+         "../grammar/generate.rkt"
          "constrain.rkt")
 
 (provide ftl-angelic-interpret

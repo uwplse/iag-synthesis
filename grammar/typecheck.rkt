@@ -1,9 +1,9 @@
 #lang rosette
 
-(require "../core/utility.rkt"
-         "../compile/parse.rkt"
-         "../core/syntax.rkt"
-         "../core/runtime.rkt")
+(require "../utility.rkt"
+         "parse.rkt"
+         "syntax.rkt"
+         "runtime.rkt")
 
 (provide ftl-ast-typecheck)
 

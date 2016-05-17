@@ -3,7 +3,7 @@
 ; Functional Tree Language (FTL) synthesis engine
 ; Grammar DSL Parser and Serializer
 
-(require "../core/syntax.rkt"
+(require "syntax.rkt"
          parser-tools/lex
          (prefix-in : parser-tools/lex-sre)
          parser-tools/yacc

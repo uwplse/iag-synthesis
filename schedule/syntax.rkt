@@ -4,8 +4,8 @@
 ; Schedule DSL Abstract Syntax Tree
 
 (require rosette/lib/angelic
-         "../core/utility.rkt"
-         "../core/grammar.rkt")
+         "../utility.rkt"
+         "../grammar/intermediate.rkt")
 
 (provide (struct-out ftl-step-eval)
          (struct-out ftl-step-iter)
