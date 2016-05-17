@@ -106,13 +106,13 @@
      ((step) (list $1)))
 
     (step
-     ((LBRACKET attr-list RBRACKET) (ftl-visit-iter $2))
-     ((RECUR IDENT) (ftl-visit-recur $2))
-     ((attr) (ftl-visit-eval $1)))
+     ((LBRACKET attr-list RBRACKET) (ftl-step-iter $2))
+     ((RECUR IDENT) (ftl-step-recur $2))
+     ((attr) (ftl-step-eval $1)))
 
     (attr-list
-     ((attr COMMA attr-list) (cons $1 $3))
-     ((attr) (list $1)))
+     ((attr COMMA attr-list) (cons (ftl-step-eval $1) $3))
+     ((attr) (list (ftl-step-eval $1))))
 
     (attr
      ((IDENT DOT IDENT) (cons $1 $3))))))
@@ -147,16 +147,16 @@
 
 (define (ftl-sched-serialize-step step)
   (match step
-    [(ftl-visit-iter attributes)
+    [(ftl-step-iter attributes)
      (string-append "["
-                    (string-join (map ftl-sched-serialize-attr
+                    (string-join (map ftl-sched-serialize-step
                                       attributes)
                                  ", ")
                     "]")]
-    [(ftl-visit-eval attribute)
+    [(ftl-step-eval attribute)
      (ftl-sched-serialize-attr attribute)]
-    [(ftl-visit-recur step)
-     (string-append "recur" (symbol->string step))]))
+    [(ftl-step-recur child)
+     (string-append "recur " (symbol->string child))]))
 
 (define/match (ftl-sched-serialize-attr attr)
   [((cons object label))

@@ -16,8 +16,8 @@
          ftl-schedule-validate
          sketch)
 
-; Incremental grammars may simply require the following inference rule in
-; combination with a dirty bit predicate expression:
+; Incremental grammars may simply require the following inference rule in a
+; distinct context for dirty bit predicates.
 ;         Γ |- t.α : τ
 ; --------------------------
 ; Γ |- ι[t.α] : τ, Δ[t.α] : 2
@@ -44,16 +44,16 @@
 ; evaluate the attributes on the tree of the grammar according to the schedule
 (define/match (ftl-schedule-evaluate! grammar tree schedule)
   [(_ _ (ftl-sched-par left right))
-   ; TODO: parallelism
    (ftl-schedule-evaluate! grammar tree (ftl-sched-seq left right))]
   [(_ _ (ftl-sched-seq left right))
    (ftl-schedule-evaluate! grammar tree left)
    (ftl-schedule-evaluate! grammar tree right)]
-  ; TODO: nested schedules
   [(_ _ (ftl-sched-trav order visit-steps))
-   (let ([traverse (match order
-                     ['pre ftl-tree-preorder]
-                     ['post ftl-tree-postorder])]
+   (let ([traverse (for/all ([order order])
+                     (match order
+                       ['pre ftl-tree-preorder]
+                       ['post ftl-tree-postorder]
+                       ['rec ftl-tree-inorder]))]
          [visit (curry ftl-visit! grammar visit-steps ftl-tree-bind!)])
      (traverse visit tree))])
 
@@ -75,34 +75,29 @@
 ; particular tree, such that every node in the region has a dependent attribute
 ; or the attribute itself.
 
-; What if we could synthesize specialized incremental traversals according to
-; the specification of equivalence between executions with the candidate and
-; normal traversal functions on the same initial tree, update, and update
-; schedule.
-
-; TODO
+; TODO for incrementality
 ; 1. dirtiness predicates in incremental attribute grammar
-; 2. schedule fast-forward to first traversal dependent on some attribute
-; 3. explore partitioning of input attributes for synthesis of specialized
+; 2. explore partitioning of input attributes for synthesis of specialized
 ;    update schedules, perhaps such that their dependency graphs share no
-;    vertices (i.e., exhibit orthogonality)
+;    vertices (i.e., exhibit orthogonality); more generally, we need to look at
+;    what sort of subdomains will present interesting opportunities for
+;    specialization, both incrementally and generally
 
 ; evaluate the attributes requiring updates on a fully annotated tree of the
 ; grammar according to the schedule, with implicit but naive incrementality
 (define (ftl-schedule-incremental-evaluate grammar tree schedule)
+  ; TODO: propagate bounds of affected region, perhaps via a path and depth
   (match schedule
     [(ftl-sched-par left right)
      (ftl-schedule-incremental-evaluate grammar tree (ftl-sched-seq left right))]
     [(ftl-sched-seq left right)
      (ftl-schedule-incremental-evaluate grammar tree left)
      (ftl-schedule-incremental-evaluate grammar tree right)]
-    ; TODO: nested schedules
     [(ftl-sched-trav order visit-steps)
      (let ([traverse (match order
                        ['pre ftl-tree-partial-preorder]
                        ['post ftl-tree-partial-postorder])]
            [visit (curry ftl-visit! grammar visit-steps ftl-tree-bind!)])
-       ; TODO: recursive traversals
        (traverse visit tree))]))
 
 ; ---------------
@@ -111,19 +106,31 @@
 
 ; pre-order traversal of a tree
 (define (ftl-tree-preorder visit tree)
-  (visit tree)
-  (for ([child (ftl-tree-children tree)])
-    (if (list? (cdr child))
-        (for-each (curry ftl-tree-preorder visit) (cdr child))
-        (ftl-tree-preorder visit (cdr child)))))
+  (for*/all ([tree tree]
+             [children (ftl-tree-children tree)])
+    (begin
+      (visit tree)
+      (for ([child children])
+        (if (list? (cdr child))
+            (for-each (curry ftl-tree-preorder visit) (cdr child))
+            (ftl-tree-preorder visit (cdr child)))))))
 
 ; post-order traversal of a tree
 (define (ftl-tree-postorder visit tree)
-  (for ([child (ftl-tree-children tree)])
-    (if (list? (cdr child))
-        (for-each (curry ftl-tree-postorder visit) (cdr child))
-        (ftl-tree-postorder visit (cdr child))))
-  (visit tree))
+  (for*/all ([tree tree]
+             [children (ftl-tree-children tree)])
+    (begin
+      (for ([child children])
+        (if (list? (cdr child))
+            (for-each (curry ftl-tree-postorder visit) (cdr child))
+            (ftl-tree-postorder visit (cdr child))))
+      (visit tree))))
+
+; in-order traversal of a tree
+(define (ftl-tree-inorder visit tree)
+  (for*/all ([tree tree]
+             [children (ftl-tree-children tree)])
+    (visit tree)))
 
 ; partial pre-order traversal of a tree, returns new affected region
 (define (ftl-tree-partial-preorder ascend? descend? depth visit tree)
@@ -168,34 +175,51 @@
 ; Tree Traversal Visits
 ; ---------------------
 
-; evaluate some attributes at the each node in the subtree rooted at the given
-; node
-; TODO: parameterize with default values for accumulators
+; interpret the given evaluation steps as part of a visit to the given node
 (define (ftl-visit! grammar visit-steps bind self)
   (match-let* ([(ftl-tree symbol option _ _) self]
-               [production (assoc-lookup (assoc-lookup grammar symbol) option)]
-               [definitions (ftl-ir-production-definitions production)]
+               [(ftl-ir-production _ _ definitions singletons sequences)
+                (assoc-lookup (assoc-lookup grammar symbol) option)]
                [steps (assoc-lookup visit-steps (cons symbol option))])
 
     ; perform each step (i.e., sequenced direct evaluation or lockstep
     ; iteration) of the visit in sequence
-    (for ([step steps]
-          #:when (not (void? step)))
-      (for/all ([step step])
-      (match step
-        [(ftl-visit-iter attributes) ; step is list of iterated attributes
-         (ftl-visit-iterate! (for/list ([attribute attributes])
-                               (unless (void? attribute)
-                                 (cons attribute
-                                       (assoc-lookup definitions
-                                                     attribute))))
-                             bind
-                             self)]
-        [(ftl-visit-eval attribute)
-         (ftl-visit-evaluate! attribute
-                              (assoc-lookup definitions attribute)
-                              bind
-                              self)])))))
+    (for/all ([steps steps])
+      (for ([step steps])
+        (for/all ([step step])
+          (unless (void? step)
+            (match step
+              [(ftl-step-iter substeps)
+               ; note that void is propagated to preserve list concreteness
+               (ftl-visit-iterate! (for/list ([substep substeps])
+                                     (match substep
+                                       [(ftl-step-eval attribute)
+                                        (cons attribute
+                                              (assoc-lookup definitions
+                                                            attribute))]
+                                       [else (void)]))
+                                   bind
+                                   self)]
+              [(ftl-step-eval attribute)
+               (ftl-visit-evaluate! attribute
+                                    (assoc-lookup definitions attribute)
+                                    bind
+                                    self)]
+              ; Symbolically evaluation becomes intractable for all but the
+              ; smallest trees when recur[sive] steps are symbolically unioned;
+              ; given a perfect tree with n uniterated attributes, m iterated
+              ; attributes, and w children per inner node, the number of
+              ; symbolically explored paths is given by
+              ; P(h) = (1+n+(1+m)^2+w*P(h-1))^2 and P(-1) = 0, which is
+              ; exponential in h.
+              [(ftl-step-recur child-name)
+               (let* ([children (assoc-lookup sequences child-name)]
+                      [children (if (void? children)
+                                    (list (assoc-lookup singletons child-name))
+                                    children)]
+                      [recurse (curry ftl-visit! grammar visit-steps bind)])
+                 (for ([child children])
+                   (ftl-tree-inorder recurse child)))])))))))
 
 ; perform an attribute evaluation
 (define (ftl-visit-evaluate! attribute rule bind self)
@@ -208,70 +232,78 @@
 
 ; perform one or more iterated attribute evaluations in lockstep
 (define (ftl-visit-iterate! actions bind self)
-  (define iterated
+  (define iterated ; this better be concrete!
     (ftl-ir-definition-iterate (cdr (findf (compose not void?) actions))))
-  ; let's just double-check that these actions are actually meant to iterate
+
+  ; let's just double-check that these actions are actually meant to iteratex
   ; over the same child sequence
   (for ([action actions])
     (assert (eq? iterated (ftl-ir-definition-iterate (cdr action)))))
-  ; for each folded attribute, compute the initial value
-  ; collect initial values into an association list
-  ; for each child in sequence, evaluate attribute, bind result if
-  ; applicable and accumulate result if applicable
-  ; for each final accumulated value, bind it if applicable
-  (let* ([children (assoc-lookup (ftl-tree-children self) iterated)]
-         [name-rule-map (cdrmap ftl-ir-definition-evaluate actions)])
 
+  ; compute the iterated evaluation in lockstep
+  (let* ([children (assoc-lookup (ftl-tree-children self) iterated)]
+         [name-rule-map (for/list ([action actions])
+                          (match action
+                            [(cons name (ftl-ir-definition _ rule))
+                             (cons name rule)]
+                            [else (void)]))])
+
+    ; collect initial values into an association list
     (define initial
       (for/fold ([current null])
                 ([name-rule name-rule-map])
-        (match-let ([(cons name rule) name-rule]
-                    [load (curry ftl-tree-load self (void) null null)])
-          (match rule
-            [(ftl-ir-evaluation _ _)
-             ; no initial accumulator for straight evaluations
-             current]
-            [(ftl-ir-reduction (ftl-ir-evaluation fun deps) _)
-             ; compute the initial evaluation for each reduction
-             (cons (cons name (fun (vector-map load deps)))
-                   current)]))))
+        (unless (void? name-rule)
+          (match-let ([(cons name rule) name-rule]
+                      [load (curry ftl-tree-load self (void) null null)])
+            (match rule
+              [(ftl-ir-evaluation _ _)
+               ; no initial accumulator for straight evaluations
+               current]
+              [(ftl-ir-reduction (ftl-ir-evaluation fun deps) _)
+               ; compute the initial evaluation for each reduction
+               (cons (cons name (fun (vector-map load deps)))
+                     current)])))))
 
+    ; iterate over the child sequence to compute the evaluations and acccumulate
+    ; the final values into an association list
     (define final
       (for/fold ([previous initial])
                 ([child children])
         (for/fold ([current null])
                   ([name-rule name-rule-map])
-          (match-let* ([(cons name rule) name-rule]
-                       [(cons object label) name]
-                       [load (curry ftl-tree-load self child previous current)])
-            (match rule
-              [(ftl-ir-evaluation fun deps)
-               ; straight evaluation, assigning to an attribute on
-               ; either some singleton child or the iterated child
-               ; sequence
-               (let ([value (fun (vector-map load deps))])
-                 (if (eq? object iterated)
-                     (bind child 'self label value)
-                     (bind self object label value))
-                 ; pass through the current accumulator unchanged
-                 current)]
-              [(ftl-ir-reduction _ (ftl-ir-evaluation fun deps))
-               ; reduction, so perform the step evaluation, assign to
-               ; iterated child sequence if necessary, and pass
-               ; through new accumulator value
-               (let ([value (fun (vector-map load deps))])
-                 (when (eq? object iterated)
-                   (bind child 'self label value))
-                 ; pass through the current accumulator unchanged
-                 (cons (cons name (fun (vector-map load deps)))
-                       current))])))))
+          (unless (void? name-rule)
+            (match-let* ([(cons name rule) name-rule]
+                         [(cons object label) name]
+                         [load (curry ftl-tree-load self child previous current)])
+              (match rule
+                [(ftl-ir-evaluation fun deps)
+                 ; straight evaluation, assigning to an attribute on
+                 ; either some singleton child or the iterated child
+                 ; sequence
+                 (let ([value (fun (vector-map load deps))])
+                   (if (eq? object iterated)
+                       (bind child 'self label value)
+                       (bind self object label value))
+                   ; pass through the current accumulator unchanged
+                   current)]
+                [(ftl-ir-reduction _ (ftl-ir-evaluation fun deps))
+                 ; reduction, so perform the step evaluation, assign to
+                 ; iterated child sequence if necessary, and pass
+                 ; through new accumulator value
+                 (let ([value (fun (vector-map load deps))])
+                   (when (eq? object iterated)
+                     (bind child 'self label value))
+                   ; pass through the current accumulator unchanged
+                   (cons (cons name (fun (vector-map load deps)))
+                         current))]))))))
 
     ; lastly, bind the final value for each accumulated value to its attribute
     ; destination if on a singleton child
-    (for ([result final])
-      (match-let ([(cons (cons object label) value) result])
-        (unless (eq? object iterated)
-          (bind self object label value))))))
+    (for/all ([final final])
+      (for ([result final])
+        (match-let ([(cons (cons object label) value) result])
+          (unless (eq? object iterated)
+            (bind self object label value)))))))
 
 ; -------------------
 ; Schedule validation
@@ -317,16 +349,18 @@
       (cons symbol new-alternatives))))
 
 ; construct a new tree with all input attributes set to the same value
-(define/match (make-validation-tree value tree)
-  [(_ (ftl-tree symbol option attributes children))
-   (ftl-tree symbol
-             option
-             (cdrmap (const value) attributes)
-             (cdrmap (λ (child)
-                       (if (list? child)
-                           (map (curry make-validation-tree value) child)
-                           (make-validation-tree value child)))
-                       children))])
+(define (make-validation-tree value tree)
+  (for/all ([tree tree])
+    (match-let ([(ftl-tree symbol option attributes children) tree])
+      (ftl-tree symbol
+                option
+                (cdrmap (const value) attributes)
+                (cdrmap (λ (child)
+                          (for/all ([child child])
+                            (if (list? child)
+                                (map (curry make-validation-tree value) child)
+                                (make-validation-tree value child))))
+                        children)))))
 
 ; check that each attribute's dependencies are satisfied before its evaluation
 ; TODO: lift over symbolic trees
@@ -369,14 +403,13 @@
         [(ftl-sched-seq left right)
          (recurse left)
          (recurse right)]
-        ; TODO: nested schedules
-        [(ftl-sched-trav order visit-steps)
+        [(ftl-sched-trav order steps)
          (let ([traverse (for/all ([order order])
                            (match order
                              ['pre ftl-tree-preorder]
-                             ['post ftl-tree-postorder]))]
-               [visit (curry ftl-visit! val-grammar visit-steps ftl-tree-bind*)])
-           ; TODO: recursive traversal
+                             ['post ftl-tree-postorder]
+                             ['rec ftl-tree-inorder]))]
+               [visit (curry ftl-visit! val-grammar steps ftl-tree-bind*)])
            (traverse visit val-tree))])))
 
   ; evaluate the validation schedule and check the output
@@ -388,22 +421,24 @@
 (current-bitwidth #f)
 (define sketch
   (let ([root-steps
-         (list (ftl-visit-eval '(root . right))
-               (ftl-visit-eval '(root . bottom)))]
+         (list (ftl-step-eval '(root . right))
+               (ftl-step-eval '(root . bottom)))]
         [hvbox-steps
-         (list (ftl-visit-eval '(self . width))
-               (ftl-visit-eval '(self . height)))])
+         (list (ftl-step-eval '(self . width))
+               (ftl-step-eval '(self . height)))])
     (ftl-sched-seq
      (ftl-sched-trav 'post
                      `(((Top . Root))
 
                        ((HVBox . HBox)
-                        ,(ftl-visit-iter '((self . childsWidth) (self . childsHeight)))
+                        ,(ftl-step-iter (list (ftl-step-eval '(self . childsWidth))
+                                              (ftl-step-eval '(self . childsHeight))))
                         ,(apply choose* hvbox-steps)
                         ,(apply choose* hvbox-steps))
 
                        ((HVBox . VBox)
-                        ,(ftl-visit-iter '((self . childsWidth) (self . childsHeight)))
+                        ,(ftl-step-iter (list (ftl-step-eval '(self . childsWidth))
+                                              (ftl-step-eval '(self . childsHeight))))
                         ,(apply choose* hvbox-steps)
                         ,(apply choose* hvbox-steps))
 
@@ -416,9 +451,17 @@
                         ,(apply choose* root-steps))
 
                        ((HVBox . HBox)
-                        ,(ftl-visit-iter '((childs . right) (childs . bottom))))
+                        ,(choose* (ftl-step-iter (list (ftl-step-eval '(childs . right))
+                                                       (ftl-step-eval '(childs . bottom))))
+                                  (ftl-step-iter (list (ftl-step-eval '(childs . bottom))
+                                                       (ftl-step-eval '(childs . right))))))
 
                        ((HVBox . VBox)
-                        ,(ftl-visit-iter '((childs . right) (childs . bottom))))
+                        ,(ftl-step-iter (list (choose* (void)
+                                                       (ftl-step-eval '(childs . right))
+                                                       (ftl-step-eval '(childs . bottom)))
+                                              (choose* (void)
+;                                                       (ftl-step-eval '(childs . right))
+                                                       (ftl-step-eval '(childs . bottom))))))
 
                        ((HVBox . Leaf)))))))
