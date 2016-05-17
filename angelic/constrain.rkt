@@ -12,10 +12,10 @@
 (provide ftl-angelic-evaluate)
 
 ; fully annotate the given derivation of the given grammar by angelic evaluation
-(define (ftl-angelic-evaluate runtime grammar derivation)
+(define (ftl-angelic-evaluate grammar derivation #:runtime [runtime ftl-base-runtime])
   (current-bitwidth #f) ; consider setting to #f in some instances
   ; let all output attribute values be symbolic
-  (ftl-tree-symbolize! runtime grammar derivation)
+  (ftl-tree-symbolize! grammar derivation #:runtime runtime)
   ; assert the actions' assignments in whatever order
   (ftl-angelic-constrain runtime grammar derivation)
   ; request that Rosette solve for the attributes' concrete values
