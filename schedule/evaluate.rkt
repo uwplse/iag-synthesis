@@ -5,6 +5,7 @@
 
 (require rosette/lib/angelic
          "../utility.rkt"
+         "../grammar/runtime.rkt"
          "../grammar/tree.rkt"
          "../grammar/traversal.rkt"
          "../grammar/parse.rkt"
@@ -34,7 +35,7 @@
 ; > (ftl-schedule-interpret ftl-base-runtime (open-input-file "../examples/points.ftl") 'Root example-deriv example-sched)
 
 ; interpret : pi_{g:L(G_FTL)} L([[g]]) * L(G_sched) -> L([[g]])
-(define (ftl-schedule-interpret! runtime ftl-port root tree schedule)
+(define (ftl-schedule-interpret! ftl-port root tree schedule #:runtime [runtime ftl-base-runtime])
   (current-bitwidth #f)
   (ftl-schedule-evaluate! (ftl-ir-generate (parse-ftl ftl-port) runtime)
                           tree

@@ -91,13 +91,13 @@
 ; ----------------
 
 ; derive an FTL tree of a grammar in IR form given an XML string
-(define (xml->ftl-tree runtime grammar sentence xml-string)
-  (xexpr->ftl-tree runtime grammar sentence (string->xexpr xml-string)))
+(define (xml->ftl-tree grammar sentence xml-string #:runtime [runtime ftl-base-runtime])
+  (xexpr->ftl-tree grammar sentence (string->xexpr xml-string) #:runtime runtime))
 
 ; derive an FTL tree of a grammar with the given sentence symbol from an
 ; X-expression, assuming that all singleton children are given first (in the same
 ; order as the grammar) and followed by at most one child sequence
-(define (xexpr->ftl-tree runtime grammar sentence xexpr)
+(define (xexpr->ftl-tree grammar sentence xexpr #:runtime [runtime ftl-base-runtime])
   (match xexpr
     [(list-rest tag
                 (and xattributes
@@ -113,7 +113,7 @@
                    ([singleton singletons])
            (match-let* ([(cons xchild xchildren) xchildren]
                         [(cons label symbol) singleton]
-                        [child (xexpr->ftl-tree runtime grammar symbol xchild)])
+                        [child (xexpr->ftl-tree grammar symbol xchild #:runtime runtime)])
              (values (cons (cons label child) children) xchildren))))
 
        (define children
@@ -121,7 +121,7 @@
            [(list (cons label symbol))
             (define child-sequence
               (for/list ([xchild xchild-sequence])
-                (xexpr->ftl-tree runtime grammar symbol xchild)))
+                (xexpr->ftl-tree grammar symbol xchild #:runtime runtime)))
             (cons (cons label child-sequence) single-children)]
            [null
             single-children]))
@@ -137,7 +137,7 @@
        (ftl-tree sentence tag attributes children))]
 
     [(list-rest tag children)
-     (xexpr->ftl-tree runtime grammar sentence (list tag null children))]
+     (xexpr->ftl-tree grammar sentence (list tag null children) #:runtime runtime)]
 
     [_
      (raise-arguments-error 'xexpr->ftl-tree
@@ -149,7 +149,7 @@
 ; -----------
 
 ; derive a symbolic FTL tree of an IR grammar bounded by the given height
-(define (ftl-tree* runtime grammar sentence width height input)
+(define (ftl-tree* grammar sentence width height input #:runtime [runtime ftl-base-runtime])
   (let* ([types (ftl-runtime-types runtime)])
     (define (recurse symbol bound)
       ; tell Rosette to ensure that terminals are chosen at the appropriate
@@ -186,7 +186,7 @@
     (recurse sentence height)))
 
 ; bind any missing attributes of the given tree to symbolic values
-(define (ftl-tree-symbolize! runtime grammar tree)
+(define (ftl-tree-symbolize! grammar tree #:runtime [runtime ftl-base-runtime])
   (for/all ([tree tree])
     (match-let* ([(ftl-tree symbol option bindings children) tree]
                  [production (assoc-lookup (assoc-lookup grammar symbol) option)]
@@ -204,7 +204,7 @@
       ; recursively do the same on each child tree
       (for ([child children])
         (for ([subchild (listify (cdr child))])
-          (ftl-tree-symbolize! runtime grammar subchild))))))
+          (ftl-tree-symbolize! grammar subchild #:runtime runtime))))))
 
 ; -----------------
 ; Checking of Trees

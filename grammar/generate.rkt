@@ -23,7 +23,7 @@
 ; -------------------------------------
 
 ; translate parsed abstract syntax tree into intermediate representation
-(define (ftl-ir-generate runtime ast-list)
+(define (ftl-ir-generate ast-list #:runtime [runtime ftl-base-runtime])
   (if (void? (ftl-ast-conflicts? ast-list))
     (ftl-ast-compile (ftl-ast-typecheck (ftl-ast-validate (ftl-ast-inline ast-list))
                                         runtime))

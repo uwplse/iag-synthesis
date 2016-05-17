@@ -18,15 +18,15 @@
 
 (define (read-grammar filename)
   (let* ([port (open-input-file filename #:mode 'text)]
-         [grammar (ftl-ir-generate runtime (ftl-ast-parse port))])
+         [grammar (ftl-ir-generate (ftl-ast-parse port))])
     (close-input-port port)
     grammar))
 
 (define (read-tree grammar sentence filename)
-  (xml->ftl-tree runtime
-                 grammar
+  (xml->ftl-tree grammar
                  sentence
-                 (port->string (open-input-file filename #:mode 'text))))
+                 (port->string (open-input-file filename #:mode 'text))
+                 #:runtime runtime))
 
 (define hvbox-grammar
   (read-grammar "examples/hvbox.ftl"))

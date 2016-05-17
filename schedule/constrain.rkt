@@ -69,7 +69,7 @@
 
 ; check that each attribute's dependencies are satisfied before its evaluation
 ; TODO: lift over symbolic trees
-(define (ftl-schedule-validate runtime grammar schedule tree)
+(define (ftl-schedule-validate grammar schedule tree #:runtime [runtime ftl-base-runtime])
   ; the current index, which is mutated on each successive traversal
   (define exclude-min -1) ; exclusive exclusion
   (define exclude-max -1) ; inclusive exclusion
@@ -87,7 +87,7 @@
                                index)))
   (define val-tree
     (make-validation-tree index tree))
-  (ftl-tree-symbolize! runtime val-grammar val-tree)
+  (ftl-tree-symbolize! val-grammar val-tree #:runtime runtime)
 
   ; recursively validate the schedule w.r.t. to the validation grammar and tree
   (define (recurse schedule)
