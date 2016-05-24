@@ -27,7 +27,6 @@
 (define (ftl-angelic-constrain-init actions self current)
   (for ([action actions])
     (match-let* ([(cons name defn) action]
-                 [action (assoc-lookup actions name)]
                  [(ftl-ir-evaluation fun deps)
                   (ftl-ir-reduction-init (ftl-ir-definition-evaluate defn))]
                  [get (curry ftl-tree-load self (void) null null)]
