@@ -9,8 +9,10 @@
          "schedule/syntax.rkt"
          "schedule/parse.rkt"
          "schedule/evaluate.rkt"
+         "schedule/constrain.rkt"
          "angelic/constrain.rkt"
-         "examples/hvbox-sketch.rkt")
+         "examples/hvbox-sketch.rkt"
+         "examples/treemap-sketch.rkt")
 
 (current-bitwidth #f)
 
@@ -45,3 +47,9 @@
 
 (define points-schedule
   (ftl-sched-parse (open-input-file "examples/points.sched")))
+
+(define treemap-grammar
+  (read-grammar "examples/treemap.ftl"))
+
+(define treemap-tree
+  (read-tree treemap-grammar 'IRoot "examples/treemap.xml"))
