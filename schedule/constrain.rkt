@@ -2,6 +2,7 @@
 
 (require rosette/lib/angelic
          "../utility.rkt"
+         "../grammar/runtime.rkt"
          "../grammar/tree.rkt"
          "../grammar/traversal.rkt"
          "../grammar/intermediate.rkt"
