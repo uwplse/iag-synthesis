@@ -72,7 +72,7 @@
   (define iterated ; this better be concrete!
     (ftl-ir-definition-iterate (cdr (findf (compose not void?) actions))))
 
-  ; let's just double-check that these actions are actually meant to iteratex
+  ; let's just double-check that these actions are actually meant to iterate
   ; over the same child sequence
   (for ([action actions])
     (assert (eq? iterated (ftl-ir-definition-iterate (cdr action)))))
