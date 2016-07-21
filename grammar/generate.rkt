@@ -13,11 +13,6 @@
 
 ; TODO: generate Typed Racket syntax instead of lambdas
 
-; Open questions:
-; 1. Must a child sequence be non-empty? Thinking NO (cf. of fold semantics)
-; 2. Can FTL grammars define an attribute outside of a loop in terms of first or
-;    last children in a child sequence? Thinking NO (due to above)
-
 ; -------------------------------------
 ; Intermediate Representation Generator
 ; -------------------------------------
