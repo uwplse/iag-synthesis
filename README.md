@@ -11,6 +11,21 @@ the domain (or just the whole domain). The concrete motivating problem is make
 possible high-performance layout of extremely large data visualizations (cf.,
 "big data").
 
+This particular branch implements an early version of the trace-based synthesis
+algorithm that symbolically (and abstractly) interprets the schedule sketch (with
+holes encoded as symbolic choices), assigning each attribute a unique step number
+corresponding to its position in a fine-grained trace of the schedule on the
+tree. Each attribute's step number is then asserted to be greater than each of
+its definition's dependencies' step numbers.
+
+Note that a single definition may correspond to several step numbers. The
+symbolic abstract interpretation of the schedule language ensures that
+constraints on individual step numbers correctly influence the possible choices
+for each hole in the schedule. Practically, these holes need to be used sparingly
+and in places that do not affect control-flow; specifically, holes are only
+feasible to solve if they replace perhaps a handful of visit slots in the entire
+schedule, leaving traversal types and compositions concrete.
+
 ## Synthesis Engine
 
 These directories contains code in [Typed] Racket and
