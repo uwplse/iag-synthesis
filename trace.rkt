@@ -5,7 +5,13 @@
 
 (require "utility.rkt"
          rosette/solver/mip/cplex
+         rosette/solver/smt/z3
          data/interval-map)
+
+(define solver
+  (if (cplex-available?)
+      (cplex)
+      (z3 #:logic 'QF_LIA)))
 
 (provide (rename-out [choose trace-choose]
                      [choice? trace-choice?]
@@ -72,7 +78,7 @@
   (define guards
     (for/list ([_ alternatives])
       (define-symbolic* g integer?)
-      ;(assert (>= g 0)) ; NOTE: This is the default lower bound in CPLEX.
+      (assert (>= g 0)) ; NOTE: This is the default lower bound in CPLEX.
       g))
   (assert (= 1 (apply + guards)))
   (choice alternatives guards))
@@ -118,7 +124,7 @@
                   (apply seteqv bs)
                   (thunk
                    (define-symbolic* bc integer?)
-                   ;(assert (>= bc 0))
+                   (assert (>= bc 0)) ; NOTE: This is the default lower bound in CPLEX.
                    (for ([b bs])
                      (assert (<= bc b)))
                    (assert (>= bc (- (apply + (cons 1 bs)) n)))
@@ -230,11 +236,10 @@
 ; assignment of holes to sketches, where #f is interpreted as a no-op (and
 ; optionally replaced by such a statement if desired).
 (define (solve-sketch)
-  (define-symbolic objective integer?) ; dummy objective variable
-  (define solver (cplex #:simplify #f))
+  (define-symbolic* objective integer?)
   (solver-clear solver)
-  (solver-assert solver (asserts))
   (solver-minimize solver (list objective))
+  (solver-assert solver (asserts))
   (define model (solver-check solver))
 
   ; Extract the solved schedule, a mapping from holes to statements.
