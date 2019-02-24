@@ -1,3 +1,17 @@
+traversal pre {
+    Root { visit; recur root }
+    HBox { loop childs { visit }; loop childs { recur } }
+    VBox { loop childs { visit }; loop childs { recur } }
+    Leaf { visit }
+}
+
+traversal post {
+    Root { recur root; visit }
+    HBox { loop childs { recur }; loop childs { visit }; visit }
+    VBox { loop childs { recur }; loop childs { visit }; visit }
+    Leaf { visit }
+}
+
 interface Top { }
 
 interface HVBox {
@@ -28,10 +42,10 @@ class HBox : HVBox {
     }
     evaluation {
         loop childs {
-            childs.width_out := fold 0 .. childs$-.width_out + childs.width;
-            childs.height_out := fold 0 .. childs$-.height_out > childs.height ? childs$-.height_out : childs.height;
-            childs.right := fold (right - width) .. childs$-.right + childs.width;
-            childs.bottom := bottom;
+            childs.width_out := fold 0 .. childs$-.width_out + childs$i.width;
+            childs.height_out := fold 0 .. childs$-.height_out > childs$i.height ? childs$-.height_out : childs$i.height;
+            childs.right := fold (self.right - self.width) .. childs$-.right + childs$i.width;
+            childs.bottom := self.bottom;
         }
 
         width := visible ? childs$$.width_out : 0;
@@ -45,10 +59,10 @@ class VBox : HVBox {
     }
     evaluation {
         loop childs {
-            childs.width_out := fold 0 .. childs$-.width_out > childs.width ? childs$-.width_out : childs.width;
-            childs.height_out := fold 0 .. childs$-.height_out + childs.height;
-            childs.bottom := fold 0 .. childs$-.bottom + childs.height;
-            childs.right := right;
+            childs.width_out := fold 0 .. childs$-.width_out > childs$i.width ? childs$-.width_out : childs$i.width;
+            childs.height_out := fold 0 .. childs$-.height_out + childs$i.height;
+            childs.bottom := fold self.bottom .. childs$-.bottom + childs$i.height;
+            childs.right := self.right;
         }
 
         width := visible ? childs$$.width_out : 0;

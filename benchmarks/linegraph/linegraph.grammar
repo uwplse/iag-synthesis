@@ -1,0 +1,260 @@
+interface IRoot {
+	input xOffset : int;
+	input yOffset : int;
+
+    input tweenMin : int;
+    input tweenMax : int;
+
+    input radius : int;
+    input minRadius : int;
+    input height : int;
+    input rotation : int;
+
+    output depth : int;
+
+}
+
+interface SecondI {
+	output xOffset : int;
+	output yOffset : int;
+	output tweenMin : int;
+	output tweenMax : int;
+	output radius : int;
+	output minRadius : int;
+	output height : int;
+	output rotation : int;
+
+	output w : int;
+	output x : int;
+	output rx : int;
+
+    output depth : int;
+}
+
+
+interface Node {
+	output xOffset : int;
+	output yOffset : int;
+	output tweenMin : int;
+	output tweenMax : int;
+	output radius : int;
+	output minRadius : int;
+	output height : int;
+	output rotation : int;
+
+	output x : int;
+	output rx : int;
+
+    output depth : int;
+    output levelLength : int;
+    output idx : int;
+}
+
+interface Leaf {
+	output xOffset : int;
+	output yOffset : int;
+	output tweenMin : int;
+	output tweenMax : int;
+	output tween : int;
+	output radius : int;
+	output minRadius : int;
+	output height : int;
+	output rotation : int;
+
+	input val : int;
+
+	output valPrev : int;
+	output valCopy : int;
+	output angle : int;
+	output increment : int;
+
+	output isFirst : int;
+	output isLast : int;
+
+    output depth : int;
+    output idx : int;
+}
+
+
+trait propagateChilds {
+	actions {
+		loop childs {
+			childs.xOffset := xOffset;
+			childs.yOffset := yOffset;
+			childs.tweenMin := tweenMin;
+			childs.tweenMax := tweenMax;
+			childs.radius := radius;
+			childs.minRadius := minRadius;
+			childs.height := height;
+			childs.rotation := rotation;
+		}
+	}
+}
+trait propagateChild {
+	actions {
+		child.xOffset := xOffset;
+		child.yOffset := yOffset;
+		child.tweenMin := tweenMin;
+		child.tweenMax := tweenMax;
+		child.radius := radius;
+		child.minRadius := minRadius;
+		child.height := height;
+		child.rotation := rotation;
+	}
+}
+
+trait propagateIntermediate{
+    actions {
+        loop childs {
+            childs.depth := depth + 1;
+        }
+    }
+}
+
+class Root(propagateChild) : IRoot {
+	attributes { }
+	children {
+		child : SecondI ;
+	}
+	actions {
+
+		child.rx := 5 + child.w;
+		child.x := child.rx - child.w;
+		child.depth := depth + 1;
+		depth := 1;
+	}
+}
+
+class Second (propagateIntermediate,propagateChilds) : SecondI {
+  attributes {
+  	output len : int;
+  }
+  children {
+    childs : [ Node ];
+  }
+  actions {
+  	loop childs {
+  		self.len := fold 0 .. self$-.len + 1;
+  		childs.levelLength := childs$$.len;
+		childs.idx := fold 0 .. childs$-.idx + 1;
+  	}
+
+	//background
+	@render @RectangleZ(xOffset - radius, yOffset - radius, 4 * radius, 4 * radius, -0.1f, rgb(0,0,0));
+	w := 10;
+    loop childs {
+		childs.rx := fold x .. childs$-.rx + 5 + 10;
+		childs.x := childs$i.rx - 10;
+    }
+  }
+}
+
+// [a,b] of i for [l%,h%] out of n
+// i < l% * n  OR  i > h% * n:
+//   off
+// else:
+//   on, tween = (i - l%n) / (h%n - l%n)
+class Generator (propagateIntermediate,propagateChilds) : Node {
+	attributes {
+		output numSpikes : int;
+		output increment : int;
+		output angle : int;
+	}
+	children {
+		childs : [ Leaf ];
+	}
+	actions {
+		numSpikes := childs$$.idx;
+		increment := 1.0f / ((tweenMax - tweenMin) * numSpikes);
+		angle := 2 * PI() * ((rotation / 360.0f) + (idx + 0.0f) / levelLength);
+		loop childs {
+			childs.idx := fold 0 .. childs$-.idx + 1;
+			childs.increment := increment;
+
+			childs.tween :=
+			    ((childs$i.idx < tweenMin * numSpikes) || (childs$i.idx > tweenMax * numSpikes))
+				? -1.0f
+				: ((childs.idx - tweenMin * childs$$.idx) / (tweenMax * numSpikes - tweenMin * numSpikes));
+
+			childs.isFirst :=
+				((childs$i.idx >= tweenMin * numSpikes) && ((childs$i.idx - 1) < tweenMin * numSpikes)) ? 1 : 0;
+			childs.isLast :=
+				((childs$i.idx <= tweenMax * numSpikes) && ((childs$i.idx + 1) > tweenMax * numSpikes)) ? 1 : 0;
+
+			childs.angle := 0.01f + angle;
+			childs.valCopy := fold 0 .. childs$i.val;
+			childs.valPrev := fold 0 .. childs$-.valCopy;
+		}
+	}
+}
+
+class Spike : Leaf {
+	attributes {
+		output isOn : int;
+		output enableShadow : int;
+	}
+	actions {
+		enableShadow := 0;
+		isOn := tween >= 0.0f ? 1 : 0;
+
+		@render (isOn != 1) ? 0 :  //segment
+			@Line3D(xOffset + 1.5 + radius + minRadius * cos(angle) + (radius *
+					((isLast == 1) ? (1.0f + increment/1.0f) : (tween + increment/1.0f))
+				  ) * cos(angle),
+				yOffset + 1.5 + radius + minRadius * sin(angle) + (radius *
+					((isLast == 1) ? (1.0f + increment/1.0f) : (tween + increment/1.0f))
+				  ) * sin(angle),
+				height * val,
+				xOffset + 1.5 + radius + minRadius * cos(angle) + (radius *
+					((isFirst == 1) ? increment/1.0f : tween)
+				  ) * cos(angle),
+				yOffset + 1.5 + radius + minRadius * sin(angle) + (radius *
+					((isFirst == 1) ? increment/1.0f : tween)
+				  ) * sin(angle),
+				height * valPrev,
+				0.15f, rgba(0, 204, 255, 102));
+		@render (isOn != 1 || enableShadow != 1) ? 0 : //shadow
+			@Line3D(
+				xOffset + 1.5 + radius + minRadius * cos(angle) + (radius *
+					((isLast == 1) ? (1.0f + increment/1.0f) : (tween + increment/1.0f))
+				  ) * cos(angle),
+				yOffset + 1.5 + radius + minRadius * sin(angle) + (radius *
+					((isLast == 1) ? (1.0f + increment/1.0f) : (tween + increment/1.0f))
+				  ) * sin(angle),
+				0.0f,
+				xOffset + 1.5 + radius + minRadius * cos(angle) + (radius *
+				    ((isFirst == 1) ? increment/1.0f : tween)
+				  ) * cos(angle),
+				yOffset + 1.5 + radius + minRadius * sin(angle) + (radius *
+				    ((isFirst == 1) ? increment/1.0f : tween)
+				  ) * sin(angle),
+				0.0f,
+				0.1f, rgb(255, 255, 255));
+		@render (isOn != 1 || isLast != 1) ? 0 : //vertical ending
+			@Line3D(
+				xOffset + 1.5 + radius + minRadius * cos(angle) + (radius * (1.0f + increment/1.0f)  ) * cos(angle),
+				yOffset + 1.5 + radius + minRadius * sin(angle) + (radius * (1.0f + increment/1.0f)  ) * sin(angle),
+				height * val,
+				xOffset + 1.5 + radius + minRadius * cos(angle) + (radius * (1.0f + increment/1.0f)  ) * cos(angle),
+				yOffset + 1.5 + radius + minRadius * sin(angle) + (radius * (1.0f + increment/1.0f)  ) * sin(angle),
+				0.0f,
+				0.1f, rgba(255, 255, 255, 125));
+		@render (isOn != 1 || isFirst != 1) ? 0 : // vertical beginning
+			@Line3D(
+				xOffset + 1.5 + radius + minRadius * cos(angle) + (radius *
+					increment/1.0f
+				  ) * cos(angle),
+				yOffset + 1.5 + radius + minRadius * sin(angle) + (radius *
+					increment/1.0f
+				  ) * sin(angle),
+				height * valPrev,
+				xOffset + 1.5 + radius + minRadius * cos(angle) + (radius *
+					increment/1.0f
+				  ) * cos(angle),
+				yOffset + 1.5 + radius + minRadius * sin(angle) + (radius *
+					increment/1.0f
+				  ) * sin(angle),
+				0.0f,
+				0.1f, rgba(0, 204, 255, 102));
+	}
+}

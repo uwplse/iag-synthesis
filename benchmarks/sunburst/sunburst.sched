@@ -1,0 +1,9 @@
+pre {
+    Root { child.rootCenterX, child.rootCenterY },
+    Radial { self.r } { child.maxR, child.show_out },
+    Leaf { self.numOpenChildren }
+} ;; pre {
+    Root { skip },
+    Radial { self.render, self.numOpenChildren } { child.sectorAng, child.alpha },
+    Leaf { self.render }
+}

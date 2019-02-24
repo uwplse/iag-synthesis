@@ -1,75 +1,25 @@
 pre {
-  Root {
-    child.minTurnout, child.maxTurnout, child.fixWidth,
-    child.showFraud, child.showProjected, child.showJavascript,
-    child.w, child.h, child.rx, child.by
-  }
-  CountryContainer {
-    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
-    childs.showFraud, childs.showProjected, childs.showJavascript
-  }
-  Region {
-    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
-    childs.showFraud, childs.showProjected, childs.showJavascript
-  }
-  Distract {
-    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
-    childs.showFraud, childs.showProjected, childs.showJavascript
-  }
-  VSquare {
-    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
-    childs.showFraud, childs.showProjected, childs.showJavascript
-  }
-  HSquare {
-    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
-    childs.showFraud, childs.showProjected, childs.showJavascript
-  }
-  PollingPlace {
-    self.calcProjectedColor, self.calcRegularColor,
-    self.calcVotesColor, self.calcFraudColor
-  }
+    Root { child.by, child.minTurnout, child.showJavascript, child.showFraud, child.maxTurnout, child.showProjected, child.fixWidth, child.rx },
+    CountryContainer { skip } { childs.minTurnout, childs.maxTurnout, childs.fixWidth, childs.showFraud, childs.showJavascript, childs.showProjected },
+    Region { self.render } { childs.showFraud, childs.fixWidth, childs.showJavascript, childs.maxTurnout, childs.showProjected, childs.minTurnout },
+    District { skip } { childs.maxTurnout, childs.minTurnout, childs.fixWidth, childs.showFraud, childs.showProjected, childs.showJavascript },
+    VSquare { self.render } { childs.showProjected, childs.minTurnout, childs.showFraud, childs.showJavascript, childs.fixWidth, childs.maxTurnout },
+    HSquare { self.render } { childs.showJavascript, childs.minTurnout, childs.maxTurnout, childs.showProjected, childs.fixWidth, childs.showFraud },
+    PollingPlace { self.votesUR, self.magnitude, self.calcProjectedColor, self.calcRegularColor, self.calcVotesColor, self.calcFraudColor }
 } ;; post {
-  Root {
-    child.totalMag_sum, child.totalMag,
-    child.votesUR_sum, child.votesUR
-  }
-  CountryContainer {
-    childs.totalMag_sum, self.totalMag,
-    childs.votesUR_sum, self.votesUR,
-    self.x, self.y,
-    childs.w, childs.h, childs.rx, childs.by,
-    self.render
-  }
-  Region {
-    childs.totalMag_sum, self.totalMag,
-    childs.votesUR_sum, self.votesUR,
-    self.x, self.y,
-    childs.w, childs.h, childs.rx, childs.by,
-    self.render
-  }
-  Distract {
-    childs.totalMag_sum, self.totalMag,
-    childs.votesUR_sum, self.votesUR,
-    self.x, self.y,
-    childs.w, childs.h, childs.rx, childs.by,
-    self.render
-  }
-  VSquare {
-    childs.totalMag_sum, self.totalMag,
-    childs.votesUR_sum, self.votesUR,
-    self.x, self.y,
-    childs.w, childs.h, childs.rx, childs.by,
-    self.render
-  }
-  HSquare {
-    childs.totalMag_sum, self.totalMag,
-    childs.votesUR_sum, self.votesUR,
-    self.x, self.y,
-    childs.w, childs.h, childs.rx, childs.by,
-    self.render
-  }
-  PollingPlace {
-    self.magnitude, self.totalMag, self.votesUR,
-    self.render
-  }
+    Root { self.totalMag },
+    CountryContainer { skip } { self.totalMag, self.votesUR },
+    Region { skip } { self.totalMag, self.votesUR },
+    District { skip } { self.votesUR, self.totalMag },
+    VSquare { skip } { self.votesUR, self.totalMag },
+    HSquare { skip } { self.totalMag, self.votesUR },
+    PollingPlace { self.totalMag }
+} ;; pre {
+    Root { child.w, self.votesUR, child.h },
+    CountryContainer { self.x, self.y, self.render } { childs.w, childs.by, childs.rx, childs.h },
+    Region { self.x, self.y } { childs.h, childs.rx, childs.w, childs.by },
+    District { self.y, self.x, self.render } { childs.w, childs.h, childs.rx, childs.by },
+    VSquare { self.y, self.x } { childs.h, childs.by, childs.rx, childs.w },
+    HSquare { self.x, self.y } { childs.w, childs.rx, childs.h, childs.by },
+    PollingPlace { self.y, self.x, self.render }
 }

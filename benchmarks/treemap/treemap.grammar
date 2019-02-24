@@ -1,27 +1,60 @@
+traversal pre {
+    Root { visit; recur child }
+    CountryContainer { visit; loop childs { visit }; loop childs { recur } }
+    Region { visit; loop childs { visit }; loop childs { recur } }
+    District { visit; loop childs { visit }; loop childs { recur } }
+    VSquare { visit; loop childs { visit }; loop childs { recur } }
+    HSquare { visit; loop childs { visit }; loop childs { recur } }
+    PollingPlace { visit }
+}
+
+traversal post {
+    Root { recur child; visit }
+    CountryContainer { loop childs { recur }; visit; loop childs { visit } }
+    Region { loop childs { recur }; visit; loop childs { visit } }
+    District { loop childs { recur }; visit; loop childs { visit } }
+    VSquare { loop childs { recur }; visit; loop childs { visit } }
+    HSquare { loop childs { recur }; visit; loop childs { visit } }
+    PollingPlace { visit }
+}
+
+traversal zip {
+    Root { visit; recur child }
+    CountryContainer { loop childs { visit; recur; visit } }
+    Region { loop childs { visit; recur; visit } }
+    District { loop childs { visit; recur; visit } }
+    VSquare { loop childs { visit; recur; visit } }
+    HSquare { loop childs { visit; recur; visit } }
+    PollingPlace { visit }
+}
+
+// traversal zigzag {
+//     Root { visit; recur child }
+//     CountryContainer { loop childs { visit }; loop childs { recur }; loop childs { visit } }
+//     Region { loop childs { visit }; loop childs { recur }; loop childs { visit } }
+//     District { loop childs { visit }; loop childs { recur }; loop childs { visit } }
+//     VSquare { loop childs { visit }; loop childs { recur }; loop childs { visit } }
+//     HSquare { loop childs { visit }; loop childs { recur }; loop childs { visit } }
+//     PollingPlace { visit }
+// }
+
 interface IRoot {
     input width : int;
     input height : int;
 
-    // Only show polling placee with turnout from (minTurnout, maxTurnout]
     input minTurnout : int;
     input maxTurnout : int;
 
-    // Change color of fraudulent nodes to fraudColor
     input showFraud : int;
 
-    // [0.0-1.0] When at 1.0, fraudulent nodes have color correspond to 
-    // projected non-fradulent votes, instead of their actual value
     input showProjected : int;
 
     output votesUR : int;
 
-    // If true, width as data resizes stays fixed (but height may outputy); if false, width varies along with height.
     input fixWidth : int;
 
-    // Tween value. When at 0, only shows Javascript simulation nodes; when at 1, all nodes shown as normal.
     input showJavascript : int;
 
-    // Here in the top so we can easily read it in host code
     output totalMag : int;
 }
 
@@ -29,9 +62,8 @@ class Root : IRoot {
     children { child : Node; }
     evaluation {
         child.w := (fixWidth != 0) ? width : width * (totalMag / 63895164);
-        // Make height a function of the current totalMag and our pre-computed
-        // default totalMag
         child.h := height * (totalMag / 63895164);
+
         child.rx := width;
         child.by := height;
 
@@ -43,23 +75,19 @@ class Root : IRoot {
 
         child.fixWidth := fixWidth;
         child.showJavascript := showJavascript;
-        
-        child.totalMag_sum := child.totalMag;
-        self.totalMag := child.totalMag_sum;
-        child.votesUR_sum := child.votesUR / totalMag;
-        self.votesUR := child.votesUR_sum;
+
+        self.totalMag := child.totalMag;
+        self.votesUR := child.votesUR / totalMag;
     }
 }
 
 interface Node {
     output totalMag : int;
-    output totalMag_sum : int;
 
     output minTurnout : int;
     output maxTurnout : int;
 
     output votesUR : int;
-    output votesUR_sum : int;
 
     output showFraud : int;
     output showProjected : int;
@@ -80,10 +108,8 @@ interface Node {
 trait tweenMagnitude {
     children { childs : [Node]; }
     evaluation {
-        self.totalMag := childs$$.totalMag_sum;
-        self.votesUR := childs$$.votesUR_sum;
         loop childs {
-            childs.totalMag_sum := fold 0 .. childs$-.totalMag_sum + childs.totalMag;
+            self.totalMag := fold 0 .. self$-.totalMag + childs$i.totalMag;
             childs.minTurnout := minTurnout;
             childs.maxTurnout := maxTurnout;
 
@@ -94,28 +120,29 @@ trait tweenMagnitude {
 
             childs.showJavascript := showJavascript;
 
-            childs.votesUR_sum := fold 0 .. childs$-.votesUR_sum + childs.votesUR;
+            //childs.votesUR_sum := fold 0 .. childs$-.votesUR_sum + childs$i.votesUR;
+            self.votesUR := fold 0 .. self$-.votesUR + childs$i.votesUR;
         }
     }
 }
 
-class CountryContainer(tweenMagnitude) : Node{
+class CountryContainer(tweenMagnitude) : Node {
     evaluation {
         x := rx - w;
         y := by - h;
-        
+
         render := (fixWidth != 0) ? x + y + w + h : 0;
 
         loop childs {
-            childs.w := (childs.totalMag / totalMag) * w;
+            childs.w := (childs$i.totalMag / totalMag) * w;
             childs.h := h;
-            childs.rx := fold x .. childs$-.rx + childs.w;
+            childs.rx := fold x .. childs$-.rx + childs$i.w;
             childs.by := y + h;
         }
     }
 }
 
-class Region(tweenMagnitude) : Node{
+class Region(tweenMagnitude) : Node {
     evaluation {
         x := rx - w;
         y := by - h;
@@ -125,30 +152,30 @@ class Region(tweenMagnitude) : Node{
         loop childs {
 
             childs.w := w;
-            childs.h := (childs.totalMag / totalMag) * h;
+            childs.h := (childs$i.totalMag / totalMag) * h;
             childs.rx := x + w;
-            childs.by := fold y .. childs$-.by + childs.h;
+            childs.by := fold y .. childs$-.by + childs$i.h;
         }
     }
 }
 
-class District(tweenMagnitude) : Node{
+class District(tweenMagnitude) : Node {
     evaluation {
         x := rx - w;
         y := by - h;
-        
+
         render := (fixWidth != 0) ? x + y + w + h : 0;
 
         loop childs {
-            childs.w := (childs.totalMag / totalMag) * w;
+            childs.w := (childs$i.totalMag / totalMag) * w;
             childs.h := h;
-            childs.rx := fold x .. childs$-.rx + childs.w;
+            childs.rx := fold x .. childs$-.rx + childs$i.w;
             childs.by := y + h;
         }
     }
 }
 
-class VSquare(tweenMagnitude) : Node{
+class VSquare(tweenMagnitude) : Node {
     evaluation {
         x := rx - w;
         y := by - h;
@@ -157,14 +184,14 @@ class VSquare(tweenMagnitude) : Node{
 
         loop childs {
             childs.w := w;
-            childs.h := (childs.totalMag / totalMag) * h;
+            childs.h := (childs$i.totalMag / totalMag) * h;
             childs.rx := x + w;
-            childs.by := fold y .. childs$-.by + childs.h;
+            childs.by := fold y .. childs$-.by + childs$i.h;
         }
     }
 }
 
-class HSquare(tweenMagnitude) : Node{
+class HSquare(tweenMagnitude) : Node {
     evaluation {
         x := rx - w;
         y := by - h;
@@ -172,35 +199,26 @@ class HSquare(tweenMagnitude) : Node{
         render := 0;
 
         loop childs {
-            childs.w := (childs.totalMag / totalMag) * w;
+            childs.w := (childs$i.totalMag / totalMag) * w;
             childs.h := h;
-            childs.rx := fold x .. childs$-.rx + childs.w;
+            childs.rx := fold x .. childs$-.rx + childs$i.w;
             childs.by := y + h;
         }
     }
 }
 
-class PollingPlace : Node{
+class PollingPlace : Node {
     attributes {
-        // Total number of ballots cast in this place
         input totalVotes : int;
-        // Number of ballots cast for UR
         input totalVotesUR : int;
-        // Percent of votes for UR
         input urVotes : int;
-        // Average of district's percent of votes for UR (e.g., projected UR vote %)
         input urVotesProjected : int;
-        // Percent of registered voters who cast a ballot in this place
         input turnout : int;
 
-        // Default color (e.g., color when % of votes for UR is 0%)
         input defColor : int;
-        // UR colors (e.g., color when % of votes for UR is 100%)
-        input urColor : int; // Red
-        // Color to turn fraudulent nodes
+        input urColor : int;
         input fraudColor : int;
 
-        // Bool-like int to let us know if this node should be rendered in our JS simulation
         input inJavascript : int;
 
         output calcRegularColor : int;
@@ -216,7 +234,10 @@ class PollingPlace : Node{
         calcRegularColor := defColor + urColor + urVotes;
         calcVotesColor := (turnout > 0) ? calcRegularColor + calcProjectedColor + showProjected : calcRegularColor;
         calcFraudColor := (turnout > 0) ? fraudColor : calcVotesColor;
-        
+
+        // In the original work on FTL, this was actually an (undocumented)
+        // rendering command. The following evaluation rule is equivalent for
+        // the purposes of static scheduling (i.e., same dependences).
         render := x + y + w + h + calcVotesColor + calcFraudColor + showFraud;
 
         x := rx - w;
@@ -224,14 +245,10 @@ class PollingPlace : Node{
 
         magnitude := (turnout > minTurnout && turnout <= maxTurnout) ? totalVotes : 0;
         totalMag := (inJavascript != 0) ? magnitude : showJavascript * magnitude;
-        
-        // How many votes for UR does this node contribute?
-        // Turn to 0 if we're not showing this bin
-        // If this is a suspect polling place, interpolate between real and
-        // projected values based off showProjected.
-        votesUR := (turnout > minTurnout && turnout <= maxTurnout) ? 
+
+        votesUR := (turnout > minTurnout && turnout <= maxTurnout) ?
             ((turnout > 0) ? ((totalVotesUR * (1 - showProjected)) + ((totalVotes * urVotesProjected) * showProjected)) : totalVotesUR)
             : 0;
     }
-    
+
 }

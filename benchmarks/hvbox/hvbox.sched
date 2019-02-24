@@ -1,26 +1,11 @@
 post {
-  Root { }
-  HBox {
-    loop childs { childs.width_out, childs.height_out },
-    self.width, self.height
-  }
-  VBox {
-    loop childs { childs.width_out, childs.height_out },
-    self.width, self.height
-  }
-  Leaf {
-    self.width, self.height
-  }
+  Root { },
+  HBox { childs.width_out, childs.height_out } { self.width, self.height },
+  VBox { childs.width_out, childs.height_out } { self.width, self.height },
+  Leaf { self.width, self.height }
 } ;; pre {
-  Root {
-    root.right, root.bottom,
-    root.width_out, root.height_out
-  }
-  HBox {
-    loop childs { childs.right, childs.bottom }
-  }
-  VBox {
-    loop childs { childs.right, childs.bottom }
-  }
+  Root { root.right, root.bottom, root.width_out, root.height_out },
+  HBox { childs.right, childs.bottom },
+  VBox { childs.right, childs.bottom },
   Leaf { }
 }
