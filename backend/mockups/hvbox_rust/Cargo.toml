@@ -1,0 +1,12 @@
+[package]
+name = "rust_hvbox"
+version = "0.1.0"
+authors = ["Nate Yazdani <nyazdani@cs.washington.edu>"]
+
+[profile.dev]
+opt-level = 3
+
+[dependencies]
+rayon = "0.8.2"
+rand = "0.3"
+time = "0.1"
