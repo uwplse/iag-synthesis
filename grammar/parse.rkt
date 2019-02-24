@@ -1,7 +1,6 @@
 #lang rosette
 
-; Functional Tree Language (FTL) synthesis engine
-; Grammar DSL Parser and Serializer
+; Parser and Serializer for Language of Attribute Grammars
 
 (require "syntax.rkt"
          parser-tools/lex
@@ -9,10 +8,8 @@
          parser-tools/yacc
          racket/match)
 
-(provide parse-ftl
-         ftl-ast-parse
-         ftl-ast-serialize
-         ftl-ast-refer-serialize)
+(provide ag-parse
+         ag-serialize)
 
 ; ----------------
 ; Lexer Definition
@@ -21,20 +18,19 @@
 (define-empty-tokens e-tkns (INTERFACE
                              RBRACE
                              LBRACE
-                             VAR
                              INPUT
+                             OUTPUT
                              TRAIT
                              CLASS
                              CHILDREN
                              ATTRIBUTES
-                             PHANTOM
-                             ACTIONS
+                             EVALUATION
                              LOOP
+                             SELF
                              DEFINE
                              FOLD
                              FIRST
                              PREVIOUS
-                             INDEX
                              LAST
                              DOTDOT
                              SEMICOLON
@@ -107,23 +103,23 @@
              (char-complement (:or "\\" "\"")))
          "\""))))
 
-(define ftl-lex
+(define ag-lex
   (lexer
-   [(comment) (ftl-lex input-port)]
+   [(comment) (ag-lex input-port)]
    ["true" (token-LITERAL #t)]
    ["false" (token-LITERAL #f)]
    ["interface" (token-INTERFACE)]
    ["}" (token-RBRACE)]
    ["{" (token-LBRACE)]
-   ["var" (token-VAR)]
    ["input" (token-INPUT)]
+   ["output" (token-OUTPUT)]
    ["trait" (token-TRAIT)]
    ["class" (token-CLASS)]
    ["children" (token-CHILDREN)]
    ["attributes" (token-ATTRIBUTES)]
-   ["phantom" (token-PHANTOM)]
-   ["actions" (token-ACTIONS)]
+   ["evaluation" (token-EVALUATION)]
    ["loop" (token-LOOP)]
+   ["self" (token-SELF)]
    [":=" (token-DEFINE)]
    ["fold" (token-FOLD)]
    [".." (token-DOTDOT)]
@@ -151,30 +147,23 @@
    ["!" (token-NOT)]
    ["$0" (token-FIRST)]
    ["$-" (token-PREVIOUS)]
-   ["$i" (token-INDEX)]
    ["$$" (token-LAST)]
    [(number) (token-LITERAL (string->number lexeme))]
-   [(ident) (token-IDENT lexeme)]
+   [(ident) (token-IDENT (string->symbol lexeme))]
    [(string) (token-LITERAL (read lexeme))]
-   [whitespace (ftl-lex input-port)]
+   [whitespace (ag-lex input-port)]
    [(eof) (token-EOF)]))
 
 ; -----------------
 ; Parser Definition
 ; -----------------
 
-; TODO: phantom types and the 'fold <ident> by <expr> { <defn>* }' construct
-; (which may be deprecated?)
-
-; TODO: default/given input values of the form 'input <ident> : <type> =
-; <literal>;'
-
-(define ftl-parse
+(define ag-parse-lexed
   (parser
    (start decl-list)
    (tokens tkns e-tkns)
    (end EOF)
-   (error (thunk (display "Error: could not parse FTL source")))
+   (error (thunk (display "Error: could not parse attribute grammar source")))
    (grammar
     (decl-list
      ((decl decl-list) (cons $1 $2))
@@ -186,291 +175,288 @@
      ((class-decl) $1))
 
     (class-decl
-     ((CLASS IDENT COLON IDENT LBRACE class-body RBRACE) (ftl-ast-class (string->symbol $2)
-                                                                    null
-                                                                    (string->symbol $4)
-                                                                    $6))
-     ((CLASS IDENT LPAREN trait-list RPAREN COLON IDENT LBRACE class-body RBRACE) (ftl-ast-class (string->symbol $2)
-                                                                                             $4
-                                                                                             (string->symbol $7)
-                                                                                             $9)))
+     ((CLASS IDENT COLON IDENT
+             LBRACE class-body RBRACE) (ag-class $2 null $4 $6))
+     ((CLASS IDENT LPAREN trait-list RPAREN COLON IDENT
+             LBRACE class-body RBRACE) (ag-class $2 $4 $7 $9)))
 
     (trait-list
-     ((IDENT COMMA trait-list) (cons (string->symbol $1) $3))
-     ((IDENT) (list (string->symbol $1))))
+     ((IDENT COMMA trait-list) (cons $1 $3))
+     ((IDENT) (list $1)))
 
     (iface-decl
-     ((INTERFACE IDENT LBRACE attr-decl-list RBRACE) (ftl-ast-interface (string->symbol $2) $4)))
+     ((INTERFACE IDENT
+                 LBRACE label-list RBRACE) (ag-interface $2 $4)))
 
     (trait-decl
-     ((TRAIT IDENT LBRACE class-body RBRACE) (ftl-ast-trait (string->symbol $2) $4)))
+     ((TRAIT IDENT LBRACE class-body RBRACE) (ag-trait $2 $4)))
 
     (class-body
-     ((class-body-block class-body) (ftl-ast-body-merge $1 $2))
-     (() (ftl-ast-body null null null)))
+     ((class-body-block class-body) (ag-body-merge $1 $2))
+     (() (ag-body null null null)))
 
     (class-body-block
-     ((ATTRIBUTES LBRACE attr-decl-list RBRACE) (ftl-ast-body null $3 null))
-;     ((PHANTOM LBRACE attr-decl-list RBRACE) (ftl-ast-body null $3 null))
-     ((ACTIONS LBRACE attr-def-list RBRACE) (ftl-ast-body null null $3))
-     ((CHILDREN LBRACE child-list RBRACE) (ftl-ast-body $3 null null)))
-
-    (attr-decl-list ((attr-decl-input IDENT COLON IDENT SEMICOLON attr-decl-list) (cons (ftl-ast-declare $1
-                                                                                                     (string->symbol $2)
-                                                                                                     (string->symbol $4))
-                                                                                        $6))
-                    (() null))
-
-    (attr-decl-input ((VAR) #f)
-                     ((INPUT) #t))
-
-    (attr-def-list
-     ((attr-def attr-def-list) (cons $1 $2))
-     (() null))
-
-    (attr-def
-     ((LOOP IDENT LBRACE attr-def-loop-list RBRACE) (ftl-ast-loop (string->symbol $2) $4))
-     ((attr-def-ref DEFINE cond-expr SEMICOLON) (ftl-ast-define $1 $3)))
-
-    (attr-def-ref
-     ((IDENT) (ftl-ast-refer 'self 'none (string->symbol $1)))
-     ((IDENT DOT IDENT) (ftl-ast-refer (string->symbol $1) 'none (string->symbol $3)))
-     ((IDENT FIRST DOT IDENT) (ftl-ast-refer (string->symbol $1) 'first (string->symbol $4)))
-     ((IDENT LAST DOT IDENT) (ftl-ast-refer (string->symbol $1) 'last (string->symbol $4))))
-
-    (attr-def-loop-list
-     ((attr-def-loop attr-def-loop-list) (cons $1 $2))
-     (() null))
-
-    (attr-def-loop
-     ((attr-def-loop-ref DEFINE fold-expr SEMICOLON) (ftl-ast-define $1 $3)))
-
-    (attr-def-loop-ref
-     ((IDENT) (ftl-ast-refer 'self 'none (string->symbol $1)))
-     ((IDENT DOT IDENT) (ftl-ast-refer (string->symbol $1) 'none (string->symbol $3)))
-     ((PREVIOUS DOT IDENT) (ftl-ast-refer 'self 'previous (string->symbol $3))) ; $0, $i, and $$ have no semantic meaning for self
-     ((IDENT FIRST DOT IDENT) (ftl-ast-refer (string->symbol $1) 'first (string->symbol $4)))
-     ((IDENT PREVIOUS DOT IDENT) (ftl-ast-refer (string->symbol $1) 'previous (string->symbol $4)))
-     ((IDENT INDEX DOT IDENT) (ftl-ast-refer (string->symbol $1) 'current (string->symbol $4)))
-     ((IDENT LAST DOT IDENT) (ftl-ast-refer (string->symbol $1) 'last (string->symbol $4))))
+     ((CHILDREN LBRACE child-list RBRACE) (ag-body $3 null null))
+     ((ATTRIBUTES LBRACE label-list RBRACE) (ag-body null $3 null))
+     ((EVALUATION LBRACE rule-or-loop-list RBRACE) (ag-body null null $3)))
 
     (child-list
-     ((IDENT COLON child-type SEMICOLON child-list) (cons (ftl-ast-child (string->symbol $1)
-                                                                     (car $3)
-                                                                     (cdr $3))
+     ((IDENT COLON child-type SEMICOLON child-list) (cons (ag-child $1
+                                                                         (car $3)
+                                                                         (cdr $3))
                                                           $5))
      (() null))
 
     (child-type
-     ((IDENT) (cons #f (string->symbol $1)))
-     ((LBRACKET IDENT RBRACKET) (cons #t (string->symbol $2))))
+     ((IDENT) (cons #f $1))
+     ((LBRACKET IDENT RBRACKET) (cons #t $2)))
 
-    (fold-expr
-     ((cond-expr) $1)
-     ((FOLD cond-expr DOTDOT cond-expr) (ftl-ast-expr-fold $2 $4)))
+    (label-list
+     ((label-io IDENT COLON IDENT SEMICOLON
+               label-list) (cons (ag-label $1 $2 $4) $6))
+     (() null))
+
+    (label-io
+     ((INPUT) #t)
+     ((OUTPUT) #f))
+
+    (rule-or-loop-list
+     ((rule-or-loop rule-or-loop-list) (cons $1 $2))
+     (() null))
+
+    (rule-or-loop
+     ((rule) $1)
+     ((loop) $1))
+
+    (rule
+      ((IDENT DEFINE expr SEMICOLON) (ag-rule (cons 'self $1) $3))
+      ((SELF DOT IDENT DEFINE expr SEMICOLON) (ag-rule (cons 'self $3) $5))
+      ((IDENT DOT IDENT DEFINE expr SEMICOLON) (ag-rule (cons $1 $3) $5)))
+
+    (loop
+     ((LOOP IDENT LBRACE loop-rule-list RBRACE) (ag-loop $2 $4)))
+
+    (loop-rule-list
+     ((loop-rule loop-rule-list) (cons $1 $2))
+     (() null))
+
+    (loop-rule
+     ((IDENT DEFINE fold SEMICOLON) (ag-rule (cons 'self $1) $3))
+     ((SELF DOT IDENT DEFINE fold SEMICOLON) (ag-rule (cons 'self $3) $5))
+     ((IDENT DOT IDENT DEFINE fold SEMICOLON) (ag-rule (cons $1 $3) $5)))
+
+    (fold
+     ((expr) $1)
+     ((FOLD expr DOTDOT expr) (ag-fold $2 $4)))
+
+    (expr
+     ((cond-expr) $1))
 
     (cond-expr
      ((and-expr) $1)
-     ((and-expr CONDITION and-expr COLON and-expr) (ftl-ast-expr-cond $1 $3 $5)))
+     ((and-expr CONDITION and-expr COLON and-expr) (ag-expr-condition $1 $3 $5)))
 
     (and-expr
      ((or-expr) $1)
-     ((or-expr AND and-expr) (ftl-ast-expr-binary $1 '&& $3)))
+     ((or-expr AND and-expr) (ag-expr-binary $1 '&& $3)))
 
     (or-expr
      ((comp-expr) $1)
-     ((comp-expr OR or-expr) (ftl-ast-expr-binary $1 '|| $3)))
+     ((comp-expr OR or-expr) (ag-expr-binary $1 '|| $3)))
 
     (comp-expr
      ((term) $1)
-     ((NOT term) (ftl-ast-expr-unary '! $2))
-     ((term GT term) (ftl-ast-expr-binary $1 '> $3))
-     ((term LT term) (ftl-ast-expr-binary $1 '< $3))
-     ((term GE term) (ftl-ast-expr-binary $1 '>= $3))
-     ((term LE term) (ftl-ast-expr-binary $1 '<= $3))
-     ((term EQ term) (ftl-ast-expr-binary $1 '== $3))
-     ((term NE term) (ftl-ast-expr-binary $1 '!= $3)))
+     ((NOT term) (ag-expr-unary '! $2))
+     ((term GT term) (ag-expr-binary $1 '> $3))
+     ((term LT term) (ag-expr-binary $1 '< $3))
+     ((term GE term) (ag-expr-binary $1 '>= $3))
+     ((term LE term) (ag-expr-binary $1 '<= $3))
+     ((term EQ term) (ag-expr-binary $1 '== $3))
+     ((term NE term) (ag-expr-binary $1 '!= $3)))
 
     (term
      ((factor) $1)
-     ((factor PLUS term) (ftl-ast-expr-binary $1 '+ $3))
-     ((factor MINUS term) (ftl-ast-expr-binary $1 '- $3)))
+     ((factor PLUS term) (ag-expr-binary $1 '+ $3))
+     ((factor MINUS term) (ag-expr-binary $1 '- $3)))
 
     (factor
      ((prim-expr) $1)
-     ((prim-expr MULTIPLY factor) (ftl-ast-expr-binary $1 '* $3))
-     ((prim-expr DIVIDE factor) (ftl-ast-expr-binary $1 '/ $3)))
+     ((prim-expr MULTIPLY factor) (ag-expr-binary $1 '* $3))
+     ((prim-expr DIVIDE factor) (ag-expr-binary $1 '/ $3)))
 
     (prim-expr
-     ((MINUS prim-expr) (ftl-ast-expr-unary '- $2))
-     ((attr-def-loop-ref) $1) ; would be a lot of duplication to distinguish between attr-def-ref and attr-def-loop-ref in expressions
+     ((MINUS prim-expr) (ag-expr-unary '- $2))
+     ((attr-expr) $1)
      ((LITERAL) $1)
-     ((IDENT LPAREN arg-list RPAREN) (ftl-ast-expr-call (string->symbol $1) $3))
-     ((IDENT LPAREN RPAREN) (ftl-ast-expr-call (string->symbol $1) null))
-     ((LPAREN cond-expr RPAREN) $2))
+     ((IDENT LPAREN arg-list RPAREN) (ag-expr-call $1 $3))
+     ((IDENT LPAREN RPAREN) (ag-expr-call $1 null))
+     ((LPAREN expr RPAREN) $2))
+
+    (attr-expr
+     ((IDENT) (ag-expr-reference 'self #f $1))
+     ((SELF DOT IDENT) (ag-expr-reference 'self #f $3))
+     ((IDENT DOT IDENT) (ag-expr-reference $1 #f $3))
+     ((IDENT FIRST DOT IDENT) (ag-expr-reference $1 'first $4))
+     ((IDENT PREVIOUS DOT IDENT) (ag-expr-reference $1 'previous $4))
+     ((IDENT LAST DOT IDENT) (ag-expr-reference $1 'last $4)))
 
     (arg-list
-     ((cond-expr) (list $1))
-     ((cond-expr COMMA arg-list) (cons $1 $3))))))
+     ((expr COMMA arg-list) (cons $1 $3))
+     ((expr) (list $1))))))
 
-(define (ftl-ast-parse input)
-  (ftl-parse (λ () (ftl-lex input))))
-
-(define parse-ftl ftl-ast-parse)
+; Take an input port and return an abstract syntax tree for the attribute grammar.
+(define (ag-parse input)
+  (ag-parse-lexed (thunk (ag-lex input))))
 
 ; -----------------
 ; AST Serialization
 ; -----------------
 
-(define (ftl-ast-serialize ftl-ast-list)
-  (string-join (for/list ([decl ftl-ast-list])
+(define (ag-serialize ast-list)
+  (string-join (for/list ([decl ast-list])
                  (cond
-                   [(ftl-ast-interface? decl)
-                    (ftl-ast-interface-serialize decl)]
-                   [(ftl-ast-trait? decl)
-                    (ftl-ast-trait-serialize decl)]
-                   [(ftl-ast-class? decl)
-                    (ftl-ast-class-serialize decl)]))
+                   [(ag-interface? decl)
+                    (ag-interface-serialize decl)]
+                   [(ag-trait? decl)
+                    (ag-trait-serialize decl)]
+                   [(ag-class? decl)
+                    (ag-class-serialize decl)]))
                "\n"))
 
-(define serialize-ftl ftl-ast-serialize)
+(define (ag-interface-serialize interface-ast)
+  (match-let ([(ag-interface name labels) interface-ast])
+    (string-append "interface "
+                   (symbol->string name)
+                   " {\n"
+                   (string-join (map ag-label-serialize
+                                     labels)
+                                "\n")
+                   "\n}\n")))
 
-(define (ftl-ast-interface-serialize iface)
-  (string-append "interface "
-                 (symbol->string (ftl-ast-interface-name iface))
-                 " {\n"
-                 (string-join (map ftl-ast-declare-serialize
-                                   (ftl-ast-interface-fields iface))
-                              "\n")
-                 "\n}\n"))
+(define (ag-label-serialize label-ast)
+  (match-let ([(ag-label input name type) label-ast])
+    (string-append "    "
+                   (if input "input" "var")
+                   " "
+                   (symbol->string name)
+                   " : "
+                   (symbol->string type) ";")))
 
-(define (ftl-ast-declare-serialize declare)
-  (string-append "    "
-                 (if (ftl-ast-declare-input declare) "input" "var")
-                 " "
-                 (symbol->string (ftl-ast-declare-name declare))
-                 " : "
-                 (symbol->string (ftl-ast-declare-type declare)) ";"))
+(define (ag-trait-serialize trait-ast)
+  (match-let ([(ag-trait name body) trait-ast])
+    (string-append "trait "
+                   (symbol->string name)
+                   " {\n"
+                   (ag-body-serialize body)
+                   "\n}\n")))
 
-(define (ftl-ast-trait-serialize trait)
-  (string-append "trait "
-                 (symbol->string (ftl-ast-trait-name trait))
-                 " {\n"
-                 (ftl-ast-body-serialize (ftl-ast-trait-body trait))
-                 "\n}\n"))
+(define (ag-class-serialize class-ast)
+  (match-let ([(ag-class name traits interface body) class-ast])
+    (define trait-list
+      (if (null? traits)
+          ""
+          (string-append "(" (string-join (map symbol->string traits) ",") ")")))
 
-(define (ftl-ast-class-serialize class)
-  (define trait-list
-    (if (null? (ftl-ast-class-traits class))
-        ""
-        (string-append "("
-                       (string-join (map symbol->string
-                                         (ftl-ast-class-traits class))
-                                    ",")
-                       ")")))
-
-  (string-append "class "
-                   (symbol->string (ftl-ast-class-name class))
+    (string-append "class "
+                   (symbol->string name)
                    trait-list
                    " : "
-                   (symbol->string (ftl-ast-class-interface class))
+                   (symbol->string interface)
                    " {\n"
-                   (ftl-ast-body-serialize (ftl-ast-class-body class))
-                   "}\n"))
+                   (ag-body-serialize body)
+                   "}\n")))
 
-(define (ftl-ast-body-serialize body)
-  (string-append "    children {\n"
-                 (serialize-children (ftl-ast-body-children body))
-                 "\n    }\n"
-                 "    attributes {\n"
-                 (serialize-attributes (ftl-ast-body-attributes body))
-                 "\n    }\n"
-                 "    actions {\n"
-                 (serialize-actions (ftl-ast-body-actions body) 8)
-                 "\n    }\n"))
+(define (ag-body-serialize body-ast)
+  (match-let ([(ag-body children labels rules) body-ast])
+    (string-append "    children {\n"
+                   (serialize-children children)
+                   "\n    }\n"
+                   "    attributes {\n"
+                   (serialize-labels labels)
+                   "\n    }\n"
+                   "    evaluation {\n"
+                   (serialize-rules rules 8)
+                   "\n    }\n")))
 
-(define (serialize-attributes attributes)
-  (string-join (for/list ([attribute attributes])
+(define (serialize-labels label-ast-list)
+  (string-join (for/list ([label-ast label-ast-list])
                  (string-append (spaces 4)
-                                (ftl-ast-declare-serialize attribute)))
+                                (ag-label-serialize label-ast)))
                "\n"))
 
-(define (ftl-ast-child-serialize child)
-  (let* ([ident (symbol->string (ftl-ast-child-name child))]
-         [iface (symbol->string (ftl-ast-child-interface child))]
-         [type (if (ftl-ast-child-sequence child)
-                   (string-append "[" iface "]")
-                   iface)])
-    (string-append "        " ident " : " type ";")))
+(define (ag-child-serialize child-ast)
+  (match-let ([(ag-child name sequence interface) child-ast])
+    (let* ([ident (symbol->string name)]
+           [iface (symbol->string interface)]
+           [type (if sequence
+                     (string-append "[" iface "]")
+                     iface)])
+      (string-append "        " ident " : " type ";"))))
 
-(define (serialize-children children)
-  (string-join (map ftl-ast-child-serialize children) "\n"))
+(define (serialize-children children-ast-list)
+  (string-join (map ag-child-serialize children-ast-list) "\n"))
 
 (define (spaces depth)
   (if (equal? depth 0)
       ""
       (string-append (spaces (- depth 1)) " ")))
 
-(define (ftl-ast-define-serialize def depth)
-  (string-append (spaces depth)
-                 (ftl-ast-refer-serialize (ftl-ast-define-lhs def))
-                 " := "
-                 (ftl-ast-expr-serialize (ftl-ast-define-rhs def))
-                 ";"))
+; This will accept folds, regardless of whether the evaluation rule was actually
+; in a loop context or not.
+(define (ag-rule-serialize rule-ast depth)
+  (match-let ([(ag-rule (cons object label) value) rule-ast])
+    (string-append (spaces depth)
+                   (symbol->string object)
+                   "."
+                   (symbol->string label)
+                   " := "
+                   (ag-fold-serialize value)
+                   ";")))
 
-(define (ftl-ast-loop-serialize loop depth)
-  (string-append (spaces depth)
-                 "loop "
-                 (symbol->string (ftl-ast-loop-iterate loop))
-                 " {\n"
-                 (serialize-actions (ftl-ast-loop-actions loop)
-                                    (+ depth 4))
-                 (spaces depth)
-                 "\n        }"))
+(define (ag-loop-serialize loop-ast depth)
+  (match-let ([(ag-loop object rules) loop-ast])
+    (string-append (spaces depth)
+                   "loop "
+                   (symbol->string object)
+                   " {\n"
+                   (serialize-rules rules (+ depth 4))
+                   ;(spaces depth) ; FIXME: delete?
+                   "\n        }")))
 
-(define (serialize-actions defs depth)
-  (string-join (for/list ([def defs])
-                 (if (ftl-ast-define? def)
-                     (ftl-ast-define-serialize def depth)
-                     (ftl-ast-loop-serialize def depth)))
+(define (serialize-rules rule-or-loop-ast-list depth)
+  (string-join (for/list ([rule-or-loop-ast rule-or-loop-ast-list])
+                 (if (ag-rule? rule-or-loop-ast)
+                     (ag-rule-serialize rule-or-loop-ast depth)
+                     (ag-loop-serialize rule-or-loop-ast depth)))
                "\n"))
 
-(define (ftl-ast-refer-serialize ref)
-  (let ([index (match (ftl-ast-refer-index ref)
-                 ['none ""]
-                 ['first "$0"]
-                 ['previous "$-"]
-                 ['current "$i"]
-                 ['last "$$"])])
-    (string-append (symbol->string (ftl-ast-refer-object ref))
-                   index
-                   "."
-                   (symbol->string (ftl-ast-refer-label ref)))))
+(define/match (ag-fold-serialize fold-ast)
+  [((ag-fold seed step))
+   (string-append "fold (" (ag-expr-serialize seed) ") .. "
+                  "(" (ag-expr-serialize step) ")")]
+  [(expr)
+   (ag-expr-serialize expr)])
 
-(define (ftl-ast-expr-serialize expr)
-  (match expr
-    [(ftl-ast-expr-fold init step)
-     (string-append "fold (" (ftl-ast-expr-serialize init) ") .. "
-                    "(" (ftl-ast-expr-serialize step) ")")]
-    [(ftl-ast-expr-cond if then else)
-     (string-append "(" (ftl-ast-expr-serialize if) ") ? "
-                    "(" (ftl-ast-expr-serialize then) ") : "
-                    "(" (ftl-ast-expr-serialize else) ")")]
-    [(ftl-ast-expr-unary op e)
-     (string-append (symbol->string op)
-                    "(" (ftl-ast-expr-serialize e) ")")]
-    [(ftl-ast-expr-binary e1 op e2)
-     (string-append "(" (ftl-ast-expr-serialize e1) ") "
-                    (symbol->string op)
-                    " (" (ftl-ast-expr-serialize e2) ")")]
-    [(ftl-ast-expr-call name args)
-     (string-append (symbol->string name)
-                    "("
-                    (string-join (map ftl-ast-expr-serialize args) ",")
-                    ")")]
-    [(? ftl-ast-refer?)
-     (ftl-ast-refer-serialize expr)]
-    [(? number?)
-     (number->string expr)]
-    [(? boolean?)
-     (if expr "true" "false")]))
+(define/match (ag-expr-serialize expr-ast)
+  [((ag-expr-condition if then else))
+   (string-append "(" (ag-expr-serialize if) ") ? "
+                  "(" (ag-expr-serialize then) ") : "
+                  "(" (ag-expr-serialize else) ")")]
+  [((ag-expr-unary op e))
+   (string-append (symbol->string op)
+                  "(" (ag-expr-serialize e) ")")]
+  [((ag-expr-binary e1 op e2))
+   (string-append "(" (ag-expr-serialize e1) ") "
+                  (symbol->string op)
+                  " (" (ag-expr-serialize e2) ")")]
+  [((ag-expr-call name args))
+   (string-append (symbol->string name)
+                  "("
+                  (string-join (map ag-expr-serialize args) ",")
+                  ")")]
+  [((? ag-expr-reference?))
+   (ag-expr-reference->string expr-ast)]
+  [((? number?))
+   (number->string expr-ast)]
+  [((? boolean?))
+   (if expr-ast "true" "false")])

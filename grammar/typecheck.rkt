@@ -1,294 +1,326 @@
 #lang rosette
 
-(require "../utility.rkt"
-         "parse.rkt"
-         "syntax.rkt"
-         "runtime.rkt")
+; Typechecker for Language of Attribute Grammars
 
-(provide ftl-ast-typecheck)
+(require "syntax.rkt")
 
-; TODO: can we disentangle typechecking, index-normalization, and
-; symbol-resolution? and if so, is it worth doing? On the other hand, how can
-; these functions be named so as to more effectively convey their generalized
-; type-driven functionality? "ftl-ast-type-magic"?
-; Note that symbol resolution also involves the substitution of function callss
-; for unary and binary operators.
+(provide typecheck-object
+         typecheck-label
+         typecheck-expression
+         undefined-function
+         ag-typecheck)
 
-; Create an error thunk to say that the given name of the given kind was
-; undefined. The name argument is assumed to be either a symbol or a pair of
-; symbols. Useful for association list lookups.
-(define ((undefined kind name))
-  (define occurrence
-    (if (pair? name)
-        (string-append (symbol->string (car name))
-                       "."
-                       (symbol->string (cdr name)))
-        (symbol->string name)))
-  (raise-arguments-error 'typecheck (string-append "undefined " kind)
-                         "occurrence" occurrence))
+; This language defines only the types bool, int, float, and string. The usual
+; assortment of binary and unary operators are also present but inextensible.
+; It is assumed that any two values of the same type are equal?-comparable.
+; If other types are used, backend code generators will likely require additional
+; information about them (e.g., a header file defining it plus the name of an
+; equality function).
 
-; Resolve a unary operator to the proper presumably monomorphic definition
-(define (resolve-unary runtime operator typename)
-  (let* ([types (ftl-runtime-types runtime)]
-         [type (assoc-lookup types
-                             typename
-                             (undefined "type" typename))]
-         [unary (ftl-type-unary type)])
-    (assoc-lookup unary
-                  operator
-                  (undefined "operator" operator))))
+(define undefined-function
+  (curry raise-user-error 'typecheck "undefined function '~a'"))
 
-; Resolve a binary operator to the proper presumably monomorphic definition
-(define (resolve-binary runtime operator typename)
-  (let* ([types (ftl-runtime-types runtime)]
-         [type (assoc-lookup types
-                             typename
-                             (undefined "type" typename))]
-         [binary (ftl-type-binary type)]
-         [eq (ftl-type-equal? type)]
-         [lt (ftl-type-less? type)])
-    ; desugar certain operators
-    (match operator
-      ['== eq]
-      ['!= (compose not eq)]
-      ['< lt]
-      ['> (λ (x y)
-            (and (not (lt x y))
-                 (not (eq x y))))]
-      ['<= (λ (x y)
-             (or (lt x y)
-                 (eq x y)))]
-      ['>= (compose not lt)]
-      [else (assoc-lookup binary
-                          operator
-                          (undefined "operator" operator))])))
+; Raise a user error to indicate that an object identifier is undefined.
+(define (undefined-object class-ast object)
+  (raise-user-error 'typecheck
+                    "undefined child '~a' in class ~a"
+                    object
+                    (ag-class-name class-ast)))
 
-; Produce an symbol-resolved, index-normalized form of a definition if it is
-; well-typed; otherwise, raise an appropriate error. Together, symbol-resolution
-; and index-normalization translate (resolve) all operators into function calls
-; to the appropriate target symbol or definition, resolve all function symbols
-; to the appropriate target symbol or definition, and inserts implicit current
-; indices (e.g., children.attr => children$i.attr) in the right-hand side of the
-; definition.
-(define (ftl-ast-define-typecheck runtime typeof iterable? loop definition)
-  (match-let* ([bool-type (ftl-runtime-boolean runtime)]
-               [library (ftl-runtime-library runtime)]
-               [(ftl-ast-define lhs rhs) definition]
-               [(ftl-ast-refer lhs-object lhs-index lhs-label) lhs])
-    ; resolve symbols and infer the type of an expression
-    (define (recurse fold expr)
-      (match expr
-        ; unary operation
-        [(ftl-ast-expr-unary oper subexpr)
-         (match-let* ([(cons subexpr type) (recurse fold subexpr)]
-                      [fun (resolve-unary runtime oper type)]
-                      [args (list subexpr)])
-           (cons (ftl-ast-expr-call fun args) type))]
-        ; binary operation
-        [(ftl-ast-expr-binary left-expr oper right-expr)
-         (match-let* ([(cons left-expr left-type) (recurse fold left-expr)]
-                      [(cons right-expr right-type) (recurse fold right-expr)]
-                      [fun (resolve-binary runtime oper left-type)]
-                      [args (list left-expr right-expr)]
-                      [type (if (memq oper '(== != < > <= >=))
-                                ; oper : type*type -> bool
-                                bool-type
-                                ; oper : type*type -> type
-                                left-type)])
-           (if (eq? left-type right-type)
-               (cons (ftl-ast-expr-call fun args) type)
-               (raise-arguments-error 'typecheck
-                                      "binary operation on two different types:"
-                                      "left" (symbol->string left-type)
-                                      "right" (symbol->string right-type))))]
-        ; conditional expression
-        [(ftl-ast-expr-cond cond-expr then-expr else-expr)
-         (match-let ([(cons cond-expr cond-type) (recurse fold cond-expr)]
-                     [(cons then-expr then-type) (recurse fold then-expr)]
-                     [(cons else-expr else-type) (recurse fold else-expr)])
-           (if (eq? cond-type bool-type)
-               (if (eq? then-type else-type)
-                   ; do not translate conditionals into function calls, because
-                   ; FTL assumes definitions have call-by-value semantics
-                   (cons (ftl-ast-expr-cond cond-expr then-expr else-expr)
-                         then-type) ; ite : bool*type*type -> type
-                   (raise-arguments-error 'typecheck
-                                          "cannot unify branches of conditional expression"
-                                          "then branch" (symbol->string then-type)
-                                          "else branch" (symbol->string else-type)))
-               (raise-arguments-error 'typecheck
-                                      "non-boolean condition expression"
-                                      "type" (symbol->string cond-type))))]
-        ; function invocation
-        [(ftl-ast-expr-call symbol arg-exprs)
-         (match-let* ([(cons sig fun) (assoc-lookup library
-                                                    symbol
-                                                    (undefined "function" symbol))]
-                      [ar (- (length sig) 1)] ; arity
-                      [par (map (curry recurse fold) arg-exprs)] ; parameters
-                      [par-exprs (map car par)]
-                      [par-types (map cdr par)]
-                      [dom (take sig ar)] ; domain
-                      [cod (last sig)]) ; codomain
-           (if (eq? ar (length arg-exprs))
-               (if (foldl && #t (map eq? dom par-types))
-                   (cons (ftl-ast-expr-call fun par-exprs)
-                         cod) ; fun : dom[*] -> cod
-                   (raise-arguments-error 'typecheck
-                                          "ill-typed function application"
-                                          "function" (symbol->string symbol)))
-               (raise-arguments-error 'typecheck
-                                      "arity mismatch"
-                                      "function" (symbol->string symbol)
-                                      "arity" ar
-                                      "arguments" (length arg-exprs))))]
-        ; reduction
-        [(ftl-ast-expr-fold init-expr step-expr)
-         (match-let ([(cons init-expr init-type) (recurse 'init init-expr)]
-                     [(cons step-expr step-type) (recurse 'step step-expr)])
-           (if (or (eq? fold 'init)
-                   (eq? fold 'step))
-               (raise-arguments-error 'typecheck
-                                      "nested fold")
-               (if (void? loop)
-                   (raise-arguments-error 'typecheck
-                                          "fold outside of loop")
-                   (if (eq? init-type step-type)
-                       (cons (ftl-ast-expr-fold init-expr step-expr)
-                             init-type) ; fold (i:type) .. (e:type) => v:type
-                       (raise-arguments-error 'typecheck
-                                              "initial and stepping expressions of fold with different types:"
-                                              "init" (symbol->string init-type)
-                                              "step" (symbol->string step-type))))))]
-        ; attribute reference
-        [(ftl-ast-refer object index label)
-         (let* ([recursive (and (eq? object lhs-object)
-                                (eq? label lhs-label))]
-                [regular (and (not recursive)
-                              (eq? index 'none)
-                              (not (iterable? object)))]
-                ; TODO: are these allowed outside a loop context over object?
-                [extrema (and (not recursive)
-                              (or (eq? index 'first)
-                                  (eq? index 'last))
-                              (iterable? object))]
-                ; normally indexed attribute references relative to loop context
-                [looping (and (not recursive)
-                              (eq? loop object)
-                              (or (eq? fold 'none)
-                                  (eq? fold 'step))
-                              (or (eq? index 'none)
-                                  (eq? index 'first)
-                                  (eq? index 'current)
-                                  (eq? index 'last)))]
-                [folding (and (eq? fold 'step)
-                              (eq? index 'previous))])
+; For a given class and object, return the pair of the object's interface name
+; (or class name, if the object is self) and a boolean indicating whether the
+; object is a sequence.
+(define (typecheck-object class-ast object)
+  (let* ([child-ast-list (ag-class-children class-ast)]
+         [child-ast (lookup-child child-ast-list object)])
+    (cond
+      [(eq? object 'self) (cons (ag-class-name class-ast) #f)]
+      [child-ast (cons (ag-child-interface child-ast)
+                       (ag-child-sequence child-ast))]
+      [else (undefined-object class-ast object)])))
 
-           ; either return index-normalized attribute reference or raise an
-           ; error, dumping relevant info
-           (if (or regular extrema looping folding)
-               (cons (ftl-ast-refer object
-                                    (if (and (iterable? object)
-                                             (eq? index 'none))
-                                        'current
-                                        index)
-                                    label)
-                     (typeof object label))
-               (raise-arguments-error 'typecheck "bad attribute reference"
-                                      "attribute" (ftl-ast-refer-serialize expr))))]
-        ; value literal
-        [else
-         ; search for matching type predicate
-         (let* ([types (ftl-runtime-types runtime)]
-                [type (findf (λ (type)
-                               ((ftl-type-predicate (cdr type)) expr))
-                             types)])
-           (if type
-               (cons expr (car type))
-               (raise-arguments-error 'typecheck "unknown literal value"
-                                      "given" expr)))]))
+; For a given class, object, and label, return the attribute's type.
+(define (typecheck-label class-ast iface-ast-list object label)
+  (let* ([child-ast-list (ag-class-children class-ast)]
+         [child-ast (lookup-child child-ast-list object)])
+    (cond
+      [(eq? object 'self)
+       (let* ([class-label-ast-list (ag-class-labels class-ast)]
+              [class-label-ast (lookup-label class-label-ast-list label)]
+              [iface-name (ag-class-interface class-ast)]
+              [iface-ast (lookup-interface iface-ast-list iface-name)]
+              [iface-label-ast-list (ag-interface-labels iface-ast)]
+              [iface-label-ast (lookup-label iface-label-ast-list label)]
+              [label-ast (or class-label-ast iface-label-ast)])
+         (if label-ast
+             (ag-label-type label-ast)
+             (raise-user-error 'typecheck
+                               "undeclared attribute '~a' for class ~a"
+                               label
+                               (ag-class-name class-ast))))]
+      [child-ast
+       (let* ([iface-name (ag-child-interface child-ast)]
+              [iface-ast (lookup-interface iface-ast-list iface-name)]
+              [label-ast-list (ag-interface-labels iface-ast)]
+              [label-ast (lookup-label label-ast-list label)])
+         (if label-ast
+             (ag-label-type label-ast)
+             (raise-user-error 'typecheck
+                               "undeclared attribute '~a' for interface ~a of child ~a"
+                               label
+                               iface-name
+                               object)))]
+      [else
+       (undefined-object class-ast object)])))
 
-      ; Check that the assignee reference is unindexed and to a sequence child iff
-      ; this action is in a loop context over that sequence child
-    (unless (and (eq? lhs-index 'none)
-                 (eq? (eq? loop lhs-object) (iterable? lhs-object)))
-      (raise-arguments-error 'typecheck
-                             "invalid attribute definition (bad assignee reference)"))
-    ; Initiate the traversal and check that the expression really is well-typed
-    (match-let* ([expected (typeof lhs-object lhs-label)]
-                 [(cons resolved inferred) (recurse 'none rhs)])
-      (if (eq? expected inferred)
-          (ftl-ast-define lhs resolved)
-          (raise-arguments-error 'typecheck
-                                 "ill-typed attribute definition"
-                                 "expected" (symbol->string expected)
-                                 "actual" (symbol->string inferred))))))
+(define (boolean-type? typename)
+  (eq? typename 'bool))
 
-; Compute the type context (list of label-type pairs) of a list of declarations
-(define (ftl-ast-declare-context decl-asts)
-  (make-immutable-hasheq
-   (map (λ (decl-ast)
-          (cons (ftl-ast-declare-name decl-ast)
-                (ftl-ast-declare-type decl-ast)))
-        decl-asts)))
+(define (numeric-type? typename)
+  (or (eq? typename 'int)
+      (eq? typename 'float)))
 
-; Compute the type environment for a body AST
-(define (ftl-ast-body-environ body-ast iface-contexts)
-  (match-let* ([(ftl-ast-body children attributes actions) body-ast]
-               [self-context (ftl-ast-declare-context attributes)])
-    (make-immutable-hasheq
-     (list* (cons 'self (cons #f self-context))
-            (map (λ (child)
-                   (match-let* ([(ftl-ast-child name sequence interface) child]
-                                [child-context (hash-ref iface-contexts
-                                                         interface
-                                                         (undefined "interface"
-                                                                    interface))])
-                    (cons name (cons sequence child-context))))
-                 children)))))
+(define (string-type? typename)
+  (eq? typename 'string))
 
-; Typecheck, index-normalize, and symbol-resolve a body AST
-(define (ftl-ast-body-typecheck body-ast iface-contexts runtime)
-  (match-let ([(ftl-ast-body children attributes actions) body-ast]
-              [environ (ftl-ast-body-environ body-ast iface-contexts)])
-    (define (iterable? object)
-      (car (hash-ref environ
-                     object
-                     (undefined "child" object))))
-    (define (typeof object label)
-      (let ([context (cdr (hash-ref environ
-                                    object
-                                    (undefined "child" object)))])
-        (hash-ref context
-                  label
-                  (undefined "attribute" (cons object label)))))
-    (define check-def
-      (curry ftl-ast-define-typecheck runtime typeof iterable?))
-    (define (check-act action)
-      (match action
-        [(? ftl-ast-define?)
-         (list (check-def (void) action))]
-        [(ftl-ast-loop child actions)
-         (if (iterable? child)
-             (for/list ([def actions])
-               (ftl-ast-loop child
-                             (check-def child def)))
-             (raise-arguments-error 'typecheck
-                                    "loop over non-sequence child"))]))
-    (ftl-ast-body children
-                  attributes
-                  (apply append (map check-act actions)))))
+(define (typecheck-literal value)
+  (cond
+    [(boolean? value) 'bool]
+    [(integer? value) 'int]
+    [(number? value) 'float]
+    [(string? value) 'string]
+    [else (raise-user-error 'typecheck
+                            "unknown literal value '~a'"
+                            value)]))
 
-; Check for type and loop errors in each inlined class, returning the
-; index-normalized, symbol-resolved form of the AST if it is well-typed
-(define (ftl-ast-typecheck ast-map runtime)
-  (define iface-contexts
-    (make-immutable-hasheq
-     (for/list ([ast-mapping ast-map])
-       (match-let* ([(list-rest symbol interface _) ast-mapping]
-                    [attributes (ftl-ast-body-attributes interface)]
-                    [context (ftl-ast-declare-context attributes)])
-         (cons symbol context)))))
-  (define (typecheck body-ast)
-    (ftl-ast-body-typecheck body-ast iface-contexts runtime))
-  (ftl-ast-map-class typecheck ast-map))
+(define (typecheck-unary operator-symbol operand-type)
+  (define operand-okay?
+    (match operator-symbol
+      [(or '- '+) numeric-type?]
+      ['! boolean-type?]
+      [_ (raise-user-error 'typecheck
+                           "illegal unary operator '~a'"
+                           operator-symbol)]))
+  (if (operand-okay? operand-type)
+      operand-type
+      (raise-user-error 'typecheck
+                        "illegal application of unary '~a' to an expression of type '~a'"
+                        operator-symbol
+                        operand-type)))
+
+(define (typecheck-binary operator-symbol left-type right-type)
+  (define result-type
+    ; assume that left-type = right-type
+    (match operator-symbol
+      [(or '== '!=) 'bool]
+      [(or '< '<= '>= '>) (and (numeric-type? left-type) 'bool)]
+      [(or '+ '- '* '/) (and (numeric-type? left-type) left-type)]
+      [(or '&& '||) (and (boolean-type? left-type) left-type)]
+      [_ (raise-user-error 'typecheck
+                           "illegal binary operator '~a'")]))
+  (cond
+    [(not (eq? left-type right-type))
+     (raise-user-error 'typecheck
+                       "illegal application of binary '~a' to different types '~a' and '~a'"
+                       operator-symbol
+                       left-type
+                       right-type)]
+    [(not result-type)
+     (raise-user-error 'typecheck
+                       "illegal application of binary '~a' to operands of type '~a'"
+                       operator-symbol
+                       left-type)]
+    [else result-type]))
+
+(define (typecheck-conditional cond-type then-type else-type)
+  (cond
+    [(not (boolean-type? cond-type))
+     (raise-user-error 'typecheck
+                       "non-boolean condition expression of type '~a'"
+                       cond-type)]
+    [(not (eq? then-type else-type))
+     (raise-user-error 'typecheck
+                       "cannot unify conditional branch types '~a' and '~a'"
+                       then-type
+                       else-type)]
+    [else then-type]))
+
+(define (typecheck-application typecheck-function function-symbol argument-types)
+  (let* ([function-type (typecheck-function function-symbol)]
+         [domain-types (car function-type)]
+         [codomain-type (cdr function-type)]
+         [arity (length domain-types)])
+    (cond
+      [(not (eq? arity (length argument-types)))
+       (raise-user-error 'typecheck
+                         "function '~a' has ~a parameters but got ~a arguments"
+                         function-symbol
+                         arity
+                         (length argument-types))]
+      [(not (andmap eq? domain-types argument-types))
+       (raise-user-error 'typecheck
+                         "ill-typed application of function '~a'"
+                         function-symbol)]
+      [else codomain-type])))
+
+; It is up to the caller to know to typecheck the seed and the step in contexts
+; with and without the accumulator, respectively. Similarly for the fold states.
+(define (typecheck-fold init-type iter-type)
+  (if (eq? init-type iter-type)
+      init-type
+      (raise-user-error 'typecheck
+                        "cannot unify fold seed type '~a' and fold step type '~a'"
+                        init-type iter-type)))
+
+(define (typecheck-expression class-ast
+                              iface-ast-list
+                              expr-ast
+                              target-object
+                              target-label
+                              loop-object
+                              fold
+                              [typecheck-function undefined-function])
+  (define/match (recurse expr-ast)
+    ; unary operation
+    [((ag-expr-unary operator operand))
+     (let ([operand-type (recurse operand)])
+       (typecheck-unary operator operand-type))]
+
+    ; binary operation
+    [((ag-expr-binary left-operand operator right-operand))
+     (let ([left-type (recurse left-operand)]
+           [right-type (recurse right-operand)])
+       (typecheck-binary operator left-type right-type))]
+
+    ; conditional expression
+    [((ag-expr-condition condition then-branch else-branch))
+     (let ([cond-type (recurse condition)]
+           [then-type (recurse then-branch)]
+           [else-type (recurse else-branch)])
+       (typecheck-conditional cond-type then-type else-type))]
+
+    ; function application
+    [((ag-expr-call function arguments))
+     (let ([argument-types (map recurse arguments)])
+       (typecheck-application typecheck-function function argument-types))]
+
+    ; attribute reference
+    [((ag-expr-reference object index label))
+     (let* ([label-type (typecheck-label class-ast iface-ast-list object label)]
+            [sequence (cdr (typecheck-object class-ast object))]
+            [iterative (eq? loop-object object)]
+            [recursive (and (eq? object target-object) (eq? label target-label))]
+            [regular (and (not recursive) (not index) (not sequence))]
+            [initial (and (not recursive) sequence (eq? index 'first))]
+            [final (and (not recursive) sequence (eq? index 'last))]
+            [looping (and iterative (not recursive) (not index))]
+            [folding (and fold iterative (eq? index 'previous))])
+
+       (if (or regular initial final looping folding)
+           label-type
+           (begin
+             (printf "sequence: ~a\nindex: ~a\nfold: ~a\nloop: ~a\nobject: ~a\nlabel: ~a\n"
+                     sequence index fold loop-object object label)
+             (raise-user-error 'typecheck
+                               "bad attribute reference: ~a"
+                               (ag-expr-reference->string expr-ast)))))]
+
+    ; value literal
+    [(_)
+     (typecheck-literal expr-ast)])
+
+  (recurse expr-ast))
+
+(define (typecheck-rule class-ast
+                        iface-ast-list
+                        rule-ast
+                        [typecheck-function undefined-function])
+  (match-define (cons object label) (ag-rule-left rule-ast))
+
+  (define inferred-type
+    (match (ag-rule-right rule-ast)
+      [(ag-loop loop-object fold-expr)
+       (unless (cdr (typecheck-object class-ast loop-object)) ; sequence child?
+         (raise-user-error 'typecheck
+                           "evaluation rule defining attribute ~a.~a iterating over non-sequence child ~a"
+                           object label loop-object))
+       (define (typecheck iterated expr-ast folding)
+         (typecheck-expression class-ast iface-ast-list expr-ast object label
+                               (and iterated loop-object) folding typecheck-function))
+       (match fold-expr
+         [(ag-fold init-expr iter-expr)
+          (let ([init-type (typecheck #f init-expr #f)]
+                [iter-type (typecheck #t iter-expr #t)])
+            (typecheck-fold init-type iter-type))]
+         [expr-ast
+          (unless (eq? loop-object object)
+            (raise-user-error 'typecheck
+                              "evaluation rule redefining non-sequence attribute ~a.~a iterating over sequence child ~a"
+                              object label loop-object))
+          (typecheck #t expr-ast #f)])]
+      [expr-ast
+       (typecheck-expression class-ast iface-ast-list expr-ast object label #f #f
+                             typecheck-function)]))
+
+  (let ([annotated-type (typecheck-label class-ast iface-ast-list object label)])
+    (cond
+      [(not annotated-type)
+       (raise-user-error 'typecheck
+                         "evaluation rule for nonexistent attribute '~a.~a'"
+                         object)]
+      [(eq? annotated-type inferred-type)
+       annotated-type]
+      [else
+       (raise-user-error 'typecheck
+                         "ill-typed evaluation rule for '~a.~a': expected '~a' but got '~a'"
+                         object
+                         label
+                         annotated-type
+                         inferred-type)])))
+
+(define (typecheck-class class-ast iface-ast-list typecheck-function)
+  ; Generate a generic error for a duplicated label or property.
+  (define (duplicate-error part name)
+    (raise-user-error 'typecheck
+                      "duplicate ~a '~a' in class ~a"
+                      part
+                      (if (symbol? name) (symbol->string name) name)
+                      (ag-class-name class-ast)))
+
+  ; Check that attribute labels are locally unique.
+  (let* ([iface-name (ag-class-interface class-ast)]
+         [iface-ast (findf (compose (curry eq? iface-name)
+                                    ag-interface-name)
+                           iface-ast-list)]
+         [iface-labels (ag-interface-labels iface-ast)]
+         [class-labels (ag-class-labels class-ast)]
+         [labels (append class-labels iface-labels)]
+         [duplicate (check-duplicates labels eq? #:key ag-label-name)])
+    (when duplicate
+      (duplicate-error "attribute declaration" (ag-label-name duplicate))))
+
+  ; Check that no class defines an attribute more than once.
+  (let ([duplicate (check-duplicates (ag-class-rules class-ast) equal?
+                                     #:key ag-rule-left)])
+    (when duplicate
+      (match-let ([(cons object label) (ag-rule-left duplicate)])
+        (duplicate-error "evaluation rule for attribute '~a.~a'"
+                         object
+                         label))))
+
+  ; Check that no class defines a child more than once.
+  (let* ([children (ag-class-children class-ast)]
+         [duplicate (check-duplicates children eq? #:key ag-child-name)])
+    (when duplicate
+      (duplicate-error "child declaration" (ag-child-name duplicate))))
+
+  ; Typecheck each evaluation rule
+  (for ([rule (ag-class-rules class-ast)])
+    (typecheck-rule class-ast iface-ast-list rule typecheck-function)))
+
+; Typecheck a list of normalized class ASTs with respect to a list of interface
+; ASTs and function typechecker, which implements the function type context for
+; attribute expressions.
+(define (ag-typecheck grammar [typecheck-function undefined-function])
+  (for ([class-ast (ag-grammar-classes grammar)])
+    (typecheck-class class-ast (ag-grammar-interfaces grammar) typecheck-function)))

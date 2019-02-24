@@ -1,0 +1,12 @@
+<Root>
+  <HBox visible="true">
+    <Leaf visible="true" width_in="64" height_in="32" />
+    <VBox visible="true">
+      <Leaf visible="true" width_in="64" height_in="32" />
+      <HBox visible="true">
+        <Leaf visible="true" width_in="64" height_in="32" />
+        <Leaf visible="true" width_in="64" height_in="32" />
+      </HBox>
+    </VBox>
+  </HBox>
+</Root>

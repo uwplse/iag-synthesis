@@ -1,0 +1,75 @@
+pre {
+  Root {
+    child.minTurnout, child.maxTurnout, child.fixWidth,
+    child.showFraud, child.showProjected, child.showJavascript,
+    child.w, child.h, child.rx, child.by
+  }
+  CountryContainer {
+    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
+    childs.showFraud, childs.showProjected, childs.showJavascript
+  }
+  Region {
+    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
+    childs.showFraud, childs.showProjected, childs.showJavascript
+  }
+  Distract {
+    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
+    childs.showFraud, childs.showProjected, childs.showJavascript
+  }
+  VSquare {
+    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
+    childs.showFraud, childs.showProjected, childs.showJavascript
+  }
+  HSquare {
+    childs.minTurnout, childs.maxTurnout, childs.fixWidth,
+    childs.showFraud, childs.showProjected, childs.showJavascript
+  }
+  PollingPlace {
+    self.calcProjectedColor, self.calcRegularColor,
+    self.calcVotesColor, self.calcFraudColor
+  }
+} ;; post {
+  Root {
+    child.totalMag_sum, child.totalMag,
+    child.votesUR_sum, child.votesUR
+  }
+  CountryContainer {
+    childs.totalMag_sum, self.totalMag,
+    childs.votesUR_sum, self.votesUR,
+    self.x, self.y,
+    childs.w, childs.h, childs.rx, childs.by,
+    self.render
+  }
+  Region {
+    childs.totalMag_sum, self.totalMag,
+    childs.votesUR_sum, self.votesUR,
+    self.x, self.y,
+    childs.w, childs.h, childs.rx, childs.by,
+    self.render
+  }
+  Distract {
+    childs.totalMag_sum, self.totalMag,
+    childs.votesUR_sum, self.votesUR,
+    self.x, self.y,
+    childs.w, childs.h, childs.rx, childs.by,
+    self.render
+  }
+  VSquare {
+    childs.totalMag_sum, self.totalMag,
+    childs.votesUR_sum, self.votesUR,
+    self.x, self.y,
+    childs.w, childs.h, childs.rx, childs.by,
+    self.render
+  }
+  HSquare {
+    childs.totalMag_sum, self.totalMag,
+    childs.votesUR_sum, self.votesUR,
+    self.x, self.y,
+    childs.w, childs.h, childs.rx, childs.by,
+    self.render
+  }
+  PollingPlace {
+    self.magnitude, self.totalMag, self.votesUR,
+    self.render
+  }
+}
