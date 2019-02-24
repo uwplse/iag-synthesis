@@ -10,27 +10,24 @@
          tree-copy
          xml->tree
          xexpr->tree
-         make-virtual-node
          tree-object
          tree-load
-         tree-read
-         tree-write
-         tree-check
-         tree-inputs
-         tree-partition-fields)
+         tree-annotate
+         tree-validate
+         tree-gather
+         tree-examples)
 
-(struct tree
-  (class
-   fields
-   children
-   ) #:transparent)
+(struct tree (class [fields #:mutable] children) #:transparent)
 
-(define (tree-copy node)
+(define (tree-copy node #:rebox? [rebox? #f])
+  (define rebox
+    (if rebox? (compose box unbox) identity))
+
   (define fields
     (for/list ([field (tree-fields node)])
       (let ([label (car field)]
-            [value (unbox (cdr field))])
-        (cons label (box value)))))
+            [value (cdr field)])
+        (cons label (rebox value)))))
 
   (define children
     (for/list ([child (tree-children node)])
@@ -39,7 +36,7 @@
         (cons name
               (if (list? nodes)
                   (map tree-copy nodes)
-                  (tree-copy nodes))))))
+                  (tree-copy nodes #:rebox? rebox?))))))
 
   (tree (tree-class node) fields children))
 
@@ -55,13 +52,13 @@
 ; remaining child X-expressions. Therefore, this procedure only supports
 ; attribute grammars whose classes have at most one sequence child as their last-
 ; declared child.
-(define (xexpr->tree grammar xexpr)
+(define (xexpr->tree grammar xexpr #:boxed? [boxed? #f])
   (match xexpr
     [(list-rest classname
                 (and xattributes (list (list (? symbol?) (? string?))...))
                 xcontent)
      (let* ([child-xexpr-list (filter list? xcontent)] ; filter out text
-            [child-tree-list (map (curry xexpr->tree grammar) child-xexpr-list)]
+            [child-tree-list (map (curry xexpr->tree grammar #:boxed? boxed?) child-xexpr-list)]
             [class-ast (get-class grammar classname)]
             [child-ast-list (ag-class-children class-ast)]
             [label-ast-list (get-labels grammar class-ast)]
@@ -79,13 +76,16 @@
                          (cons (cons label (first input)) output))))))
 
        (define attributes
-         (for/list ([label-ast label-ast-list])
-           (cons (ag-label-name label-ast) (box (void)))))
+         (if boxed?
+             (for/list ([label-ast label-ast-list])
+               (cons (ag-label-name label-ast) (box (void))))
+             null))
 
        (for ([xattribute xattributes])
-         (match-let* ([(list label value) xattribute]
-                      [cell (cdr (assq label attributes))])
-           (set-box! cell (read-value value))))
+         (match-let ([(list label value) xattribute])
+           (if boxed?
+               (set-box! (cdr (assoc label attributes)) (read-value value))
+               (set! attributes (cons (cons label (read-value value)) attributes)))))
 
        (tree classname attributes children))]
 
@@ -97,95 +97,110 @@
                             "could not convert X-expression to tree"
                             'xexpr xexpr)]))
 
-; Construct a virtual tree node, which is one with only output fields and no
-; children. A virtual node is only ever used to store the initial accumulators
-; for folds in a loop. (The amount of storage needed is overapproximated by
-; simply allocating a field for every output attribute.)
-(define (make-virtual-node self object)
-  (let ([template (first (tree-object self object))])
-    (tree (tree-class template)
-          (for/list ([field (tree-fields template)])
-            (cons (car field) (box (void))))
-          null)))
-
 ; Find the object (self, child node, or child node sequence) with the given name.
-(define (tree-object node object)
+(define (tree-object self object)
   (if (eq? object 'self)
-      node
-      (cdr (assq object (tree-children node)))))
+      self
+      (cdr (assoc object (tree-children self)))))
 
-; Load an attribute reference from the current node, the indexed node, or the
-; previously indexed (virtual) node. The returned value is the attribute's memory
-; cell (a box), allowing both reads and writes. The loop argument should indicate
-; which child is being looped over, if any (#f otherwise).
-(define (tree-load current loop previous indexed reference)
+; Select the appropriate store for the object and index.
+(define (tree-load self reference lookup child-seq previous current virtual final)
   (let ([object (ag-expr-reference-object reference)]
         [index (ag-expr-reference-index reference)]
         [label (ag-expr-reference-label reference)])
   (cond
-    [(and (eq? object 'self) (not index))
-     (cdr (assq label (tree-fields current)))]
+    [(equal? index 'previous)
+     (lookup (cons object label) previous)]
+    [(and (equal? object child-seq) (or (equal? index 'current) (not index)))
+     (lookup label (tree-fields current))]
+    [(equal? index 'current)
+     (lookup (cons object label) virtual)]
     [(not index)
-     (let ([child (if (eq? object loop)
-                      indexed
-                      (cdr (assq object (tree-children current))))])
-       (cdr (assq label (tree-fields child))))]
-    [(eq? index 'previous)
-     (unless (eq? object loop)
-       (raise-user-error 'interpret
-                         "invalid reference to '~a$-.~a' in loop over '~a'"
-                         object
-                         label
-                         loop))
-     (cdr (assq label (tree-fields previous)))]
-    [(eq? index 'first)
-     (let ([child (first (cdr (assq object (tree-children current))))])
-       (cdr (assq label (tree-fields child))))]
-    [(eq? index 'last)
-     (let ([child (last (cdr (assq object (tree-children current))))])
-       (cdr (assq label (tree-fields child))))])))
+     (lookup label (tree-fields (tree-object self object)))]
+    [(equal? index 'first)
+     (lookup label (tree-fields (first (tree-object self object))))]
+    [(equal? index 'last)
+     ;(lookup label (tree-fields (last (tree-object self object))))
+     (lookup (cons object label) final)])))
 
-(define (tree-read current loop previous indexed reference)
-  (unbox (tree-load current loop previous indexed reference)))
+; Annotate the tree with attribute information.
+(define (tree-annotate grammar node make-empty allocate initialize)
+  (let ([class-ast (get-class grammar (tree-class node))]
+        [recurse (λ (node) (tree-annotate grammar node make-empty allocate initialize))])
+    (tree (tree-class node)
+          (for/fold ([store0 (make-empty)])
+                    ([label-ast (get-labels grammar class-ast)])
+            (match-let* ([(ag-label input label type) label-ast]
+                         [store (allocate store0 label)])
+              (if input
+                  (initialize store label type)
+                  store)))
+          (for/list ([child (tree-children node)])
+            (cons (car child)
+                  (if (list? (cdr child))
+                      (map recurse (cdr child))
+                      (recurse (cdr child))))))))
 
-(define (tree-write current loop previous indexed reference value)
-  (set-box! (tree-load current loop previous indexed reference) value))
+; Validate some property of every output attribute value.
+(define (tree-validate grammar tree validate)
+  (let ([class-ast (get-class grammar (tree-class tree))]
+        [store (tree-fields tree)])
+    (for ([label-ast (get-labels grammar class-ast)]
+          #:unless (ag-label-input label-ast))
+      (validate store (ag-label-name label-ast)))
+    (for* ([child (tree-children tree)]
+           [node (listify (cdr child))])
+      (tree-validate grammar node validate))))
 
-; Assert that every field in the tree is initialized (i.e., not void).
-(define (tree-check tree)
-  (for ([field (tree-fields tree)])
-    (assert (not (void? (unbox (cdr field))))))
-  (for* ([child (tree-children tree)]
-         [node (listify (cdr child))])
-    (tree-check node)))
-
-; Collect every input field in the tree, according to the grammar, appending the
-; memory cells to the given list of previously found inputs.
-(define (tree-inputs grammar tree [inputs null])
-  (let ([labels (get-labels grammar (get-class grammar (tree-class tree)))]
-        [fields (tree-fields tree)])
-    (define new-inputs
-      (for*/fold ([result inputs])
-                 ([child (tree-children tree)]
-                  [node (listify (cdr child))])
-        (tree-inputs grammar node result)))
-    (for/fold ([result new-inputs])
-              ([label labels]
-               #:when (ag-label-input label))
-      (let ([input-field (cdr (assq (ag-label-name label) fields))])
-        (cons input-field result)))))
-
-; Return two lists: those fields that satisfy the predicate and the rest.
-(define (tree-partition-fields predicate tree [positive null] [negative null])
-  (define-values (updated-positive updated-negative)
-    (for/fold ([positive positive]
-               [negative negative])
-              ([field (tree-fields tree)])
-      (if (predicate (unbox (cdr field)))
-          (values (cons (cdr field) positive) negative)
-          (values positive (cons (cdr field) negative)))))
-  (for*/fold ([positive updated-positive]
-              [negative updated-negative])
+; Collect all the nodes in the tree into a post-order list.
+(define (tree-gather tree [nodes null])
+  (for*/fold ([nodes (cons tree nodes)])
              ([child (tree-children tree)]
               [node (listify (cdr child))])
-    (tree-partition-fields predicate node positive negative)))
+    (tree-gather node nodes)))
+
+; Count the nodes in the tree.
+(define (tree-size tree)
+  (+ (for*/sum ([child (tree-children tree)]
+                [node (listify (cdr child))])
+       (tree-size node))
+     1))
+
+; Return a set of example tree skeletons that include every parent-child class
+; pairing permitted by the grammar.
+(define (tree-examples grammar)
+  (define instances
+    (associate-by ag-class-interface identity (ag-grammar-classes grammar)))
+
+  (define interactions
+    (for*/list ([parent-class-ast (ag-grammar-classes grammar)]
+                [child-ast (ag-class-children parent-class-ast)])
+      (cons (cons parent-class-ast (ag-child-name child-ast))
+            (list->mutable-set (cdr (assoc (ag-child-interface child-ast) instances))))))
+
+  (define (construct class-ast)
+    (define children-list
+      (match (ag-class-children class-ast)
+        [(list) (list null)]
+        [(list (ag-child names #t ifaces) ...)
+         (list
+          (for/list ([name names])
+            (let* ([class-ast-set (cdr (assoc (cons class-ast name) interactions))]
+                   [class-ast-list (set->list class-ast-set)])
+              (set-clear! class-ast-set)
+              (cons name (append-map construct class-ast-list)))))]
+        [(list (ag-child name #f iface))
+         (let ([class-ast-set (cdr (assoc (cons class-ast name) interactions))])
+           (if (set-empty? class-ast-set)
+               (let* ([class-ast-list (cdr (assoc iface instances))]
+                      [leaf-class (findf (compose null? ag-class-children) class-ast-list)])
+                 (map (curry cons name) (construct leaf-class)))
+               (for*/list ([class-ast class-ast-set]
+                           #:when (set-member? class-ast-set class-ast)
+                           [subtree (construct class-ast)])
+                 (list (cons name subtree)))))]))
+
+    (for/list ([children children-list])
+      (tree (ag-class-name class-ast) #f children)))
+
+  (append-map construct (cdr (assoc (ag-grammar-root grammar) instances))))

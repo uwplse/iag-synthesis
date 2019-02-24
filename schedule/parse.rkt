@@ -19,11 +19,11 @@
                              LBRACE
                              RBRACE
                              COMMA
+                             SKIP
                              HOLE
                              DOT
                              SEQ
                              PAR
-                             LOOP
                              EOF))
 
 (define-tokens tkns (IDENT))
@@ -48,10 +48,10 @@
    ["}" (token-RBRACE)]
    ["," (token-COMMA)]
    ["." (token-DOT)]
+   ["skip" (token-SKIP)]
    ["??" (token-HOLE)]
    [";;" (token-SEQ)]
    ["||" (token-PAR)]
-   ["loop" (token-LOOP)]
    [(ident) (token-IDENT (string->symbol lexeme))]
    [whitespace (sched-lex input-port)]
    [(eof) (token-EOF)]))
@@ -64,83 +64,80 @@
    (error (thunk (display "Error: could not parse schedule source")))
    (grammar
     (comp
-     ((trav comp-type trav) (sched-comp $2 $1 $3))
+     ((trav comp-type comp) ($2 $1 $3))
      ((trav) $1))
 
     (comp-type
-     ((SEQ) 'seq)
-     ((PAR) 'par))
+     ((SEQ) sched-sequential)
+     ((PAR) sched-parallel))
 
     (trav
-     ((trav-type LBRACE visit-list RBRACE) (sched-trav $1 $3))
+     ((IDENT LBRACE visitor-list RBRACE) (sched-traversal $1 $3))
      ((LPAREN comp RPAREN) $2))
 
-    (trav-type
-     ((IDENT) $1))
+    (visitor-list
+     ((visitor COMMA visitor-list) (cons $1 $3))
+     ((visitor) (list $1)))
 
-    (visit-list
-     ((visit visit-list) (cons $1 $2))
-     ((visit) (list $1)))
+    (visitor
+     ((IDENT block-list) (cons $1 $2)))
 
-    (visit
-     ((IDENT LBRACE RBRACE) (cons $1 null))
-     ((IDENT LBRACE slot-list RBRACE) (cons $1 $3)))
+    (block-list
+     ((block block-list) (cons $1 $2))
+     ((block) (list $1)))
+
+    (block
+     ((HOLE) (sched-hole))
+     ((LBRACE slot-list RBRACE) $2))
 
     (slot-list
      ((slot COMMA slot-list) (cons $1 $3))
-     ((slot) (list $1)))
+     ((slot) (list $1))
+     (() null))
 
     (slot
-     ((LOOP IDENT LBRACE attr-list RBRACE) (cons $2 $4))
-     ((attr) $1))
-
-    (attr-list
-     ((attr COMMA attr-list) (cons $1 $3))
-     ((attr) (list $1)))
-
-    (attr
-     ((IDENT DOT IDENT) (cons $1 $3))
-     ((HOLE) '??)))))
+     ((HOLE) (sched-hole))
+     ((SKIP) (sched-slot-skip))
+     ((IDENT DOT IDENT) (sched-slot-eval $1 $3))))))
 
 (define (sched-parse input)
   (sched-parse-lexed (thunk (sched-lex input))))
 
 (define/match (sched-serialize sched [parenthesize #f])
-  [((sched-comp 'seq left right) _)
-   (string-append (sched-serialize left #t)
+  [((sched-sequential left right) _)
+   (string-append (if parenthesize "(" "")
+                  (sched-serialize left #t)
                   ";;"
-                  (sched-serialize right))]
-  [((sched-comp 'par left right) _)
-   (string-append (sched-serialize left #t)
+                  (sched-serialize right)
+                  (if parenthesize ")" "")
+                  )]
+  [((sched-parallel left right) _)
+   (string-append (if parenthesize "(" "")
+                  (sched-serialize left #t)
                   "||"
-                  (sched-serialize right))]
-  [((sched-trav order visits) _)
+                  (sched-serialize right)
+                  (if parenthesize ")" ""))]
+  [((sched-traversal order visitors) _)
    (string-append (if parenthesize "(" "")
                   (symbol->string order)
                   " {\n"
-                  (string-join (map sched-serialize-visit visits) "\n")
+                  (string-join (map sched-serialize-visitor visitors) ",\n")
                   "\n}"
                   (if parenthesize ")" ""))])
 
-(define/match (sched-serialize-visit visit)
-  [((cons classname slots))
-   (string-append "  "
+(define/match (sched-serialize-visitor visitor)
+  [((cons classname blocks))
+   (string-append "    "
                   (symbol->string classname)
-                  " {\n    "
-                  (string-join (map sched-serialize-slot slots) ",\n    ")
-                  "\n  }")])
+                  (string-join (map sched-serialize-block blocks) ""))])
 
-(define (sched-serialize-slot slot)
-  (if (list? (cdr slot))
-      (string-append "loop "
-                     (symbol->string (car slot))
-                     " { "
-                     (string-join (map sched-serialize-attr (cdr slot)) ", ")
-                     " }")
-      (sched-serialize-attr slot)))
+(define (sched-serialize-block block)
+  (if (sched-hole? block)
+      " ??"
+      (string-append " { " (string-join (map sched-serialize-slot block) ", ") " }")))
 
-(define/match (sched-serialize-attr attr)
-  [((cons object label))
-   (string-append (symbol->string object)
-                  "."
-                  (symbol->string label))])
+(define/match (sched-serialize-slot slot)
+  [((sched-hole)) "??"]
+  [((sched-slot-skip)) "skip"]
+  [((sched-slot-eval object label))
+   (string-append (symbol->string object) "." (symbol->string label))])

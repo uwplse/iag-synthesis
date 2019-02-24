@@ -1,6 +1,6 @@
 #lang rosette
 
-; Typechecker for Language of Attribute Grammars
+; Typechecker for language of attribute grammars
 
 (require "syntax.rkt")
 
@@ -13,8 +13,7 @@
 ; This language defines only the types bool, int, float, and string. The usual
 ; assortment of binary and unary operators are also present but inextensible.
 ; It is assumed that any two values of the same type are equal?-comparable.
-; If other types are used, backend code generators will likely require additional
-; information about them (e.g., a header file defining it plus the name of an
+; The backend may require additional information to handle additional types.
 ; equality function).
 
 (define undefined-function
@@ -178,7 +177,6 @@
                               target-object
                               target-label
                               loop-object
-                              fold
                               [typecheck-function undefined-function])
   (define/match (recurse expr-ast)
     ; unary operation
@@ -208,22 +206,22 @@
     [((ag-expr-reference object index label))
      (let* ([label-type (typecheck-label class-ast iface-ast-list object label)]
             [sequence (cdr (typecheck-object class-ast object))]
-            [iterative (eq? loop-object object)]
             [recursive (and (eq? object target-object) (eq? label target-label))]
-            [regular (and (not recursive) (not index) (not sequence))]
-            [initial (and (not recursive) sequence (eq? index 'first))]
-            [final (and (not recursive) sequence (eq? index 'last))]
-            [looping (and iterative (not recursive) (not index))]
-            [folding (and fold iterative (eq? index 'previous))])
+            [regular (and (not index) (not recursive) (not sequence))]
+            [initial (and (eq? index 'first) (not recursive) sequence)]
+            [final (and (eq? index 'last) (not recursive) sequence)]
+            [looping (and (or (eq? index 'current) (not index))
+                          (eq? object loop-object) (not recursive))]
+            ; This assumes that the attribute is defined by a fold (possibly not
+            ; this one). NOTE: Maybe we should actually check that.
+            [folding (or (eq? index 'previous)
+                         (and (eq? index 'current) (not recursive)))])
 
        (if (or regular initial final looping folding)
            label-type
-           (begin
-             (printf "sequence: ~a\nindex: ~a\nfold: ~a\nloop: ~a\nobject: ~a\nlabel: ~a\n"
-                     sequence index fold loop-object object label)
-             (raise-user-error 'typecheck
-                               "bad attribute reference: ~a"
-                               (ag-expr-reference->string expr-ast)))))]
+           (raise-user-error 'typecheck
+                             "bad attribute reference: ~a"
+                             (ag-expr-reference->string expr-ast))))]
 
     ; value literal
     [(_)
@@ -244,22 +242,22 @@
          (raise-user-error 'typecheck
                            "evaluation rule defining attribute ~a.~a iterating over non-sequence child ~a"
                            object label loop-object))
-       (define (typecheck iterated expr-ast folding)
+       (define (typecheck iterated expr-ast)
          (typecheck-expression class-ast iface-ast-list expr-ast object label
-                               (and iterated loop-object) folding typecheck-function))
+                               (and iterated loop-object) typecheck-function))
        (match fold-expr
          [(ag-fold init-expr iter-expr)
-          (let ([init-type (typecheck #f init-expr #f)]
-                [iter-type (typecheck #t iter-expr #t)])
+          (let ([init-type (typecheck #f init-expr)]
+                [iter-type (typecheck #t iter-expr)])
             (typecheck-fold init-type iter-type))]
          [expr-ast
           (unless (eq? loop-object object)
             (raise-user-error 'typecheck
                               "evaluation rule redefining non-sequence attribute ~a.~a iterating over sequence child ~a"
                               object label loop-object))
-          (typecheck #t expr-ast #f)])]
+          (typecheck #t expr-ast)])]
       [expr-ast
-       (typecheck-expression class-ast iface-ast-list expr-ast object label #f #f
+       (typecheck-expression class-ast iface-ast-list expr-ast object label #f
                              typecheck-function)]))
 
   (let ([annotated-type (typecheck-label class-ast iface-ast-list object label)])

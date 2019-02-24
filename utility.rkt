@@ -6,18 +6,34 @@
 
 (current-bitwidth #f)
 
+(define (oracle type)
+  (match type
+    ['int
+     (define-symbolic* int integer?)
+     int]
+    ['bool
+     (define-symbolic* bool boolean?)
+     bool]))
+
 (define (symbol-append . xs)
   (string->symbol (string-append* (map symbol->string xs))))
+
+(define symbol-upcase
+  (compose string->symbol string-upcase symbol->string))
+
+(define symbol-downcase
+  (compose string->symbol string-downcase symbol->string))
 
 ; If it isn't a list, make it a singleton list.
 (define (listify x)
   (if (list? x) x (list x)))
 
+(define (map-or-app f x)
+  (if (list? x) (map f x) (f x)))
+
 ; Compute the approximate size of a formula, where each unique occurrence of an
 ; AST node counts as 1. Returns two values: the number of unique AST nodes in the
 ; assertion store and the number of unique variables in the assertion store.
-; FIXME: Does pruning of common subexpressions in constraints actually make sense?
-; I think probably not for arithmetic equations, at the very least.
 (define (formula-size)
   (let ([subformulae (mutable-seteq)]
         [nodes 0]
@@ -35,3 +51,16 @@
            (void)])))
     (for-each recurse (asserts))
     (values nodes variables)))
+
+(define-syntax-rule (-- x)
+  (begin
+    (set! x (- x 1))
+    x))
+
+(define-syntax-rule (++ x)
+  (begin
+    (set! x (+ x 1))
+    x))
+
+(define (associate-by key val lst [same? equal?])
+  (map (λ (g) (cons (key (first g)) (val g))) (group-by key lst same?)))

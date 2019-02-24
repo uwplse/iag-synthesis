@@ -4,23 +4,36 @@
 
 (require rosette/lib/angelic
          racket/promise
-         "../enumeration.rkt"
+         "../schedule/enumerate.rkt"
          "../utility.rkt"
          "../tree.rkt"
          "interpreter.rkt")
 
 (provide (all-defined-out))
 
-(define (synthesize-schedule grammar schedule-skeleton forest)
-  (let ([sketch (make-sketch grammar schedule-skeleton choose*)]
+(define (multichoose* n xs)
+  (build-list n (thunk* (apply choose* xs))))
+
+(define (complete-sketch grammar hole-range sketch examples)
+  (let ([schedule (instantiate-sketch multichoose* hole-range grammar sketch)]
         [initial-time (current-milliseconds)])
 
-    (with-handlers ([exn:fail? (const #f)])
-      (for ([tree forest])
-        (let-values ([(outputs _) (tree-partition-fields void? tree)])
-          (interpret grammar sketch tree)
-          (for ([location outputs])
-            (assert (not (void? (unbox location))))))))
+    (for ([tree examples])
+      (with-handlers ([exn:fail? (const #f)])
+        (let* ([lookup (compose cdr assoc)]
+               ;; [allocate (λ (store name)
+               ;;             (cons (cons name (box #f)) store))]
+               ;; [initialize (λ (store name type)
+               ;;               (set-box! (lookup name store) #t)
+               ;;               store)]
+               ;; [validate (λ (store name)
+               ;;             (assert (unbox (lookup name store))))]
+               [allocate (λ (store name) store)]
+               [initialize (λ (store name type) (cons (cons name #t) store))]
+               [validate (λ (store name) (assert (lookup name store)))]
+               [tree (tree-annotate grammar tree (const null) allocate initialize)])
+          (interpret grammar schedule tree)
+          (tree-validate grammar tree validate))))
 
     (match-let-values ([(running-time) (- (current-milliseconds) initial-time)]
                        [(nodes variables) (formula-size)]
@@ -30,4 +43,4 @@
       (printf "Symbolic Evaluation: ~ams\n" (+ running-time overhead-time))
       (printf "Constraint Solving: ~ams\n" (- solving-time overhead-time))
       (printf "Constraint size: ~a nodes and ~a variables\n" nodes variables)
-      (and (sat? model) (evaluate sketch model)))))
+      (and (sat? model) (evaluate schedule model)))))

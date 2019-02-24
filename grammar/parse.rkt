@@ -1,6 +1,6 @@
 #lang rosette
 
-; Parser and Serializer for Language of Attribute Grammars
+; Parser and serializer for language of attribute grammars
 
 (require "syntax.rkt"
          parser-tools/lex
@@ -15,7 +15,10 @@
 ; Lexer Definition
 ; ----------------
 
-(define-empty-tokens e-tkns (INTERFACE
+(define-empty-tokens e-tkns (TRAVERSAL
+                             RECUR
+                             VISIT
+                             INTERFACE
                              RBRACE
                              LBRACE
                              INPUT
@@ -26,10 +29,10 @@
                              ATTRIBUTES
                              EVALUATION
                              LOOP
-                             SELF
                              DEFINE
                              FOLD
                              FIRST
+                             CURRENT
                              PREVIOUS
                              LAST
                              DOTDOT
@@ -108,6 +111,9 @@
    [(comment) (ag-lex input-port)]
    ["true" (token-LITERAL #t)]
    ["false" (token-LITERAL #f)]
+   ["traversal" (token-TRAVERSAL)]
+   ["recur" (token-RECUR)]
+   ["visit" (token-VISIT)]
    ["interface" (token-INTERFACE)]
    ["}" (token-RBRACE)]
    ["{" (token-LBRACE)]
@@ -119,7 +125,6 @@
    ["attributes" (token-ATTRIBUTES)]
    ["evaluation" (token-EVALUATION)]
    ["loop" (token-LOOP)]
-   ["self" (token-SELF)]
    [":=" (token-DEFINE)]
    ["fold" (token-FOLD)]
    [".." (token-DOTDOT)]
@@ -146,6 +151,7 @@
    ["!=" (token-NE)]
    ["!" (token-NOT)]
    ["$0" (token-FIRST)]
+   ["$i" (token-CURRENT)]
    ["$-" (token-PREVIOUS)]
    ["$$" (token-LAST)]
    [(number) (token-LITERAL (string->number lexeme))]
@@ -170,9 +176,39 @@
      (() null))
 
     (decl
+     ((trav-decl) $1)
      ((iface-decl) $1)
      ((trait-decl) $1)
      ((class-decl) $1))
+
+    (trav-decl
+     ((TRAVERSAL IDENT LBRACE trav-form-list RBRACE) (ag-traversal $2 $4)))
+
+    (trav-form-list
+     ((trav-form trav-form-list) (cons $1 $2))
+     (() null))
+
+    (trav-form
+     ((IDENT LBRACE trav-part-list RBRACE) (cons $1 $3)))
+
+    (trav-part-list
+     ((trav-part SEMICOLON trav-part-list) (cons $1 $3))
+     ((trav-part trav-part-list) (cons $1 $2))
+     (() null))
+
+    (trav-part
+     ((VISIT) (ag-trav-visit))
+     ((RECUR IDENT) (ag-trav-recur $2))
+     ((LOOP IDENT LBRACE trav-loop-part-list RBRACE) (ag-trav-loop $2 $4)))
+
+    (trav-loop-part-list
+     ((trav-loop-part SEMICOLON trav-loop-part-list) (cons $1 $3))
+     ((trav-loop-part trav-loop-part-list) (cons $1 $2))
+     (() null))
+
+    (trav-loop-part
+     ((VISIT) (ag-trav-visit))
+     ((RECUR) (ag-trav-recur (void))))
 
     (class-decl
      ((CLASS IDENT COLON IDENT
@@ -230,7 +266,6 @@
 
     (rule
       ((IDENT DEFINE expr SEMICOLON) (ag-rule (cons 'self $1) $3))
-      ((SELF DOT IDENT DEFINE expr SEMICOLON) (ag-rule (cons 'self $3) $5))
       ((IDENT DOT IDENT DEFINE expr SEMICOLON) (ag-rule (cons $1 $3) $5)))
 
     (loop
@@ -242,7 +277,6 @@
 
     (loop-rule
      ((IDENT DEFINE fold SEMICOLON) (ag-rule (cons 'self $1) $3))
-     ((SELF DOT IDENT DEFINE fold SEMICOLON) (ag-rule (cons 'self $3) $5))
      ((IDENT DOT IDENT DEFINE fold SEMICOLON) (ag-rule (cons $1 $3) $5)))
 
     (fold
@@ -294,9 +328,9 @@
 
     (attr-expr
      ((IDENT) (ag-expr-reference 'self #f $1))
-     ((SELF DOT IDENT) (ag-expr-reference 'self #f $3))
      ((IDENT DOT IDENT) (ag-expr-reference $1 #f $3))
      ((IDENT FIRST DOT IDENT) (ag-expr-reference $1 'first $4))
+     ((IDENT CURRENT DOT IDENT) (ag-expr-reference $1 'current $4))
      ((IDENT PREVIOUS DOT IDENT) (ag-expr-reference $1 'previous $4))
      ((IDENT LAST DOT IDENT) (ag-expr-reference $1 'last $4)))
 
@@ -315,6 +349,8 @@
 (define (ag-serialize ast-list)
   (string-join (for/list ([decl ast-list])
                  (cond
+                   [(ag-traversal? decl)
+                    (error 'ag-serialize "Traversal serialization is unimplemented")]
                    [(ag-interface? decl)
                     (ag-interface-serialize decl)]
                    [(ag-trait? decl)
