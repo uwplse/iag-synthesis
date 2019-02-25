@@ -11,23 +11,26 @@
 (provide multichoose multichoice? multifork for/multichoice
          step thread empty read write output break (rename-out [solve-trace solve]))
 
-(define solver
+; Activate an ILP solver (IBM CPLEX if available, otherwise Z3 in ILP mode)
+(current-solver
   (if (cplex-available?)
       (cplex)
       (z3 #:logic 'QF_LIA)))
 
-; Interaction with the symbolic trace happens as follows:
+; Dummy objective variable for the ILP solver
+(define-symbolic objective integer?)
+
+; Interaction with the symbolic trace should match the following state machine:
 ; multichoose *
-; {
-;   [ thread empty read write step multifork ] *
+; (
+;   ( multifork | thread | empty | read | write | step ) *
+;   output *
 ;   break
-; } *
-; output *
+; ) *
 ; solve *
 
-
-
 (struct memory (inflow outflow timestamp) #:mutable #:transparent)
+
 (define store-count 0)
 
 (define read-table (make-hash))
@@ -53,36 +56,50 @@
 ; then by alternative).
 (struct multichoice (alternatives variables) #:transparent)
 
-; Symbolically choose n of the given values.
-(define (multichoose n options)
+(define (vector-sum vect)
+  (for/fold ([sum 0])
+            ([elem vect])
+    (+ elem sum)))
 
+; Symbolically choose n of the given values.
+(define (multichoose n options) ; FIXME: Separate default option
+  (define k (length options))
+  
   ; Construct the guard matrix of binary variables.
   (define matrix
-    (for/list ([_ (in-range n)])
-      (for/list ([_ options])
+    (for/vector #:length n ([_ (in-range n)])
+      (for/vector #:length k ([_ options])
         ; If this guard variable is 1, then this alternative is chosen for this
         ; position of the list.
         (define-symbolic* guard integer?)
-        (assert (>= guard 0)) ; NOTE: This is also the default lower bound for CPLEX.
+        (assert (<= guard 1)) ; NOTE: technically redundant
+        (assert (>= guard 0)) ; NOTE: technically redundant to CPLEX but not to Z3
         guard)))
 
   ; Each row must sum to 1 so that each position is assigned exactly one
   ; alternative.
-  (for ([row matrix])
-    ;(partition-add! variable-exclusion row)
-    (assert (= (apply + row) 1)))
+  (for ([i (in-range n)])
+    (let ([row (vector-ref matrix i)])
+      (assert (= (vector-sum row) 1))))
+
+  ; Each (non-default) column must sum to 1 so that each position is assigned either
+  ; a unique alternative or the default.
+  (for ([j (in-range 1 k)])
+    (let ([column (for/vector ([row matrix]) (vector-ref row j))])
+      (assert (<= (vector-sum column) 1))))
 
   (multichoice options matrix))
 
 ; Given a multichoice, return the list of alternatives chosen by the model.
-(define ((multichosen model) multichoice)
-  (if (multichoice? multichoice)
-      (for/list ([variables (multichoice-variables multichoice)])
-        (for/last ([variable variables]
-                   [alternative (multichoice-alternatives multichoice)]
-                   #:final (= (evaluate variable model) 1))
-          alternative))
-      multichoice))
+(define (multichosen model)
+  (match-lambda
+    [(multichoice options guard-matrix)
+     (for/list ([guards guard-matrix])
+       (for/last ([guard guards]
+                  [option options]
+                  #:final (= (evaluate guard model) 1))
+         option))]
+    [value value]))
 
 
 ; User-facing handle on a store.
@@ -214,22 +231,22 @@
 ; The conjunction of a list of binary variables.
 (define conjunction-cache (make-hash))
 (define (conjoin . variables)
-  (let ([count (length variables)])
-    (cond
-      [(= count 0) 1]
-      [(= count 1) (first variables)]
-      [else
-       ; Since Rosette symbolic variables are only distinguishable by `eqv?`, a
-       ; `seteqv` is used as the key for the conjunction cache.
-       (hash-ref! conjunction-cache
-                  (apply seteqv variables)
-                  (thunk
-                   (define-symbolic* conjunct integer?)
-                   (assert (>= conjunct 0)) ; NOTE: This is also the default lower bound for CPLEX.
-                   (for ([variable variables])
-                     (assert (<= conjunct variable)))
-                   (assert (>= conjunct (- (apply + (cons 1 variables)) count)))
-                   conjunct))])))
+  (match (length variables)
+    [0 1]
+    [1 (first variables)]
+    [count
+     ; Since Rosette symbolic variables are only distinguishable by `eqv?`, a
+     ; `seteqv` is used as the key for the conjunction cache.
+     (hash-ref! conjunction-cache
+                (apply seteqv variables)
+                (thunk
+                 (define-symbolic* conjunct integer?)
+                 (assert (<= conjunct 1)) ; NOTE: technically redundant
+                 (assert (>= conjunct 0)) ; NOTE: technically redundant to CPLEX but not to Z3
+                 (for ([variable variables])
+                   (assert (<= conjunct variable)))
+                 (assert (>= (+ conjunct count) (cons 1 (apply + variables))))
+                 conjunct))]))
 
 
 ; Evaluate the residual program.
@@ -325,14 +342,6 @@
 ; After one or more traces, solve for an assignment of each multichoice to an
 ; appropriately sized list of its alternatives.
 (define (solve-trace)
-  (define-symbolic objective integer?) ; dummy objective variable
-  ;(solver-clear solver)
-  (assert (>= objective 0))
-  (solver-minimize solver (list objective))
-  (solver-assert solver (asserts))
-
-  ; Execute the constraint solver
-  (define model (solver-check solver))
-
-  ; Extract the solved schedule, a mapping from holes to statements.
-  (and (sat? model) (multichosen model)))
+  (let ([model (optimize #:minimize (list objective) #:guarantee (>= objective 0))])
+    ; Extract the solved schedule, a mapping from holes to statements
+    (and (sat? model) (multichosen model))))
