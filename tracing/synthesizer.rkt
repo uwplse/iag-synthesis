@@ -31,21 +31,21 @@
       (printf "Symbolic Evaluation: ~ams\n" (+ running-time overhead-time))
       (printf "Constraint Solving: ~ams\n" (- solving-time overhead-time))
       (printf "Constraint size: ~a nodes and ~a variables\n" nodes variables)
-      (and concretize (substitute schedule concretize)))))
+      (and concretize (concretize schedule)))))
 
-(define (substitute schedule concretize)
-  (match schedule
-    [(sched-parallel left right)
-     (sched-parallel (substitute left concretize)
-                     (substitute right concretize))]
-    [(sched-sequential left right)
-     (sched-sequential (substitute left concretize)
-                       (substitute right concretize))]
-    [(sched-traversal order visitors)
-     (sched-traversal order
-                      (for/list ([visitor visitors])
-                        (cons (car visitor)
-                              (for/list ([block (cdr visitor)])
-                                (if (multichoice? block)
-                                    (concretize block)
-                                    (map concretize block))))))]))
+;(define (substitute schedule concretize)
+;  (match schedule
+;    [(sched-parallel left right)
+;     (sched-parallel (substitute left concretize)
+;                     (substitute right concretize))]
+;    [(sched-sequential left right)
+;     (sched-sequential (substitute left concretize)
+;                       (substitute right concretize))]
+;    [(sched-traversal order visitors)
+;     (sched-traversal order
+;                      (for/list ([visitor visitors])
+;                        (cons (car visitor)
+;                              (for/list ([block (cdr visitor)])
+;                                (if (multichoice? block)
+;                                    (concretize block)
+;                                    (map concretize block))))))]))

@@ -2,6 +2,8 @@
 
 ; Helper functions and common initialization.
 
+(require racket/struct)
+
 (provide (all-defined-out))
 
 (current-bitwidth #f)
@@ -64,3 +66,13 @@
 
 (define (associate-by key val lst [same? equal?])
   (map (λ (g) (cons (key (first g)) (val g))) (group-by key lst same?)))
+
+(define (vector-sum vec)
+  (for/fold ([sum 0])
+            ([elem vec])
+    (+ elem sum)))
+
+(define (struct-map f str)
+  (let-values ([(str-typ _) (struct-info str)])
+    (apply (struct-type-make-constructor str-typ)
+           (map f (struct->list str)))))

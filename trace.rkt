@@ -56,11 +56,6 @@
 ; then by alternative).
 (struct multichoice (alternatives variables) #:transparent)
 
-(define (vector-sum vect)
-  (for/fold ([sum 0])
-            ([elem vect])
-    (+ elem sum)))
-
 ; Symbolically choose n of the given values.
 (define (multichoose n options) ; FIXME: Separate default option
   (define k (length options))
@@ -92,14 +87,19 @@
 
 ; Given a multichoice, return the list of alternatives chosen by the model.
 (define (multichosen model)
-  (match-lambda
-    [(multichoice options guard-matrix)
-     (for/list ([guards guard-matrix])
-       (for/last ([guard guards]
-                  [option options]
-                  #:final (= (evaluate guard model) 1))
-         option))]
-    [value value]))
+  (define (subst value)
+    (match value
+      [(multichoice options guard-matrix)
+       (for/list ([guards guard-matrix])
+         (for/last ([guard guards]
+                    [option options]
+                    #:final (= (evaluate guard model) 1))
+           option))]
+      [(? list?) (map subst value)]
+      [(? vector?) (vector-map subst value)]
+      [(? struct?) (struct-map subst value)]
+      [_ value]))
+  subst)
 
 
 ; User-facing handle on a store.
