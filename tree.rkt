@@ -104,24 +104,23 @@
       (cdr (assoc object (tree-children self)))))
 
 ; Select the appropriate store for the object and index.
-(define (tree-load self reference lookup child-seq previous current virtual final)
+(define (tree-load self reference lookup child-seq previous current virtual)
   (let ([object (ag-expr-reference-object reference)]
         [index (ag-expr-reference-index reference)]
         [label (ag-expr-reference-label reference)])
-  (cond
-    [(equal? index 'previous)
-     (lookup (cons object label) previous)]
-    [(and (equal? object child-seq) (or (equal? index 'current) (not index)))
-     (lookup label (tree-fields current))]
-    [(equal? index 'current)
-     (lookup (cons object label) virtual)]
-    [(not index)
-     (lookup label (tree-fields (tree-object self object)))]
-    [(equal? index 'first)
-     (lookup label (tree-fields (first (tree-object self object))))]
-    [(equal? index 'last)
-     ;(lookup label (tree-fields (last (tree-object self object))))
-     (lookup (cons object label) final)])))
+    (cond
+      [(equal? index 'previous)
+       (lookup (cons object label) previous)]
+      [(and (equal? object child-seq) (or (equal? index 'current) (not index)))
+       (lookup label (tree-fields current))]
+      [(equal? index 'current)
+       (lookup (cons object label) virtual)]
+      [(not index)
+       (lookup label (tree-fields (tree-object self object)))]
+      [(equal? index 'first)
+       (lookup label (tree-fields (first (tree-object self object))))]
+      [(equal? index 'last)
+       (lookup label (tree-fields (last (tree-object self object))))])))
 
 ; Annotate the tree with attribute information.
 (define (tree-annotate grammar node make-empty allocate initialize)
@@ -171,6 +170,10 @@
 (define (tree-examples grammar)
   (define instances
     (associate-by ag-class-interface identity (ag-grammar-classes grammar)))
+  
+  (define (find-leaf-instance iface)
+    (let ([class-ast-list (cdr (assoc iface instances))])
+      (findf (compose null? ag-class-children) class-ast-list)))
 
   (define interactions
     (for*/list ([parent-class-ast (ag-grammar-classes grammar)]
@@ -178,22 +181,25 @@
       (cons (cons parent-class-ast (ag-child-name child-ast))
             (list->mutable-set (cdr (assoc (ag-child-interface child-ast) instances))))))
 
-  (define (construct class-ast)
+  (define (construct class-ast)    
     (define children-list
       (match (ag-class-children class-ast)
         [(list) (list null)]
         [(list (ag-child names #t ifaces) ...)
          (list
-          (for/list ([name names])
-            (let* ([class-ast-set (cdr (assoc (cons class-ast name) interactions))]
-                   [class-ast-list (set->list class-ast-set)])
-              (set-clear! class-ast-set)
-              (cons name (append-map construct class-ast-list)))))]
+          (for/list ([name names]
+                     [iface ifaces])
+            (let ([class-ast-set (cdr (assoc (cons class-ast name) interactions))])
+              (if (set-empty? class-ast-set)
+                  (let ([leaf-class (find-leaf-instance iface)])
+                    (cons name (construct leaf-class)))
+                  (let ([class-ast-list (set->list class-ast-set)])
+                    (set-clear! class-ast-set)
+                    (cons name (append-map construct class-ast-list)))))))]
         [(list (ag-child name #f iface))
          (let ([class-ast-set (cdr (assoc (cons class-ast name) interactions))])
            (if (set-empty? class-ast-set)
-               (let* ([class-ast-list (cdr (assoc iface instances))]
-                      [leaf-class (findf (compose null? ag-class-children) class-ast-list)])
+               (let ([leaf-class (find-leaf-instance iface)])
                  (map (curry cons name) (construct leaf-class)))
                (for*/list ([class-ast class-ast-set]
                            #:when (set-member? class-ast-set class-ast)

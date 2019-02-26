@@ -33,6 +33,8 @@
 (define (map-or-app f x)
   (if (list? x) (map f x) (f x)))
 
+(define (const* f) (thunk* (f)))
+
 ; Compute the approximate size of a formula, where each unique occurrence of an
 ; AST node counts as 1. Returns two values: the number of unique AST nodes in the
 ; assertion store and the number of unique variables in the assertion store.
@@ -68,11 +70,48 @@
   (map (λ (g) (cons (key (first g)) (val g))) (group-by key lst same?)))
 
 (define (vector-sum vec)
-  (for/fold ([sum 0])
-            ([elem vec])
-    (+ elem sum)))
+  (apply + (vector->list vec)))
+
+(struct matrix (height width rows) #:transparent) ; row-major vector representation
+
+(define (build-matrix n m f)
+  (matrix n m
+          (build-vector n (λ (i) (build-vector m (λ (j) (f i j)))))))
+
+(define (matrix-ref mat i j)
+  (vector-ref (vector-ref (matrix-rows mat) i) j))
+
+(define (matrix-transpose mat)
+  (let ([n (matrix-height mat)]
+        [m (matrix-width mat)])
+    (matrix m n
+            (for/vector #:length m ([j (in-range m)])
+              (for/vector #:length n ([i (in-range n)])
+                (matrix-ref mat i j))))))
+
+(define (matrix-columns mat)
+  (matrix-rows (matrix-transpose mat)))
 
 (define (struct-map f str)
   (let-values ([(str-typ _) (struct-info str)])
     (apply (struct-type-make-constructor str-typ)
            (map f (struct->list str)))))
+
+(define-syntax-rule (push! name expr)
+  (set! name (cons expr name)))
+
+(define-syntax-rule (pop! name)
+  (begin0
+    (first name)
+    (set! name (rest name))))
+
+(define-syntax shadow!
+  (syntax-rules ()
+    [(shadow! ([name expr]) body ...)
+     (let ([initial name])
+       (set! name expr)
+       (begin0
+         (begin body ...)
+         (set! name initial)))]
+    [(shadow! (binder binders ...) body ...)
+     (shadow! (binder) (shadow! (binders ...) body ...))]))

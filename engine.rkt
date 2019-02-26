@@ -17,11 +17,11 @@
 (provide (all-from-out "grammar/syntax.rkt")
          (all-from-out "schedule/syntax.rkt")
          (all-from-out "schedule/enumerate.rkt")
-         (all-from-out "tree.rkt")
          (all-from-out "checking/interpreter.rkt")
          (all-from-out "checking/synthesizer.rkt")
          (all-from-out "tracing/interpreter.rkt")
          (all-from-out "tracing/synthesizer.rkt")
+         (all-from-out "tree.rkt")
          (all-defined-out))
 
 ; Read and parse the attribute grammar in the named file, returning the list of
@@ -33,6 +33,9 @@
     (ag-typecheck grammar)
     grammar))
 
+(define (display-grammar grammar)
+  (displayln (ag-serialize grammar)))
+
 ; Read and parse the tree traversal schedule in the named file, returning the
 ; AST.
 (define (read-schedule filename)
@@ -40,6 +43,9 @@
          [schedule (sched-parse port)])
     (close-input-port port)
     schedule))
+
+(define (display-schedule schedule)
+  (displayln (sched-serialize schedule)))
 
 (define (read-tree grammar filename)
   (xml->tree grammar (file->string filename #:mode 'text)))
@@ -52,5 +58,3 @@
       (displayln sketch)
       (synthesizer grammar hole-range sketch examples)
       (clear-asserts!))))
-
-;; (define (search grammar examples passes))
