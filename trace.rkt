@@ -3,7 +3,7 @@
 ; A symbolic data structure for static scheduling of statements with varying
 ; static and dynamic contexts.
 
-(require "utility.rkt" "partition.rkt"
+(require "utility.rkt"
          rosette/solver/mip/cplex
          rosette/solver/smt/z3
          data/interval-map)
@@ -173,7 +173,6 @@
                      (assert (<= z y))
                      (assert (= (+ w z) (+ x y)))
                      z)))])))
-
 
 (define (trace-read! location assumption store)
   (match-let ([(traced dependency antidependency) (hash-ref store location (traced 0 1))])
