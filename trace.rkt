@@ -5,8 +5,7 @@
 
 (require "utility.rkt"
          rosette/solver/mip/cplex
-         rosette/solver/smt/z3
-         data/interval-map)
+         rosette/solver/smt/z3)
 
 (provide permute iter-permuted for/permuted join-threads join
          empty read write break (rename-out [solve-trace solve]))
