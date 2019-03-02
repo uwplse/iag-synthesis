@@ -8,7 +8,11 @@
          "../utility.rkt"
          "../tree.rkt")
 
-(provide interpret)
+(provide lookup
+         interpret)
+
+(define (lookup record attr)
+  (cdr (assoc attr record)))
 
 (define (interpret grammar schedule tree)
   (match schedule
@@ -55,7 +59,7 @@
                 (for*/all ([object object]
                            [label label])
                   (let ([expr (ag-rule-right (lookup-rule class-ast object label))])
-                    (assign (tree-object self object) label (eval expr self #:final virtual))))]))))
+                    (assign (tree-object self object) label (eval expr self))))]))))
          (values (rest blocks) virtual)]
         [(ag-trav-loop child-seq loop-form)
          (let-values ([(loop-blocks rest-blocks)
@@ -122,13 +126,11 @@
                       [label label])
              (unless (equal? object child-seq)
                (let ([value (assoc (cons object label) final)])
-                 (assign (tree-object self object) label value))))])))
-
-    final))
+                 (assign (tree-object self object) label value))))])))))
 
 
 ; Abstract interpretation of an expression
-(define (eval expression self [child-seq #f] [previous #f] [current #f] [virtual #f] #:final [final #f])
+(define (eval expression self [child-seq #f] [previous #f] [current #f] [virtual #f])
   (define (recur expression)
     (cond
       [(ag-expr-unary? expression)
@@ -143,8 +145,7 @@
       [(ag-expr-call? expression)
        (for-each recur (ag-expr-call-arguments expression))]
       [(ag-expr-reference? expression)
-       (let* ([lookup (compose cdr assoc)]
-              [value (tree-load self expression lookup child-seq previous current virtual final)])
+       (let ([value (tree-load self expression lookup child-seq previous current virtual)])
          (assert value))]
       [(or (number? expression) (boolean? expression) (string? expression))
        (void)]))

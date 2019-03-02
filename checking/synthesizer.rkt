@@ -20,8 +20,7 @@
 
     (for ([tree examples])
       (with-handlers ([exn:fail? (const #f)])
-        (let* ([lookup (compose cdr assoc)]
-               ;; [allocate (λ (store name)
+        (let* (;; [allocate (λ (store name)
                ;;             (cons (cons name (box #f)) store))]
                ;; [initialize (λ (store name type)
                ;;               (set-box! (lookup name store) #t)

@@ -110,30 +110,32 @@
         [label (ag-expr-reference-label reference)])
     (cond
       [(equal? index 'previous)
-       (lookup (cons object label) previous)]
+       (lookup previous (cons object label))]
       [(and (equal? object child-seq) (or (equal? index 'current) (not index)))
-       (lookup label (tree-fields current))]
+       (lookup (tree-fields current) label)]
       [(equal? index 'current)
-       (lookup (cons object label) virtual)]
+       ;(lookup current label)
+       (lookup virtual (cons object label))
+       ]
       [(not index)
-       (lookup label (tree-fields (tree-object self object)))]
+       (lookup (tree-fields (tree-object self object)) label)]
       [(equal? index 'first)
-       (lookup label (tree-fields (first (tree-object self object))))]
+       (lookup (tree-fields (first (tree-object self object))) label)]
       [(equal? index 'last)
-       (lookup label (tree-fields (last (tree-object self object))))])))
+       (lookup (tree-fields (last (tree-object self object))) label)])))
 
 ; Annotate the tree with attribute information.
-(define (tree-annotate grammar node make-empty allocate initialize)
+(define (tree-annotate grammar node emp new upd)
   (let ([class-ast (get-class grammar (tree-class node))]
-        [recurse (λ (node) (tree-annotate grammar node make-empty allocate initialize))])
+        [recurse (λ (node) (tree-annotate grammar node emp new upd))])
     (tree (tree-class node)
-          (for/fold ([store0 (make-empty)])
+          (for/fold ([record (emp)])
                     ([label-ast (get-labels grammar class-ast)])
             (match-let* ([(ag-label input label type) label-ast]
-                         [store (allocate store0 label)])
+                         [record (new record label)])
               (if input
-                  (initialize store label type)
-                  store)))
+                  (upd record label type)
+                  record)))
           (for/list ([child (tree-children node)])
             (cons (car child)
                   (if (list? (cdr child))
