@@ -33,7 +33,7 @@ trait Node<I>: Send {
 ")
   (for ([_ (sched-flatten schedule)]
         [index (in-naturals 1)])
-    (fprintf port "\n    fn traverse~a(&mut self, depth: u32) -> ();\n"))
+    (fprintf port "\n    fn traverse~a(&mut self, depth: u32) -> ();\n" index))
   (fprintf port "}\n\n")
 
   (for ([iface-ast (ag-grammar-interfaces grammar)])
@@ -89,20 +89,20 @@ fn main() -> () {
 
 (define (generate-layout schedule [index 1])
   (match schedule
-    [(sched-comp 'seq left right)
+    [(sched-sequential left right)
      (fprintf port "|tree| { ")
-     (define index (generate-layout left index))
+     (define left-index (generate-layout left index))
      (fprintf port "(tree); ")
-     (define index (generate-layout right index))
+     (define right-index (generate-layout right left-index))
      (fprintf port "(tree) }")
-     index]
-    [(sched-comp 'par left right)
+     right-index]
+    [(sched-parallel left right)
      (fprintf port "|tree| { parallel(tree, ")
-     (define index (generate-layout left index))
+     (define left-index (generate-layout left index))
      (fprintf port ", ")
-     (define index (generate-layout right index))
+     (define right-index (generate-layout right left-index))
      (fprintf port ") }")
-     index]
+     right-index]
     [_
      (fprintf port "|tree| { tree.traverse~a(0) }" index)
      (+ index 1)]))
@@ -130,7 +130,7 @@ struct ~a {
     (match-let ([(ag-label _ name type) label-ast])
       (fprintf port "    ~a: ~a,\n" name type)))
 
-  (for ([child-ast children])
+  (for ([child-ast (ag-class-children class-ast)])
     (fprintf port
              (if (ag-child-sequence child-ast) "    ~a: Vec<Box<~a>>,\n" "    ~a: Box<~a>,\n")
              (ag-child-name child-ast) (ag-child-interface child-ast)))
@@ -161,12 +161,12 @@ impl Node<~a> for ~a {
   )
 
 (define (generate-traversal class-ast traversal index) ; FIXME: Interface?
-  (match-let ([(sched-trav order visitors) traversal])
+  (match-let ([(sched-traversal order visitors) traversal])
     (fprintf port "\n    fn traverse~a(&mut self, depth: u32) {\n" index)
     (when (equal? order 'post)
       (generate-recursion class-ast index))
     (for ([statement (cdr (assoc (ag-class-name class-ast) visitors))])
-      (generate-statement class-ast statement))
+      (generate-statement class-ast statement index (equal? order 'pre) (equal? order 'post)))
     (when (equal? order 'pre)
       (generate-recursion class-ast index))
     (fprintf port "    }\n")))
@@ -175,15 +175,15 @@ impl Node<~a> for ~a {
   (fprintf port "    if depth < CUTOFF {\n")
   ; FIXME: Use rayon::scope for parallelism across multiple child productions.
   (for ([child-ast (ag-class-children class-ast)])
-    (fprintf "        self.~a" (ag-child-name child-ast))
+    (fprintf port "        self.~a" (ag-child-name child-ast))
     (if (ag-child-sequence child-ast)
-        (fprintf ".par_iter_mut().for_each(|child| child.traverse~a(depth + 1));\n" index)
-        (fprintf ".traverse~a(depth + 1);\n" index)))
+        (fprintf port ".par_iter_mut().for_each(|child| child.traverse~a(depth + 1));\n" index)
+        (fprintf port ".traverse~a(depth + 1);\n" index)))
   (fprintf port "    } else {\n")
   (for ([child-ast (ag-class-children class-ast)])
     (if (ag-child-sequence child-ast)
-        (fprintf ".iter_mut().for_each(|child| child.traverse~a(depth + 1));\n" index)
-        (fprintf ".traverse~a(depth + 1);\n" index)))
+        (fprintf port ".iter_mut().for_each(|child| child.traverse~a(depth + 1));\n" index)
+        (fprintf port ".traverse~a(depth + 1);\n" index)))
   (fprintf port "    }\n"))
 
 (define (generate-statement class-ast slot pass seq-pre seq-post)
