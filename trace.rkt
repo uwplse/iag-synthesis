@@ -8,7 +8,7 @@
          rosette/solver/smt/z3)
 
 (provide permute iter-permuted for/permuted join-threads join
-         empty read write break (rename-out [solve-trace solve]))
+         table? make-table table-ref! table-def! break (rename-out [solve-trace solve]))
 
 ; Activate an ILP solver (IBM CPLEX if available, otherwise Z3 in ILP mode)
 (current-solver
@@ -20,8 +20,8 @@
 
 (define store (make-hash)) ; TODO: Maybe split into dependency and antidependency maps
 
-; Next available block index for user allocation (cf., empty).
-(define alloc-count 0)
+; Next available memory location for a table entry.
+(define next-location 0)
 
 ; List of assumed bit-encoded conditions.
 (define path-condition null)
@@ -64,17 +64,17 @@
   subst)
 
 
-; User-facing handle on a store.
-(struct handle (index) #:mutable)
+; Opaque, user-facing handle on a table.
+(struct table (contents) #:mutable)
 
-; Initialize the store for use (i.e., grab an index).
-(struct cmd:alloc (store) #:transparent)
+; Reset the table for a fresh, disjoint execution path.
+(struct cmd:alloc (table) #:transparent)
 
-; Abstract read from the named location in the store.
-(struct cmd:read (store name) #:transparent)
+; Abstract read from the named entry in the table.
+(struct cmd:read (table name) #:transparent)
 
-; Abstract write to the named location in the store.
-(struct cmd:write (store name) #:transparent)
+; Abstract write to the named entry in the table.
+(struct cmd:write (table name) #:transparent)
 
 ; Compose two residual programs in parallel.
 (struct cmd:join (left right) #:transparent)
@@ -136,21 +136,21 @@
     [(join body bodies ...)
      (join-threads (thunk body) (thunk (join bodies ...)))]))
 
-; Create an empty store.
-(define (empty)
-  (let ([store (handle -1)])
-    (push! residue (cmd:alloc store))
+; Create an empty table.
+(define (make-table)
+  (let ([table (table -1)])
+    (push! residue (cmd:alloc table))
     (flush-residue!)
-    store))
+    table))
 
-; Register a read from the named location in the store.
-(define (read store name)
-  (push! residue (cmd:read store name))
+; Reference the named entry in the table.
+(define (table-ref! table name)
+  (push! residue (cmd:read table name))
   (flush-residue!))
 
-; Register a write to the named location in the store.
-(define (write store name)
-  (push! residue (cmd:write store name))
+; Define (and initialize) the named entry on the table.
+(define (table-def! table name)
+  (push! residue (cmd:write table name))
   (flush-residue!))
 
 ; Create the conjunction of a list of binary variables.
@@ -203,14 +203,14 @@
        (push! path-condition guard)
        (evaluate-residue! body shared-stores)
        (pop! path-condition)]
-      [(cmd:alloc store)
-       (set-handle-index! store (++ alloc-count))]
-      [(cmd:read (handle index) name)
-       (let ([location (cons index name)]
+      [(cmd:alloc table)
+       (set-table-contents! table (make-hash))]
+      [(cmd:read (table contents) name)
+       (let ([location (hash-ref! contents name (thunk (++ next-location)))]
              [assumption (conjoin* path-condition)])
          (trace-read! location assumption store))]
-      [(cmd:write (handle index) name)
-       (let ([location (cons index name)]
+      [(cmd:write (table contents) name)
+       (let ([location (hash-ref! contents name (thunk (++ next-location)))]
              [assumption (conjoin* path-condition)])
          (trace-write! location assumption store)
          (for-each (curry trace-write! location assumption) shared-stores))]
@@ -235,7 +235,7 @@
     (error 'break "Cannot break trace within nested operation"))
   ;(trace-exit! store)
   (set! store (make-hash))
-  (set! alloc-count 0))
+  (set! next-location 0))
 
 ; After one or more traces, solve for an assignment of each multichoice to an
 ; appropriately sized list of its alternatives.

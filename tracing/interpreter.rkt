@@ -22,7 +22,7 @@
      (traverse grammar (get-traversal grammar order) visitors tree)]))
 
 (define (assign node label)
-  (write (tree-fields node) label))
+  (table-def! (tree-fields node) label))
 
 (define (traverse grammar traversal visitors self)
   (let ([recur (curry traverse grammar traversal visitors)]
@@ -53,7 +53,7 @@
 ; Interpret a loop
 (define (loop class-ast child-seq form blocks recur self)
   (let ([children (tree-object self child-seq)]
-        [initial (empty)])
+        [initial (make-table)])
 
     ; Initialize the virtual node for all visits.
     (for ([block blocks])
@@ -64,13 +64,13 @@
            (let ([expr (rule-initial (lookup-rule class-ast object label))])
              (when expr
                (eval expr self)
-               (write initial (cons object label))))])))
+               (table-def! initial (cons object label))))])))
 
     ; Iterate through the child sequence
     (define final
       (for/fold ([previous initial])
                 ([current children])
-        (let ([virtual (empty)])
+        (let ([virtual (make-table)])
           (for/fold ([blocks blocks])
                     ([part form])
             (match part
@@ -84,7 +84,7 @@
                    [(sched-slot-eval object label)
                     (let ([expr (rule-iterate (lookup-rule class-ast object label))])
                       (eval expr self child-seq previous current virtual)
-                      (write virtual (cons object label))
+                      (table-def! virtual (cons object label))
                       (when (equal? object child-seq)
                         (assign current label)))]))
                (rest blocks)]))
@@ -97,7 +97,7 @@
           [(sched-slot-skip) (void)]
           [(sched-slot-eval object label)
            (unless (equal? object child-seq)
-             (read final (cons object label))
+             (table-ref! final (cons object label))
              (assign (tree-object self object) label))])))))
 
 ; Abstract interpretation of an expression
@@ -115,8 +115,7 @@
     [((ag-expr-call _ arguments))
      (for-each recur arguments)]
     [((? ag-expr-reference?))
-     (let ([lookup (λ (name store) (read store name))]) ; Well this feels a bit silly.
-       (tree-load self expression lookup child-seq previous current virtual))]
+     (tree-load self expression table-ref! child-seq previous current virtual)]
     [((or (? number?) (? boolean?) (? string?)))
      (void)])
   (recur expression))

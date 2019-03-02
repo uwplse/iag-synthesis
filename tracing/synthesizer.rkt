@@ -16,11 +16,11 @@
         [initial-time (current-milliseconds)])
 
     (for ([tree examples])
-      (let* ([allocate (λ (store name) store)]
-             [initialize (λ (store name type) (write store name) store)]
-             [tree (tree-annotate grammar tree empty allocate initialize)])
+      (let* ([allocate (λ (table name) table)]
+             [initialize (λ (table name type) (table-def! table name) table)]
+             [tree (tree-annotate grammar tree make-table allocate initialize)])
         (interpret grammar schedule tree)
-        (tree-validate grammar tree read)
+        (tree-validate grammar tree table-ref!)
         (break)))
 
     (match-let-values ([(running-time) (- (current-milliseconds) initial-time)]
