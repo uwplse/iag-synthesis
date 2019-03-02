@@ -2,8 +2,7 @@
 
 ; Tracing synthesizer for language of tree traversal schedules
 
-(require "../schedule/syntax.rkt"
-         "../schedule/enumerate.rkt"
+(require "../schedule/enumerate.rkt"
          "../utility.rkt"
          "../tree.rkt"
          "../trace.rkt"

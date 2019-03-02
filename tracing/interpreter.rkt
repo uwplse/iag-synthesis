@@ -4,7 +4,6 @@
 
 (require "../grammar/syntax.rkt"
          "../schedule/syntax.rkt"
-         "../utility.rkt"
          "../tree.rkt"
          "../trace.rkt")
 
