@@ -84,6 +84,39 @@ interface InlineBox {
   output right : int;
 }
 
+class DocumentFlow : BaseFlow {
+  children {
+    body: BaseFlow;
+  }
+  attributes {
+    input screenHeight : int;
+  }
+  evaluation {
+    self.absX := 0;
+    self.absY := 0;
+    self.relX := 0;
+    self.relY := 0;
+    self.boxX := 0;
+    self.boxY := 0;
+    self.boxWidth := self.screenWidth;
+    self.boxHeight := self.screenHeight;
+    self.totalWidth := self.boxWidth;
+    self.totalHeight := self.boxHeight;
+    self.right := self.totalWidth;
+    self.bottom := self.totalHeight;
+    self.leastWidth := body.leastWidth;
+    self.relaxWidth := body.relaxWidth;
+
+    body.absX := self.absX;
+    body.absY := self.absY;
+    body.relX := 0;
+    body.relY := 0;
+    body.right := body.totalWidth;
+    body.bottom := body.totalHeight;
+    body.availWidth := screenWidth;
+  }
+}
+
 trait FrameFlow {
   attributes {
     // Width of content box (no margin) per style properties
