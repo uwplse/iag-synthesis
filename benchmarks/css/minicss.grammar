@@ -60,15 +60,11 @@ interface BaseFlow {
   output right : int;
   output bottom : int;
 
-  output intrinsMinWidth : int;
-  output intrinsPrefWidth : int;
+  output leastWidth : int;
+  output relaxWidth : int;
 
   // Width of this flow's containing box
   output availWidth : int;
-
-  // XXX: Rendering
-  //output makeList : DisplayList;
-  //output display_list : DisplayList;
 }
 
 interface InlineBox {
@@ -86,34 +82,30 @@ interface InlineBox {
   output posX : int;
   output posY : int;
   output right : int;
-
-  // XXX: Rendering
-  //input fragSpecific : SpecificFragmentInfo;
-  //input fragStyle : Arc<ComputedValues>;
-  //input fragNode : OpaqueNode;
 }
 
 trait FrameFlow {
   attributes {
-    // Dimensions of a block flow's box as derived from style properties
+    // Width of content box (no margin) per style properties
+    output autoWidth : int;
+    output realWidth : int;
+
+    // Dimensions of a block flow's box per style properties
     output intrinsWidth : int;
     output intrinsHeight : int;
 
     // Length of content boundary (padding+border) in each direction
-    output boundWidth : int; // width (horizontal or left+right)
-    output boundHeight : int; // height (vertical or top+bottom)
+    output boundWidth : int; // left+right
+    output boundHeight : int; // top+bottom
 
     // Length of content frame (margin+padding+border) in each direction
-    output frameWidth : int; // width (horizontal or left+right)
-    output frameHeight : int; // height (vertical or top+bottom)
+    output frameWidth : int; // left+right
+    output frameHeight : int; // top+bottom
 
-    // Width of horizontal margins as derived from style properties (non-automatic)
+    // Width of margin frame per style properties (non-automatic)
     output marginLeft : int;
     output marginRight : int;
     output marginWidth : int;
-
-    // Width for trimmed/overflown content
-    output computedWidth : int;
 
     // Style: height
     input blockHeight_auto : bool; // automatic?
@@ -240,12 +232,11 @@ trait FrameFlow {
     frameWidth := ml + mr + boundWidth;
     frameHeight  := mt + mb + boundHeight;
 
-    computedWidth :=
-      is_root ?
-        screenWidth :
-        (blockWidth_auto ?
-          ((intrinsMinWidth < availWidth ? availWidth : intrinsMinWidth) - frameWidth) :
-          intrinsWidth);
+    autoWidth :=
+      leastWidth < availWidth ? (relaxWidth < availWidth ? relaxWidth : availWidth) : leastWidth;
+
+    realWidth :=
+      is_root ? screenWidth : (blockWidth_auto ? (autoWidth - frameWidth) : intrinsWidth);
   }
 }
 
@@ -254,30 +245,27 @@ class BlockFlow (FrameFlow) : BaseFlow {
     flow : [BaseFlow];
   }
   attributes {
-    // XXX: Rendering
-    //input fragment: &Fragment;
+    output boxWidth_inner : int;
+    output boxHeight_inner : int;
 
-    output innerWidth : int;
-    output innerHeight : int;
-
-    output innerMinWidth : int;
-    output innerPrefWidth : int;
+    output leastWidth_inner : int;
+    output relaxWidth_inner : int;
   }
   evaluation {
     loop flow {
-      innerHeight := fold 0 .. self$-.innerHeight + flow$i.totalHeight;
-      innerWidth := fold 0 .. self$-.innerWidth + flow$i.totalWidth;
+      boxHeight_inner := fold 0 .. self$-.boxHeight_inner + flow$i.totalHeight;
+      boxWidth_inner := fold 0 .. self$-.boxWidth_inner + flow$i.totalWidth;
 
-      innerMinWidth :=
+      leastWidth_inner :=
         fold intrinsWidth ..
-          self$-.innerMinWidth < flow$i.intrinsMinWidth ?
-            flow$i.intrinsMinWidth :
-            self$-.innerMinWidth;
-      innerPrefWidth :=
+          self$-.leastWidth_inner < flow$i.leastWidth ?
+            flow$i.leastWidth :
+            self$-.leastWidth_inner;
+      relaxWidth_inner :=
         fold intrinsWidth ..
-          self$-.innerPrefWidth < flow$i.intrinsPrefWidth ?
-            flow$i.intrinsPrefWidth :
-            self$-.innerPrefWidth;
+          self$-.relaxWidth_inner < flow$i.relaxWidth ?
+            flow$i.relaxWidth :
+            self$-.relaxWidth_inner;
 
       flow.bottom := fold pt + bt .. flow$-.bottom + flow$i.totalHeight;
       flow.right := flow$i.totalWidth + pl + bl;
@@ -288,34 +276,20 @@ class BlockFlow (FrameFlow) : BaseFlow {
       flow.absX := flow$i.relX + absX + ml;
       flow.absY := flow$i.relY + absY + mt;
 
-      flow.availWidth := computedWidth;
-
-      // XXX: Rendering
-      //display_list := fold makeList .. merge_lists(self$-.display_list, flow$i.display_list);
-      //makeLists := fold 0 .. merge_lists(display_list, flow$i.display_list) + flow$i.render;
+      flow.availWidth := realWidth;
     }
 
-    intrinsMinWidth := innerMinWidth + frameWidth;
-    intrinsPrefWidth := (intrinsWidth == 0 ? innerPrefWidth : intrinsWidth) + frameWidth;
+    leastWidth := leastWidth_inner + frameWidth;
+    relaxWidth := (intrinsWidth == 0 ? relaxWidth_inner : intrinsWidth) + frameWidth;
 
     boxX := relX + ml;
     boxY := relY + mt;
 
-    boxWidth :=  is_root ? screenWidth : computedWidth + boundWidth;
-    boxHeight := (intrinsHeight == 0 ? innerHeight : intrinsHeight) + boundHeight;
+    boxWidth :=  is_root ? screenWidth : realWidth + boundWidth;
+    boxHeight := (intrinsHeight == 0 ? boxHeight_inner : intrinsHeight) + boundHeight;
 
     totalWidth := boxWidth + ml + mr;
     totalHeight := boxHeight + mt + mb;
-
-    // XXX: Rendering
-    // Adds items to display list layering from bottom up. In this case background
-    // comes before border.
-    //display_list := new_display_list();
-    //makeList := add_border(add_background(new_display_list(), fragment, absX + ml,
-    //                                   absY + mt, boxWidth, boxHeight),
-    //                    fragment, absX + ml, absY + mt, boxWidth, boxHeight, bt, br, bb, bl);
-    //render := addBackground(display_list, fragment, absX + ml, absY + mt, boxWidth, boxHeight) +
-    //            addBorder(display_list, fragment, absX + ml, absY + mt, boxWidth, boxHeight, bt, br, bb, bl);
   }
 }
 
@@ -341,43 +315,30 @@ class InlineFlow : BaseFlow {
   children {
     text : [InlineBox];
   }
-  attributes {
-    output topline : int;
-    output baseline : int;
-    //output baselineLast : [int];
-  }
   evaluation {
     boxWidth := availWidth;
     boxX := relX;
     boxY := relY;
-    intrinsPrefWidth := 0;
-    intrinsMinWidth := 0;
+    relaxWidth := 0;
+    leastWidth := 0;
     totalHeight := boxHeight;
     totalWidth := boxWidth;
 
-    // XXX: The 'by' annotation on a loop is an undocumented hold-over.
-    loop text /*by split_to_width(text$-.lineWidth, text$i.newline)*/ {
+    loop text {
       text.newline :=
         fold true .. (text$i.inlineWidth > text$-.lineWidth) || text$i.linebreak;
 
       text.lineWidth :=
         fold availWidth .. text$i.newline ? availWidth : (text$-.lineWidth - text$i.inlineWidth);
 
-      // XXX: This attribute is apparently a _mutable_ list of position/dimension values.
-      //text.topline := fold EmptyList() ..
-      //                  text$i.newline ?
-      //                    append(text$-.topline, text$i.inlineAscent) :
-      //                    modifyLast(text$-.topline, max(getLast(text$-.topline), text$i.inlineAscent));
       text.topline :=
-        fold 0 .. text$i.newline ? (text$-.topline + text$i.inlineAscent) : text$-.topline;
+        fold 0 ..
+          text$i.newline ?
+            text$i.inlineAscent :
+            (text$-.topline < text$i.inlineAscent ? text$i.inlineAscent : text$-.topline);
 
-      // XXX: This attribute is apparently a _mutable_ list of position/dimension values.
-      //text.baseline := fold topline .. text$i.newline ? text$-.baseline : butFirst(text$-.baseline);
-      text.baseline := fold topline .. text$i.newline ? text$-.baseline : text$i.topline;
+      text.baseline := fold 0 .. text$i.newline ? text$-.topline : text$-.baseline;
     }
-
-    topline := text$$.topline;
-    baseline := text$$.baseline;
 
     loop text {
       text.right :=
@@ -395,12 +356,6 @@ class InlineFlow : BaseFlow {
             (text$-.lineHeight < text$i.inlineHeight ? text$i.inlineHeight : text$-.lineHeight);
 
       boxHeight := fold 0 .. self$-.boxHeight + text$i.lineHeight;
-
-      // XXX: Rendering
-      //display_list := fold new_display_list() ..
-      //                  add_text_fragment(self$-.display_list, text$i.fragSpecific, text$i.fragStyle,
-      //                                    text$i.fragNode, text$i.posX, text$i.posY,
-      //                                    text$i.lineWidth, text$i.lineHeight);
     }
   }
 }
