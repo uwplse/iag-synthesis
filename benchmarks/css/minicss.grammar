@@ -1,4 +1,5 @@
 traversal pre_order {
+  Document { visit; recur body }
   BlockFlow { visit; loop flow { visit }; visit; loop flow { recur } }
   ImageFlow { visit }
   InlineFlow { visit; loop text { visit }; visit; loop text { recur } }
@@ -6,6 +7,7 @@ traversal pre_order {
 }
 
 traversal post_order {
+  Document { visit; recur body }
   BlockFlow { loop flow { recur }; visit; loop flow { visit }; visit }
   ImageFlow { visit }
   InlineFlow { loop text { recur }; visit; loop text { visit }; visit }
@@ -13,6 +15,7 @@ traversal post_order {
 }
 
 traversal inter_pre_order {
+  Document { visit; recur body }
   BlockFlow { visit; loop flow { visit; recur } }
   ImageFlow { visit }
   InlineFlow { visit; loop text { visit; recur } }
@@ -20,6 +23,7 @@ traversal inter_pre_order {
 }
 
 traversal inter_post_order {
+  Document { visit; recur body }
   BlockFlow { loop flow { recur; visit }; visit }
   ImageFlow { visit }
   InlineFlow { loop text { recur; visit }; visit }
@@ -27,11 +31,14 @@ traversal inter_post_order {
 }
 
 traversal in_order {
+  Document { visit; recur body }
   BlockFlow { visit; loop flow { visit; recur; visit }; visit }
   ImageFlow { visit }
   InlineFlow { visit; loop text { visit; recur; visit }; visit }
   InlineText { }
 }
+
+interface Root { }
 
 interface BaseFlow {
   input is_root : bool;
@@ -84,36 +91,18 @@ interface InlineBox {
   output right : int;
 }
 
-class DocumentFlow : BaseFlow {
+class Document : Root {
   children {
     body: BaseFlow;
   }
-  attributes {
-    input screenHeight : int;
-  }
   evaluation {
-    self.absX := 0;
-    self.absY := 0;
-    self.relX := 0;
-    self.relY := 0;
-    self.boxX := 0;
-    self.boxY := 0;
-    self.boxWidth := self.screenWidth;
-    self.boxHeight := self.screenHeight;
-    self.totalWidth := self.boxWidth;
-    self.totalHeight := self.boxHeight;
-    self.right := self.totalWidth;
-    self.bottom := self.totalHeight;
-    self.leastWidth := body.leastWidth;
-    self.relaxWidth := body.relaxWidth;
-
-    body.absX := self.absX;
-    body.absY := self.absY;
+    body.absX := 0;
+    body.absY := 0;
     body.relX := 0;
     body.relY := 0;
     body.right := body.totalWidth;
     body.bottom := body.totalHeight;
-    body.availWidth := screenWidth;
+    body.availWidth := body.screenWidth;
   }
 }
 
@@ -263,7 +252,7 @@ trait FrameFlow {
           (marginLeft_auto ? (marginWidth / 2) : (marginWidth - marginLeft)));
 
     frameWidth := ml + mr + boundWidth;
-    frameHeight  := mt + mb + boundHeight;
+    frameHeight := mt + mb + boundHeight;
 
     autoWidth :=
       leastWidth < availWidth ? (relaxWidth < availWidth ? relaxWidth : availWidth) : leastWidth;
@@ -318,7 +307,8 @@ class BlockFlow (FrameFlow) : BaseFlow {
     boxX := relX + ml;
     boxY := relY + mt;
 
-    boxWidth :=  is_root ? screenWidth : realWidth + boundWidth;
+    //boxWidth :=  is_root ? screenWidth : realWidth + boundWidth; // "original" rule
+    boxWidth := (intrinsWidth == 0 ? boxWidth_inner : intrinsWidth) + boundWidth;
     boxHeight := (intrinsHeight == 0 ? boxHeight_inner : intrinsHeight) + boundHeight;
 
     totalWidth := boxWidth + ml + mr;
@@ -327,21 +317,25 @@ class BlockFlow (FrameFlow) : BaseFlow {
 }
 
 class ImageFlow (FrameFlow) : BaseFlow {
-    attributes {
-        // Dimensions of raw image
-        input imageWidth : int;
-        input imageHeight : int;
-    }
-    evaluation {
-        boxX := relX + ml;
-        boxY := relY + mt;
+  attributes {
+    // Dimensions of raw image
+    input imageWidth : int;
+    input imageHeight : int;
+  }
+  evaluation {
+    leastWidth := imageWidth + frameWidth;
+    relaxWidth := (intrinsWidth == 0 ? imageHeight : intrinsWidth) + frameWidth;
 
-        boxWidth := (intrinsWidth == 0 ? imageWidth : intrinsWidth) + boundWidth;
-        boxHeight := (intrinsHeight == 0 ? imageHeight : intrinsHeight) + boundHeight;
+    boxX := relX + ml;
+    boxY := relY + mt;
 
-        totalWidth := boxWidth + ml + mr;
-        totalHeight := boxHeight + mt + mb;
-    }
+    //boxWidth := realWidth + boundWidth; // "original" rule
+    boxWidth := (intrinsWidth == 0 ? imageWidth : intrinsWidth) + boundWidth;
+    boxHeight := (intrinsHeight == 0 ? imageHeight : intrinsHeight) + boundHeight;
+
+    totalWidth := boxWidth + ml + mr;
+    totalHeight := boxHeight + mt + mb;
+  }
 }
 
 class InlineFlow : BaseFlow {
@@ -358,8 +352,8 @@ class InlineFlow : BaseFlow {
     totalWidth := boxWidth;
 
     loop text {
-      text.newline :=
-        fold true .. (text$i.inlineWidth > text$-.lineWidth) || text$i.linebreak;
+      //text.newline := fold true .. (text$i.inlineWidth > text$-.lineWidth) || text$i.linebreak;
+      text.newline := fold true .. (text$i.inlineWidth > availWidth) || text$i.linebreak;
 
       text.lineWidth :=
         fold availWidth .. text$i.newline ? availWidth : (text$-.lineWidth - text$i.inlineWidth);
@@ -370,7 +364,8 @@ class InlineFlow : BaseFlow {
             text$i.inlineAscent :
             (text$-.topline < text$i.inlineAscent ? text$i.inlineAscent : text$-.topline);
 
-      text.baseline := fold 0 .. text$i.newline ? text$-.topline : text$-.baseline;
+      //text.baseline := fold 0 .. text$i.newline ? text$-.topline : text$-.baseline;
+      text.baseline := fold 0 .. text$i.newline ? text$i.topline : text$-.baseline;
     }
 
     loop text {
