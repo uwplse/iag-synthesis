@@ -69,12 +69,12 @@
   (match schedule
     [(sched-sequential left right)
      `(sequential
-        ,(elaborate-schedule grammar left)
-        ,(elaborate-schedule grammar right))]
+       ,(elaborate-schedule grammar left)
+       ,(elaborate-schedule grammar right))]
     [(sched-parallel left right)
      `(parallel
-        ,(elaborate-schedule grammar left)
-        ,(elaborate-schedule grammar right))]
+       ,(elaborate-schedule grammar left)
+       ,(elaborate-schedule grammar right))]
     [(sched-traversal order visitors)
      (let ([template (ag-traversal-forms (get-traversal grammar order))])
        `(traverse ,order (match . ,(elaborate-visitors template visitors))))]))
@@ -88,17 +88,17 @@
 
 (define (elaborate-blocks schema blocks)
   `(do .
-    ,(append*
-      (for/list ([form schema])
-        (match form
-          [(ag-trav-visit)
-           (let ([block (first (unbox blocks))])
-             (set-box! blocks (rest (unbox blocks)))
-             (for/list ([statement block])
-               (match statement
-                [(sched-slot-skip) `skip]
-                [(sched-slot-eval object label) `(eval ,object ,label)])))]
-          [(ag-trav-loop child schema)
-           (list `(loop child ,(elaborate-blocks schema blocks)))]
-          [(ag-trav-recur child)
-           (list `(recur ,child))])))))
+       ,(append*
+         (for/list ([form schema])
+           (match form
+             [(ag-trav-visit)
+              (let ([block (first (unbox blocks))])
+                (set-box! blocks (rest (unbox blocks)))
+                (for/list ([statement block])
+                  (match statement
+                    [(sched-slot-skip) `skip]
+                    [(sched-slot-eval object label) `(eval ,object ,label)])))]
+             [(ag-trav-loop child schema)
+              (list `(loop child ,(elaborate-blocks schema blocks)))]
+             [(ag-trav-recur child)
+              (list `(recur ,child))])))))
