@@ -9,7 +9,7 @@
          "../tree.rkt"
          "interpreter.rkt")
 
-(provide (all-defined-out))
+(provide complete-sketch)
 
 (define (multichoose* n xs)
   (build-list n (thunk* (apply choose* xs))))
