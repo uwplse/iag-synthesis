@@ -9,14 +9,18 @@
 
 (provide (prefix-out rust: generate-program))
 
-(define port (void))
+(define port #f)
 
-(define grammar (void))
+(define grammar #f)
 
-(define (generate-program grammar0 schedule)
-  (set! port (open-output-string))
+(define (generate fmt . args)
+  (apply (curry fprintf port fmt) args))
+
+; Generate implementation of an elaborated schedule
+(define (generate-program port0 grammar0 schedule)
+  (set! port port0)
   (set! grammar grammar0)
-  (fprintf port "\
+  (generate "\
 extern crate rayon;
 extern crate rand;
 extern crate time;
@@ -33,18 +37,18 @@ trait Node<I>: Send {
 ")
   (for ([_ (sched-flatten schedule)]
         [index (in-naturals 1)])
-    (fprintf port "\n    fn traverse~a(&mut self, depth: u32) -> ();\n" index))
-  (fprintf port "}\n\n")
+    (generate "\n    fn traverse~a(&mut self, depth: u32) -> ();\n" index))
+  (generate "}\n\n")
 
   (for ([iface-ast (ag-grammar-interfaces grammar)])
     (generate-interface iface-ast))
 
-  (fprintf port "\n")
+  (generate "\n")
 
   (for ([class-ast (ag-grammar-classes grammar)])
     (generate-class class-ast schedule))
 
-  (fprintf port "
+  (generate "
 type Tree = ~a;
 
 fn generate(width: u32, height: u32) -> Tree {
@@ -68,7 +72,7 @@ fn layout(t: &mut Tree) -> () {
     "
            (ag-grammar-root grammar) (ag-grammar-root grammar))
   (generate-layout schedule)
-  (fprintf port "
+  (generate "
 }
 
 fn main() -> () {
@@ -90,37 +94,37 @@ fn main() -> () {
 (define (generate-layout schedule [index 1])
   (match schedule
     [(sched-sequential left right)
-     (fprintf port "|tree| { ")
+     (generate "|tree| { ")
      (define left-index (generate-layout left index))
-     (fprintf port "(tree); ")
+     (generate "(tree); ")
      (define right-index (generate-layout right left-index))
-     (fprintf port "(tree) }")
+     (generate "(tree) }")
      right-index]
     [(sched-parallel left right)
-     (fprintf port "|tree| { parallel(tree, ")
+     (generate "|tree| { parallel(tree, ")
      (define left-index (generate-layout left index))
-     (fprintf port ", ")
+     (generate ", ")
      (define right-index (generate-layout right left-index))
-     (fprintf port ") }")
+     (generate ") }")
      right-index]
     [_
-     (fprintf port "|tree| { tree.traverse~a(0) }" index)
+     (generate "|tree| { tree.traverse~a(0) }" index)
      (+ index 1)]))
 
 (define (generate-interface iface-ast)
-  (fprintf port "struct ~a {\n" (ag-interface-name iface-ast))
+  (generate "struct ~a {\n" (ag-interface-name iface-ast))
 
   (for ([label-ast (ag-interface-labels iface-ast)])
     (match-let ([(ag-label _ name type) label-ast])
-      (fprintf port "    ~a: ~a,\n" name type)))
+      (generate "    ~a: ~a,\n" name type)))
 
-  (fprintf port "}\n\n")
+  (generate "}\n\n")
 
   ; TODO: Implement random node generation
   )
 
 (define (generate-class class-ast schedule)
-  (fprintf port "\
+  (generate "\
 struct ~a {
     public: ~a,
 "
@@ -128,16 +132,16 @@ struct ~a {
 
   (for ([label-ast (ag-class-labels class-ast)])
     (match-let ([(ag-label _ name type) label-ast])
-      (fprintf port "    ~a: ~a,\n" name type)))
+      (generate "    ~a: ~a,\n" name type)))
 
   (for ([child-ast (ag-class-children class-ast)])
-    (fprintf port
+    (generate
              (if (ag-child-sequence child-ast) "    ~a: Vec<Box<~a>>,\n" "    ~a: Box<~a>,\n")
              (ag-child-name child-ast) (ag-child-interface child-ast)))
 
-  (fprintf port "}\n\n")
+  (generate "}\n\n")
 
-  (fprintf port "\
+  (generate "\
 unsafe impl Send for ~a { }
 
 unsafe impl Sync for ~a { }
@@ -145,7 +149,7 @@ unsafe impl Sync for ~a { }
 "
            (ag-class-name class-ast) (ag-class-name class-ast))
 
-  (fprintf port "\
+  (generate "\
 impl Node<~a> for ~a {
     fn interface(&mut self) -> &mut ~a { &mut self.public }
 "
@@ -155,38 +159,43 @@ impl Node<~a> for ~a {
         [index (in-naturals 1)])
     (generate-traversal class-ast traversal index))
 
-  (fprintf port "}\n\n")
+  (generate "}\n\n")
 
   ; TODO: Implement random node generation
   )
 
-(define (generate-traversal class-ast traversal index) ; FIXME: Interface?
-  (match-let ([(sched-traversal order visitors) traversal])
-    (fprintf port "\n    fn traverse~a(&mut self, depth: u32) {\n" index)
+(define (generate-traversal class-ast traversal index)
+  (let* ([class-name (ag-class-name class-ast)]
+         [order (sched-traversal-order traversal)]
+         [blocks (sched-traversal-visitors traversal)]
+         [template (get-traversal grammar order)]
+         [schema (cdr (assoc class-name (ag-traversal-forms template)))])
+    (generate "\n    fn traverse~a(&mut self, depth: u32) {\n" index)
     (when (equal? order 'post)
       (generate-recursion class-ast index))
-    (for ([statement (cdr (assoc (ag-class-name class-ast) visitors))])
+    (for ([statement (cdr (assoc (ag-class-name class-ast) blocks))])
       (generate-statement class-ast statement index (equal? order 'pre) (equal? order 'post)))
     (when (equal? order 'pre)
       (generate-recursion class-ast index))
-    (fprintf port "    }\n")))
+    (generate "    }\n")))
 
 (define (generate-recursion class-ast index)
-  (fprintf port "    if depth < CUTOFF {\n")
+  (generate "    if depth < CUTOFF {\n")
   ; FIXME: Use rayon::scope for parallelism across multiple child productions.
   (for ([child-ast (ag-class-children class-ast)])
-    (fprintf port "        self.~a" (ag-child-name child-ast))
+    (generate "        self.~a" (ag-child-name child-ast))
     (if (ag-child-sequence child-ast)
-        (fprintf port ".par_iter_mut().for_each(|child| child.traverse~a(depth + 1));\n" index)
-        (fprintf port ".traverse~a(depth + 1);\n" index)))
-  (fprintf port "    } else {\n")
+        (generate ".par_iter_mut().for_each(|child| child.traverse~a(depth + 1));\n" index)
+        (generate ".traverse~a(depth + 1);\n" index)))
+  (generate "    } else {\n")
   (for ([child-ast (ag-class-children class-ast)])
     (if (ag-child-sequence child-ast)
-        (fprintf port ".iter_mut().for_each(|child| child.traverse~a(depth + 1));\n" index)
-        (fprintf port ".traverse~a(depth + 1);\n" index)))
-  (fprintf port "    }\n"))
+        (generate ".iter_mut().for_each(|child| child.traverse~a(depth + 1));\n" index)
+        (generate ".traverse~a(depth + 1);\n" index)))
+  (generate "    }\n"))
 
 (define (generate-statement class-ast slot pass seq-pre seq-post)
+  ; FIXME: Blocks
   (match slot
     ['nop (void)]
     [(cons loop-object (list substatements ...))
@@ -197,11 +206,11 @@ impl Node<~a> for ~a {
          (match (ag-loop-body (ag-rule-right rule))
            [(ag-fold expr _)
             (let ([rhs (generate-expression class-ast expr loop-object)])
-              (fprintf port "\n    let ~a_~a = ~a;" object label rhs))]
+              (generate "\n    let ~a_~a = ~a;" object label rhs))]
            [_ (void)])))
 
      ; Open loop body
-     (fprintf port "
+     (generate "
         for child in self.~a.iter_mut() {"
               (symbol-downcase (ag-class-name class-ast)) loop-object)
 
@@ -214,7 +223,7 @@ impl Node<~a> for ~a {
             (let* ([ref (ag-expr-reference object 'current label)]
                    [lhs (generate-expression class-ast ref loop-object)]
                    [rhs (generate-expression class-ast expr loop-object)])
-              (fprintf port "
+              (generate "
             ~a = ~a;"
                        lhs rhs))])))
 
@@ -229,7 +238,7 @@ impl Node<~a> for ~a {
            (let* ([ref (ag-expr-reference object 'current label)]
                   [rhs (generate-expression class-ast ref loop-object)]
                   )
-             (fprintf port "
+             (generate "
             ~a_~a = ~a;"
                       object label rhs)))))
 
@@ -239,7 +248,7 @@ impl Node<~a> for ~a {
               [child-ast (lookup-child (ag-class-children class-ast) loop-object)]
               [child-iface (ag-child-interface child-ast)]
               [child-struct (symbol-downcase child-iface)])
-         (fprintf port "
+         (generate "
         if (P == 1) {
             cilk_for (this = 0; this < ~a.n_~a[body]; ++this)
                 visit~a_~a(~a.i_~a[body][this], P - 1);
@@ -251,7 +260,7 @@ impl Node<~a> for ~a {
                   class-struct loop-object pass child-struct class-struct loop-object)))
 
      ; Close loop body
-     (fprintf port "
+     (generate "
         }"
               )]
     [(cons object label)
@@ -259,7 +268,7 @@ impl Node<~a> for ~a {
             [ref (ag-expr-reference object #f label)]
             [lhs (generate-expression class-ast ref)]
             [rhs (generate-expression class-ast expr)])
-       (fprintf port "
+       (generate "
         ~a = ~a;"
                 lhs rhs))]))
 
