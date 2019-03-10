@@ -172,7 +172,7 @@
 (define (tree-examples grammar)
   (define instances
     (associate-by ag-class-interface identity (ag-grammar-classes grammar)))
-  
+
   (define (find-leaf-instance iface)
     (let ([class-ast-list (cdr (assoc iface instances))])
       (findf (compose null? ag-class-children) class-ast-list)))
@@ -183,7 +183,7 @@
       (cons (cons parent-class-ast (ag-child-name child-ast))
             (list->mutable-set (cdr (assoc (ag-child-interface child-ast) instances))))))
 
-  (define (construct class-ast)    
+  (define (construct class-ast)
     (define children-list
       (match (ag-class-children class-ast)
         [(list) (list null)]
