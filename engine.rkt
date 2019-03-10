@@ -22,7 +22,13 @@
          (all-from-out "tracing/interpreter.rkt")
          (all-from-out "tracing/synthesizer.rkt")
          (all-from-out "tree.rkt")
-         (all-defined-out))
+         read-grammar
+         display-grammar
+         read-schedule
+         display-schedule
+         read-tree
+         synthesize-schedules
+         elaborate-schedule)
 
 ; Read and parse the attribute grammar in the named file, returning the list of
 ; class ASTs (interface ASTs unnecessary for interpretation).
@@ -58,3 +64,41 @@
       (displayln sketch)
       (synthesizer grammar hole-range sketch examples)
       (clear-asserts!))))
+
+(define (elaborate-schedule grammar schedule)
+  (match schedule
+    [(sched-sequential left right)
+     `(sequential
+        ,(elaborate-schedule grammar left)
+        ,(elaborate-schedule grammar right))]
+    [(sched-parallel left right)
+     `(parallel
+        ,(elaborate-schedule grammar left)
+        ,(elaborate-schedule grammar right))]
+    [(sched-traversal order visitors)
+     (let ([template (ag-traversal-forms (get-traversal grammar order))])
+       `(traverse ,order (match . ,(elaborate-visitors template visitors))))]))
+
+(define (elaborate-visitors template visitors)
+  (for/list ([visitor visitors])
+    (let* ([class-name (car visitor)]
+           [blocks (box (cdr visitor))]
+           [schema (cdr (assoc class-name template))])
+      `(case ,class-name ,(elaborate-blocks schema blocks)))))
+
+(define (elaborate-blocks schema blocks)
+  `(do .
+    ,(append*
+      (for/list ([form schema])
+        (match form
+          [(ag-trav-visit)
+           (let ([block (first (unbox blocks))])
+             (set-box! blocks (rest (unbox blocks)))
+             (for/list ([statement block])
+               (match statement
+                [(sched-slot-skip) `skip]
+                [(sched-slot-eval object label) `(eval ,object ,label)])))]
+          [(ag-trav-loop child schema)
+           (list `(loop child ,(elaborate-blocks schema blocks)))]
+          [(ag-trav-recur child)
+           (list `(recur ,child))])))))
