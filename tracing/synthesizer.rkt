@@ -8,7 +8,7 @@
          "../trace.rkt"
          "interpreter.rkt")
 
-(provide (all-defined-out))
+(provide complete-sketch)
 
 (define (complete-sketch grammar hole-range sketch examples)
   (let ([schedule (instantiate-sketch permute hole-range grammar sketch)]
