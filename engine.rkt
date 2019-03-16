@@ -99,6 +99,6 @@
                     [(sched-slot-skip) `skip]
                     [(sched-slot-eval object label) `(eval ,object ,label)])))]
              [(ag-trav-loop child schema)
-              (list `(loop child ,(elaborate-blocks schema blocks)))]
+              (list `(loop ,child ,(elaborate-blocks schema blocks)))]
              [(ag-trav-recur child)
               (list `(recur ,child))])))))
