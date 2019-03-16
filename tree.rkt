@@ -170,8 +170,7 @@
 ; Return a set of example tree skeletons that include every parent-child class
 ; pairing permitted by the grammar.
 (define (tree-examples grammar)
-  (define instances
-    (associate-by ag-class-interface identity (ag-grammar-classes grammar)))
+  (define instances (associate-classes grammar))
 
   (define (find-leaf-instance iface)
     (let ([class-ast-list (cdr (assoc iface instances))])

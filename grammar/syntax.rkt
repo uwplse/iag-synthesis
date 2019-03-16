@@ -320,3 +320,8 @@
     [(ag-loop _ (ag-fold _ iter-expr)) iter-expr]
     [(ag-loop _ expr) expr]
     [_ #f]))
+
+; Return an association list from interface names to class ASTs.
+(define (associate-classes grammar)
+  (map (λ (group) (cons (ag-class-interface (first group)) group))
+       (group-by ag-class-interface (ag-grammar-classes grammar) eq?)))
