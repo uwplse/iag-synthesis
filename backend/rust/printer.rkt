@@ -223,7 +223,7 @@
 
 ;; param ::= `(: self Self)
 ;;         | `(: self (ref Self))
-;;         | `(: self (ref-mut Self))
+;;         | `(: self (ref (mut Self)))
 ;;         | binder
 (define/match (print-function-parameter parameter)
   [(`(: self Self))
