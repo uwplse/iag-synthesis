@@ -56,22 +56,23 @@
   [(global)
    (print-global global)])
 
-;; loc ::= `(select ,loc ,label)
-;;       | `(index ,loc ,expr)
+;; loc ::= `(select ,expr ,label)
+;;       | `(index ,expr ,expr)
 ;;       | global
 (define/match (print-location loc)
-  [(`(select ,loc ,label-name))
-   (print-location loc)
+  [(`(select ,expr ,label-name))
+   (print-expression expr)
    (printf ".~a" label-name)]
-  [(`(index ,loc ,index-expr))
-   (print-location loc)
+  [(`(index ,expr ,index-expr))
+   (print-expression expr)
    (display "[")
    (print-expression index-expr)
    (display "]")]
   [(id)
    (print-global id)])
 
-;; expr ::= `(if ,expr ,expr ,expr)
+;; expr ::= `(unsafe ,expr)
+;;        | `(if ,expr ,expr ,expr)
 ;;        | `(+ ,expr ,expr) | `(* ,expr ,expr) | ...
 ;;        | `(range ,expr ,expr)
 ;;        | `(call ,path (,expr ...))
@@ -81,6 +82,10 @@
 ;;        | int
 ;;        | loc
 (define/match (print-expression expression)
+  [(`(unsafe ,expr))
+   (display "unsafe { ")
+   (print-expression expr)
+   (display " }")]
   [(`(if ,cond-expr ,then-expr ,else-expr))
    (display "if ")
    (print-expression cond-expr)
@@ -167,8 +172,8 @@
    (print-expression expression)])
 
 ;; stmt ::= `(if ,expr ,body ,body)
-;;        | `(let ,name ,type ,expr)
-;;        | `(let-mut ,name ,type ,expr)
+;;        | `(let ,name ,expr)
+;;        | `(let-mut ,name ,expr)
 ;;        | `(:= ,path ,expr)
 ;;        | `(match ,expr ,match-case ...)
 ;;        | `(for ,name ,expr ,body)
@@ -181,16 +186,12 @@
    (print-body then-body)
    (display " else")
    (print-body else-body)]
-  [(`(let ,name ,type ,expr))
-   (printf "let ~a: " name)
-   (print-type type)
-   (display " = ")
+  [(`(let ,name ,expr))
+   (printf "let ~a = " name)
    (print-expression expr)
    (display ";")]
-  [(`(let-mut ,name ,type ,expr))
-   (printf "let mut ~a: " name)
-   (print-type type)
-   (display " = ")
+  [(`(let-mut ,name ,expr))
+   (printf "let mut ~a = " name)
    (print-expression expr)
    (display ";")]
   [(`(:= ,loc ,expr))
@@ -266,7 +267,7 @@
 ;;        | `blank
 ;;        | `(comment ,text)
 (define/match (print-declaration declaration)
-  [(`blank)
+  [(`(blank))
    (newline)]
   [(`(extern ,package))
    (printf "extern crate ~a;" package)
@@ -303,10 +304,10 @@
   (for-each print-declaration program))
 
 (define test-binding-statement
-  '(let v (gen (:: std Vec) (HVBox)) (call (:: Vec new) ())))
+  '(let v (call (:: Vec new) ())))
 
 (define test-mutable-binding-statement
-  '(let-mut v (gen Vec (HVBox)) (call (:: Vec new) ())))
+  '(let-mut v (call (:: Vec new) ())))
 
 (define test-conditional-statement
   '(if b
@@ -319,12 +320,12 @@
   `(match (select self kind)
      (=> (constructor IsHBox (record (: x x) (: y y) (: z w) (: children _)))
          (do ,test-binding-statement
-           ,test-conditional-statement
-           (return x)))
+             ,test-conditional-statement
+             (return x)))
      (=> (constructor IsVBox (record (: x x) (: y y) (: z w) (: children _)))
          (do ,test-mutable-binding-statement
-           ,test-conditional-statement
-           (return y)))
+             ,test-conditional-statement
+             (return y)))
      (=> (constructor IsLeaf (unit))
          (do (return 0)))))
 
