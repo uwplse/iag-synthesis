@@ -2,7 +2,11 @@
 
 ; Script to test on Sunburst.
 
-(require "../engine.rkt")
+(require racket/pretty
+         "../engine.rkt"
+         "../schedule/elaborate.rkt"
+         "../backend/rust/builder.rkt"
+         "../backend/rust/printer.rkt")
 
 (displayln "Parsing attribute grammar...")
 (define sunburst-grammar (read-grammar "benchmarks/sunburst/sunburst.grammar" 'IRoot))
@@ -31,7 +35,15 @@
   (checking:complete-sketch sunburst-grammar (make-hole-range sunburst-grammar)
                             sunburst-sketch sunburst-examples))
 
-(displayln "Synthesizing a schedule from sequential sketch...")
+(newline)
+(displayln "Synthesizing a schedule to complete sketch...")
 (define sunburst-schedule (tracing:test-sunburst))
 (when sunburst-schedule
-  (display-schedule sunburst-schedule))
+  (display-schedule sunburst-schedule)
+  (newline)
+  (displayln "Elaborating synthesized schedule...")
+  (let ([sunburst-program (elaborate-schedule sunburst-grammar sunburst-schedule)])
+    (pretty-print sunburst-program)
+    (newline)
+    (displayln "Generating a Rust program to implement synthesized schedule...")
+    (rust:print (build-program sunburst-grammar sunburst-program))))

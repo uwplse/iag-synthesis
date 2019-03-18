@@ -2,7 +2,11 @@
 
 ; Script to test on Treemap.
 
-(require "../engine.rkt")
+(require racket/pretty
+         "../engine.rkt"
+         "../schedule/elaborate.rkt"
+         "../backend/rust/builder.rkt"
+         "../backend/rust/printer.rkt")
 
 (displayln "Parsing attribute grammar...")
 (define treemap-grammar (read-grammar "benchmarks/treemap/treemap.grammar" 'IRoot))
@@ -33,7 +37,15 @@
   (checking:complete-sketch treemap-grammar (make-hole-range treemap-grammar)
                             treemap-sketch treemap-examples))
 
-(displayln "Synthesizing a schedule from sequential sketch...")
+(newline)
+(displayln "Synthesizing a schedule to complete sketch...")
 (define treemap-schedule (tracing:test-treemap))
 (when treemap-schedule
-  (display-schedule treemap-schedule))
+  (display-schedule treemap-schedule)
+  (newline)
+  (displayln "Elaborating synthesized schedule...")
+  (let ([treemap-program (elaborate-schedule treemap-grammar treemap-schedule)])
+    (pretty-print treemap-program)
+    (newline)
+    (displayln "Generating a Rust program to implement synthesized schedule...")
+    (rust:print (build-program treemap-grammar treemap-program))))
