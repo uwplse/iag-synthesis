@@ -57,30 +57,6 @@
              (let ([schema (dict-ref template class-name)])
                `(=> ,class-name (do . ,(elaborate-body-schema schema blocks)))))))))
 
-;(define (elaborate-visitor schema blocks [loop-child #f])
-;  `(do .
-;     ,(sequence->list
-;       (in-generator
-;        (for/fold ([blocks blocks])
-;                  ([form schema])
-;          (match form
-;            [(ag-trav-visit)
-;             (for ([statement (first blocks)])
-;               (match statement
-;                 [(sched-slot-skip)
-;                  (yield `skip)]
-;                 [(sched-slot-eval object label)
-;                  (yield `(eval ,(if (eq? object loop-child) `(index ,loop-child) object) ,label))]))
-;             (rest blocks)]
-;            [(ag-trav-loop loop-child loop-schema)
-;             (let-values ([(loop-blocks blocks) (split-at blocks (count ag-trav-visit? loop-schema))])
-;               (yield
-;                `(loop ,loop-child ,(elaborate-visitor loop-schema loop-blocks loop-child)))
-;               blocks)]
-;            [(ag-trav-recur child)
-;             (yield `(recur ,(if (void? child) `(index ,loop-child) child)))
-;             blocks]))))))
-
 (define (bundle-blocks schema blocks)
   (define (aux schema blocks bundles)
     (match schema
@@ -105,7 +81,7 @@
   [((ag-trav-visit) (list block))
    (map elab-slot block)]
   [((ag-trav-recur child) null)
-   (list `(recur ,child))]
+   (list `(recur (child ,child)))]
   [((ag-trav-loop child schema) (list bundles ...))
    (elaborate-loop-schema schema bundles child)])
   
@@ -137,7 +113,7 @@
    (let ([prev (elab-attr object 'previous label #:loop child)]
          [expr (rule-initial (lookup-rule class-ast object label))])
      (if expr
-         `(:= ,prev ,(elab-expr expr))
+         `(let ,prev ,(elab-expr expr))
          `(skip)))])
   
 (define/match (elab-slot-iter child slot)
