@@ -126,7 +126,9 @@
   [(_ (sched-slot-eval object label))
    (let ([curr (elab-attr object 'current label #:loop child)]
          [prev (elab-attr object 'previous label #:loop child)])
-     `(:= ,prev ,curr))])
+     (if (rule-initial (lookup-rule class-ast object label))
+         `(:= ,prev ,curr)
+         `(skip)))])
   
 (define/match (elab-slot-fin child slot)
   [(_ (sched-slot-skip))

@@ -20,8 +20,7 @@
         `(use crossbeam thread *)
         `(blank)
         `(type int i32)
-        `(type float f32)
-        `(blank)))
+        `(type float f32)))
 
 ; Generation of data structures
 
@@ -73,9 +72,13 @@
            [class-names (map ag-class-name class-ast-list)])
        (list*
         `(blank)
+        `(blank)
         (build-interface-structure iface-ast)
+        `(blank)
         (build-class-enumeration iface-name class-names)
-        (map build-class-structure class-ast-list))))))
+        `(use ,(symbol-append iface-name 'Kind) *)
+        `(blank)
+        (add-between (map build-class-structure class-ast-list) `(blank)))))))
 
 ; Generation of traversal functions
 
@@ -122,9 +125,9 @@
      `(let-mut ,(build-variable node label) ,(build-expression expr))]
     [(`(:= (attr ,node ,label) ,expr))
      `(:= ,(build-variable node label) ,(build-expression expr))]
-    [(`(iter ,children (do ,stmt-list ...)))
+    [(`(iter ,children ,body))
      `(for ,(symbol-append children '_cur) (call (select (select class ,children) iter_mut) ())
-        (do . ,(map recur stmt-list)))]
+        ,(recur body))]
     [(`(recur (cursor ,children)))
      `(call (select ,(symbol-append children '_cur) ,trav-name) ())]
     [(`(recur (child ,child)))
@@ -134,7 +137,7 @@
 (define (build-class-visitor trav-name visitor-case)
   (match visitor-case
     [`(=> ,class-name ,visitor-stmt)
-     `(=> (constructor ,(symbol-append 'Is class-name) (tuple class))
+     `(=> (constructor ,(symbol-append 'Is class-name) (tuple (ref (mut class))))
           ,(build-statement trav-name visitor-stmt))]))
 
 (define (build-interface-visitor trav-name visitor)
@@ -142,8 +145,8 @@
     [`(: ,iface-name (case ,visitor-cases ...))
      `(impl
        ,iface-name
-       (fn ,trav-name ((: self (ref-mut Self))) (unit)
-           (do (match (select self class) .
+       (fn ,trav-name ((: self (ref (mut Self)))) (unit)
+           (do (match (ref (mut (select self class))) .
                  ,(map (curry build-class-visitor trav-name)
                        visitor-cases)))))]))
 
@@ -187,5 +190,5 @@
 (define (build-program grammar schedule)
   (append header
           (build-types grammar)
-          (build-visitors schedule)
+          (add-between (build-visitors schedule) `(blank))
           (list `(blank) (build-evaluator (ag-grammar-root grammar) schedule 'evaluate))))

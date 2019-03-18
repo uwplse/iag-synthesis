@@ -39,7 +39,7 @@
    (display var)])
 
 ;; type ::= `(unit) | ref-type
-;; ref-type ::= `(ref ,gen-type) | `(ref-mut ,gen-type) | gen-type
+;; ref-type ::= `(ref ,gen-type) | `(ref (mut ,gen-type)) | gen-type
 ;; gen-type ::= `(gen ,global (,type ...)) | global
 (define/match (print-type type)
   [(`(unit))
@@ -47,8 +47,8 @@
   [(`(ref ,type))
    (display "&")
    (print-type type)]
-  [(`(ref-mut ,type))
-   (display "&mut ")
+  [(`(mut ,type))
+   (display "mut ")
    (print-type type)]
   [(`(gen ,global ,arg-type-list))
    (print-global global)
@@ -78,7 +78,7 @@
 ;;        | `(call ,path (,expr ...))
 ;;        | `(lambda (,name ...) ,body)
 ;;        | `(ref ,expr)
-;;        | `(ref-mut ,expr)
+;;        | `(ref (mut ,expr))
 ;;        | int
 ;;        | loc
 (define/match (print-expression expression)
@@ -110,11 +110,11 @@
   [(`(lambda ,name-list ,body))
    (print-each display name-list "|" "|")
    (print-body body)]
+  [(`(ref (mut ,expr)))
+   (display "&mut ")
+   (print-expression expr)]
   [(`(ref ,expr))
    (display "& ")
-   (print-expression expr)]
-  [(`(ref-mut ,expr))
-   (display "&mut ")
    (print-expression expr)]
   [((? integer? int))
    (display int)]
@@ -140,7 +140,7 @@
 
 ;; pattern ::= `(constructor ,global ,content-pattern)
 ;;           | `(ref ,pattern)
-;;           | `(ref-mut ,pattern)
+;;           | `(mut ,pattern)
 ;;           | name
 (define/match (print-pattern pattern)
   [(`(constructor ,global ,content-pattern))
@@ -149,8 +149,8 @@
   [(`(ref ,pattern))
    (display "ref ")
    (print-pattern pattern)]
-  [(`(ref-mut ,pattern))
-   (display "ref mut ")
+  [(`(mut ,pattern))
+   (display "mut ")
    (print-pattern pattern)]
   [(var)
    (display var)])
@@ -238,7 +238,7 @@
 ;; func ::= `(fn ,name (,param ...) ,type ,body)
 (define/match (print-function function)
   [(`(fn ,name ,parameter-list ,return-type ,body))
-   (printf "fn ~a" name)
+   (printf "pub fn ~a" name)
    (print-each print-function-parameter parameter-list "(" ")")
    (display " -> ")
    (print-type return-type)
@@ -281,11 +281,11 @@
    (display ";")
    (newline)]
   [(`(struct ,constructor))
-   (printf "struct ")
+   (printf "pub struct ")
    (print-constructor constructor)
    (newline)]
   [(`(enum ,name ,constructor-list ...))
-   (printf "enum ~a" name)
+   (printf "pub enum ~a" name)
    (print-each print-constructor constructor-list " {" "}" #:indent? #t)
    (newline)]
   [(`(impl ,name ,function-list ...))
