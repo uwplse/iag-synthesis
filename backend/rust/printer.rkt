@@ -110,11 +110,11 @@
   [(`(lambda ,name-list ,body))
    (print-each display name-list "|" "|")
    (print-body body)]
-  [(`(ref (mut ,expr)))
-   (display "&mut ")
+  [(`(mut ,expr))
+   (display "mut ")
    (print-expression expr)]
   [(`(ref ,expr))
-   (display "& ")
+   (display "&")
    (print-expression expr)]
   [((? integer? int))
    (display int)]
@@ -230,7 +230,7 @@
    (display "self")]
   [(`(: self (ref Self)))
    (display "&self")]
-  [(`(: self (ref-mut Self)))
+  [(`(: self (ref (mut Self))))
    (display "&mut self")]
   [(binder)
    (print-binder binder)])
