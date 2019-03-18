@@ -9,6 +9,14 @@
 
 (provide elaborate-schedule)
 
+; Global name-freshening state
+(define freshen
+  (let ([used (make-hash)])
+    (λ (name)
+      (let ([i (hash-ref! used name 0)])
+        (hash-set! used name (+ i 1))
+        (symbol-append name (string->symbol (number->string i)))))))
+
 ; Global variable to avoid threading these through basically everything :-(
 (define grammar (void))
 (define class-ast (void))
@@ -41,7 +49,7 @@
      `(par ,(recur left-sched) ,(recur right-sched))]
     [((sched-traversal order visitors))
      (let ([template (ag-traversal-forms (get-traversal grammar order))])
-       `(trav ,order . ,(elaborate-traversal template visitors)))])
+       `(trav ,(freshen order) . ,(elaborate-traversal template visitors)))])
   (recur schedule))
 
 (define (elaborate-traversal template visitors)
