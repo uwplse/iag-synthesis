@@ -94,7 +94,12 @@
    (display " } else { ")
    (print-expression else-expr)
    (display " }")]
-  [(`(,(and operator (or '+ '- '* '/ '< '<= '== '>= '>)) ,left-expr ,right-expr))
+  [(`(,(and operator (or '- '!)) ,expr))
+   (display "(")
+   (display operator)
+   (print-expression expr)
+   (display ")")]
+  [(`(,(and operator (or '+ '- '* '/ '< '<= '== '!= '>= '> '&& '||)) ,left-expr ,right-expr))
    (display "(")
    (print-expression left-expr)
    (printf " ~a " operator)
