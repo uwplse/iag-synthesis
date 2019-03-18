@@ -51,7 +51,6 @@ class Root : IRoot {
     children {
         child : Node;
     }
-
     attributes {
         input radius : int;
         input centerRadius : int;
@@ -79,8 +78,12 @@ class Radial : Node {
     children {
         child : [ Node ];
     }
+    attributes {
+        output numOpenGrandChildren : int;
+    }
     evaluation {
         r := (maxR - parentTotR)/3 < 10 ? 10 : (maxR - parentTotR)/4;
+        numOpenGrandChildren := child$$.numOpenChildren;
 
         loop child {
             //subtreeWeight := fold 1 .. child$-.subtreeWeight + child$i.subtreeWeight;
@@ -94,16 +97,16 @@ class Radial : Node {
 
             child.maxR := maxR;
 
-            child.sectorAng :=  child$$.numOpenChildren > 0 ? child$i.show * sectorAng / child$$.numOpenChildren : 0;
+            child.sectorAng := numOpenGrandChildren > 0 ? child$i.show * sectorAng / numOpenGrandChildren : 0;
 
             child.alpha :=
             fold
-              (child$$.numOpenChildren > 0 ?
-               alpha - (sectorAng / 2) - (sectorAng/(child$$.numOpenChildren*2)) :
+              (numOpenGrandChildren > 0 ?
+               alpha - (sectorAng / 2) - (sectorAng/(numOpenGrandChildren*2)) :
                0)
               ..
-              (child$$.numOpenChildren > 0 ?
-               child$-.alpha + child$i.show * (sectorAng/child$$.numOpenChildren) :
+              (numOpenGrandChildren > 0 ?
+               child$-.alpha + child$i.show * (sectorAng/numOpenGrandChildren) :
                0);
 
             child.show_out := fold 0 .. child$-.show_out + child$i.show;
