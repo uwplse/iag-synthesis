@@ -97,7 +97,7 @@
     [`(cursor ,children)
      `(select ,(symbol-append children '_cur) ,label)]))
 
-(define (build-expression expression loop)
+(define (build-expression expression)
   (define/match (recur expr)
     [(`(call ,function ,arguments))
      `(call ,function ,(map recur arguments))]
@@ -115,20 +115,16 @@
   (recur expression))
 
 (define (build-statement trav-name statement)
-  (define loop #f)
   (define/match (recur stmt)
     [(`(do ,statement-list ...))
      `(do . ,(map recur (remove* (list `(skip)) statement-list)))]
     [(`(let (attr ,node ,label) ,expr))
-     `(let-mut ,(build-variable node label) ,(build-expression expr loop))]
+     `(let-mut ,(build-variable node label) ,(build-expression expr))]
     [(`(:= (attr ,node ,label) ,expr))
-     `(:= ,(build-variable node label) ,(build-expression expr loop))]
+     `(:= ,(build-variable node label) ,(build-expression expr))]
     [(`(iter ,children (do ,stmt-list ...)))
-     (set! loop children)
-     (begin0
-       `(for ,(symbol-append children '_cur) (call (select (select class ,children) iter_mut) ())
-          (do . ,(map recur stmt-list)))
-       (set! loop #f))]
+     `(for ,(symbol-append children '_cur) (call (select (select class ,children) iter_mut) ())
+        (do . ,(map recur stmt-list)))]
     [(`(recur (cursor ,children)))
      `(call (select ,(symbol-append children '_cur) ,trav-name) ())]
     [(`(recur (child ,child)))
