@@ -7,7 +7,7 @@
          "../../schedule/syntax.rkt"
          "../../utility.rkt")
 
-(provide (all-defined-out))
+(provide build-program)
 
 ; Generic program header
 
