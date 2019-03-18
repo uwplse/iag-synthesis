@@ -10,6 +10,12 @@
 (provide permute iter-permuted for/permuted join-threads join
          table? make-table table-ref! table-def! break (rename-out [solve-trace solve]))
 
+(define DEBUG #f)
+
+(define (debug:displayln action)
+  (when DEBUG
+    (displayln action)))
+
 ; Activate an ILP solver (IBM CPLEX if available, otherwise Z3 in ILP mode)
 (current-solver
   (if #f ;(cplex-available?) ; Rosette encodes for CPLEX very, very slowly...
@@ -138,7 +144,7 @@
 
 ; Create an empty table.
 (define (make-table)
-  (let ([table (table -1)])
+  (let ([table (table #f)])
     (push! residue (cmd:alloc table))
     (flush-residue!)
     table))
@@ -176,9 +182,9 @@
 (define (trace-read! location assumption store)
   (match-let ([(traced dependency antidependency) (hash-ref store location (traced 0 1))])
     (when (eqv? assumption 1)
-      (assert (= dependency 1)))
-    (assert (<= 0 dependency 1))
-    (assert (<= assumption dependency))))
+      (assert (= dependency 1) "assumption |\\- dependency"))
+    (assert (<= 0 dependency 1) "|\\- 0 <= dependency <= 1")
+    (assert (<= assumption dependency) "|\\- assumption --> dependency")))
 
 (define (trace-write! location assumption store)
   (hash-update! store
@@ -192,33 +198,48 @@
 (define (trace-exit! store)
   (for ([tr (hash-values store)])
     (match-let ([(traced dependency antidependency) tr])
-      (assert (<= 0 dependency 1))
-      (assert (<= 0 antidependency 1)))))
+      (assert (<= 0 dependency 1) "|\\- 0 <= dependency <= 1")
+      (assert (<= 0 antidependency 1) "|\\- 0 <= antidependency <= 1"))))
+
+; Rollback after reaching trivially impossible path
+(define (rollback exn)
+  (let ([phi (conjoin* path-condition)])
+    (debug:displayln `(rollback ,phi))
+    (assert (= phi 0) "|- assumption -> _|_")))
 
 ; Evaluate residual program commands.
 (define (evaluate-residue! program [shared-stores null])
   (for ([command program])
     (match command
       [(cmd:assume guard body)
+       (debug:displayln `(assume ,guard))
        (push! path-condition guard)
-       (evaluate-residue! body shared-stores)
-       (pop! path-condition)]
+       (with-handlers ([exn:fail? rollback])
+         (debug:displayln `(assume ,guard))
+         (evaluate-residue! body shared-stores))
+       (pop! path-condition)
+       (debug:displayln `(revert ,guard))]
       [(cmd:alloc table)
+       (debug:displayln `(alloc <table>))
        (set-table-contents! table (make-hash))]
       [(cmd:read (table contents) name)
        (let ([location (hash-ref! contents name (thunk (++ next-location)))]
              [assumption (conjoin* path-condition)])
+         (debug:displayln `(read <table> ,name))
          (trace-read! location assumption store))]
       [(cmd:write (table contents) name)
        (let ([location (hash-ref! contents name (thunk (++ next-location)))]
              [assumption (conjoin* path-condition)])
+         (debug:displayln `(write <table> ,name))
          (trace-write! location assumption store)
          (for-each (curry trace-write! location assumption) shared-stores))]
       [(cmd:join left right)
        (let ([initial (hash-copy store)])
+         (debug:displayln `(join left))
          (evaluate-residue! left shared-stores)
          (let ([final store])
            (shadow! ([store initial])
+             (debug:displayln `(join right))
              (evaluate-residue! right (cons final shared-stores)))))])))
 
 ; Evaluate the accumulated residual program if in a quiescent state
