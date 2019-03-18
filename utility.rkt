@@ -66,8 +66,9 @@
     (set! x (+ x 1))
     x))
 
-(define (associate-by key val lst [same? equal?])
-  (map (λ (g) (cons (key (first g)) (val g))) (group-by key lst same?)))
+(define (associate-by key lst [same? equal?])
+  (map (λ (grp) (cons (key (first grp)) grp))
+       (group-by key lst same?)))
 
 (define (vector-sum vec)
   (apply + (vector->list vec)))

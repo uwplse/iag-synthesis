@@ -16,10 +16,6 @@
 (define (public? label)
   (not (lookup-label (ag-class-labels class-ast) label)))
 
-(define (associate-by key lst [same? equal?])
-  (map (λ (grp) (cons (key (first grp)) grp))
-       (group-by key lst same?)))
-
 (define (associate-visitors visitors)
   (associate-by (compose ag-class-interface (curry get-class grammar) car)
                 visitors))
