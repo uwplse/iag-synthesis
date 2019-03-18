@@ -28,18 +28,6 @@
   (associate-by (compose ag-class-interface (curry get-class grammar) car)
                 visitors))
 
-(define (make-interface-relation grammar)
-  (map (λ (class-ast)
-         (cons (ag-class-name class-ast)
-               (ag-class-interface class-ast)))
-       (ag-grammar-classes grammar)))
-
-(define (make-attribute-relation grammar)
-  (map (λ (iface-ast)
-         (cons (ag-interface-name iface-ast)
-               (map ag-label-name (ag-interface-labels iface-ast))))
-       (ag-grammar-interfaces grammar)))
-
 (define (elaborate-schedule grammar0 schedule)
   (set! grammar grammar0)
   (define/match (recur sched)
