@@ -27,9 +27,9 @@
                ;;               store)]
                ;; [validate (λ (store name)
                ;;             (assert (unbox (lookup name store))))]
-               [allocate (λ (store name) store)]
-               [initialize (λ (store name type) (cons (cons name #t) store))]
-               [validate (λ (store name) (assert (lookup name store)))]
+               [allocate (λ (record label) record)]
+               [initialize (λ (record label type) (cons (cons label #t) record))]
+               [validate (λ (record label) (assert (lookup record label)))]
                [tree (tree-annotate grammar tree (const null) allocate initialize)])
           (interpret grammar schedule tree)
           (tree-validate grammar tree validate))))

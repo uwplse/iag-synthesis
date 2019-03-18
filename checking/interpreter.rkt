@@ -42,30 +42,29 @@
         [class-ast (get-class grammar (tree-class self))]
         [form (cdr (assq (tree-class self) (ag-traversal-forms traversal)))]
         [visitor (cdr (assq (tree-class self) visitors))])
-    (for/fold ([blocks visitor]
-               [virtual null])
+    (for/fold ([blocks visitor])
               ([part form])
       (match part
         [(ag-trav-recur child)
          (recur (cdr (assq child (tree-children self))))
-         (values blocks virtual)]
+         blocks]
         [(ag-trav-visit)
          (for ([slot (first blocks)])
            (for/all ([slot slot])
-                    (begin
-             (match slot
-               [(sched-slot-skip) (void)]
-               [(sched-slot-eval object label)
-                (for*/all ([object object]
-                           [label label])
-                  (let ([expr (ag-rule-right (lookup-rule class-ast object label))])
-                    (assign (tree-object self object) label (eval expr self))))]))))
-         (values (rest blocks) virtual)]
+             (begin
+               (match slot
+                 [(sched-slot-skip) (void)]
+                 [(sched-slot-eval object label)
+                  (for*/all ([object object]
+                             [label label])
+                    (let ([expr (ag-rule-right (lookup-rule class-ast object label))])
+                      (assign (tree-object self object) label (eval expr self))))]))))
+         (rest blocks)]
         [(ag-trav-loop child-seq loop-form)
          (let-values ([(loop-blocks rest-blocks)
                        (split-at blocks (count ag-trav-visit? loop-form))])
-           (values rest-blocks
-                   (loop class-ast child-seq loop-form loop-blocks recur self)))]))))
+           (loop class-ast child-seq loop-form loop-blocks recur self)
+           rest-blocks)]))))
 
 ; Interpret a loop
 (define (loop class-ast child-seq form blocks recur self)
@@ -74,50 +73,52 @@
 
     ; Initialize the virtual node for all visits.
     (define initial
-      (for/fold ([virtual null])
+      (for/fold ([initial null])
                 ([slot slot-list])
         (for/all ([slot slot])
           (match slot
-            [(sched-slot-skip) virtual]
+            [(sched-slot-skip) initial]
             [(sched-slot-eval object label)
              (for*/all ([object object]
                         [label label])
                (let ([expr (rule-initial (lookup-rule class-ast object label))])
                  (if expr
-                     (cons (cons (cons object label) (eval expr self)) virtual)
-                     virtual)))]))))
+                     (cons (cons (cons object label) (eval expr self)) initial)
+                     initial)))]))))
 
     ; Iterate through the child sequence
     (define final
       (for/fold ([previous initial])
                 ([current children])
-        (let ([block-list blocks])
-          (for/fold ([virtual null])
-                    ([part form])
-            (match part
-              [(ag-trav-recur (? void?))
-               (recur current)
-               virtual]
-              [(ag-trav-visit)
-               (let ([block (first block-list)])
-                 (set! block-list (rest block-list))
-                 (for/fold ([virtual virtual])
-                           ([slot block])
-                   (for/all ([slot slot])
-                            (begin
-                     (match slot
-                       [(sched-slot-skip) virtual]
-                       [(sched-slot-eval object label)
-                        (for*/all ([object object]
-                                   [label label])
-                          (let* ([expr (rule-iterate (lookup-rule class-ast object label))]
-                                 [value (eval expr self child-seq previous current virtual)])
-                            (when (equal? object child-seq)
-                              (assign current label value))
-                            (cons (cons (cons object label) value) virtual)))])))))])))))
+        (for/fold ([virtual null]
+                   [blocks blocks]
+                   #:result virtual)
+                  ([part form])
+          (match part
+            [(ag-trav-recur (? void?))
+             (recur current)
+             (values virtual blocks)]
+            [(ag-trav-visit)
+             (values
+              (for/fold ([virtual virtual])
+                        ([slot (first blocks)])
+                (for/all ([slot slot])
+                  (begin
+                    (match slot
+                      [(sched-slot-skip) virtual]
+                      [(sched-slot-eval object label)
+                       (for*/all ([object object]
+                                  [label label])
+                         (let* ([expr (rule-iterate (lookup-rule class-ast object label))]
+                                [value (eval expr self child-seq previous current virtual)])
+                           (when (equal? object child-seq)
+                             (assign current label value))
+                           (cons (cons (cons object label) value) virtual)))]))))
+              (rest blocks))]))))
 
     ; Assign final attribute values.
-    (for ([slot slot-list])
+    (for* ([block blocks]
+           [slot block])
       (for/all ([slot slot])
         (match slot
           [(sched-slot-skip) (void)]
@@ -125,7 +126,7 @@
            (for*/all ([object object]
                       [label label])
              (unless (equal? object child-seq)
-               (let ([value (assoc (cons object label) final)])
+               (let ([value (lookup final (cons object label))])
                  (assign (tree-object self object) label value))))])))))
 
 
@@ -136,24 +137,21 @@
       [(ag-expr-unary? expression)
        (recur (ag-expr-unary-operand expression))]
       [(ag-expr-binary? expression)
-       (recur (ag-expr-binary-left expression))
-       (recur (ag-expr-binary-right expression))]
+       (and (recur (ag-expr-binary-left expression))
+            (recur (ag-expr-binary-right expression)))]
       [(ag-expr-condition? expression)
-       (recur (ag-expr-condition-if expression))
-       (recur (ag-expr-condition-then expression))
-       (recur (ag-expr-condition-else expression))]
+       (and (recur (ag-expr-condition-if expression))
+            (recur (ag-expr-condition-then expression))
+            (recur (ag-expr-condition-else expression)))]
       [(ag-expr-call? expression)
-       (for-each recur (ag-expr-call-arguments expression))]
+       (andmap recur (ag-expr-call-arguments expression))]
       [(ag-expr-reference? expression)
-       (let ([value (tree-load self expression lookup child-seq previous current virtual)])
-         (assert value))]
+       (tree-load self expression lookup child-seq previous current virtual)]
       [(or (number? expression) (boolean? expression) (string? expression))
-       (void)]))
-  (recur expression)
+       #t]))
+  (assert (recur expression))
   #t)
 
-; NOTE: We really should interpret statements abstractly, to avoid giving
-; loopholes to the solver.
 ;; ; Concrete interpretation of an expression.
 ;; (define (eval expression self [child-seq #f] [previous #f] [current #f] [virtual #f])
 ;;   (define (recur expression)
