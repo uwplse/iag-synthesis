@@ -1,12 +1,11 @@
-#lang rosette
+#lang racket
 
 ; Parser and serializer for language of attribute grammars
 
 (require "syntax.rkt"
          parser-tools/lex
          (prefix-in : parser-tools/lex-sre)
-         parser-tools/yacc
-         racket/match)
+         parser-tools/yacc)
 
 (provide ag-parse
          ag-serialize)
