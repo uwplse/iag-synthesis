@@ -24,11 +24,27 @@
 (define (public? label)
   (not (lookup-label (ag-class-labels class-ast) label)))
 
+(define (symbol-join syms sep)
+  (string->symbol (string-join (map symbol->string syms) sep)))
+
+(define (access->symbol path)
+  (match path
+    [(list items ...)
+     (symbol-join
+      (map (λ (item)
+             (if (list? item)
+                 (string->symbol (string-append (symbol->string (first item))
+                                                "(" (symbol->string (symbol-join (rest item) ", ")) ")"))
+                 item))
+           items)
+      "." )]
+    [field field]))
+
 (define (label->access object label)
-  (lookup-path grammar class-ast object label))
+  (access->symbol (lookup-path grammar class-ast object label)))
 
 (define (child->access child-name)
-  (ag-child-access (lookup-child (ag-class-children class-ast) child-name)))
+  (access->symbol (ag-child-access (lookup-child (ag-class-children class-ast) child-name))))
 
 (define (associate-visitors visitors)
   (associate-by (compose ag-class-interface (curry get-class grammar) car)
