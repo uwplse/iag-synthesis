@@ -44,6 +44,8 @@
    name
    ; list of attribute declarations
    labels
+   ; object-level path to access
+   access
    ) #:transparent)
 
 ; trait (mixin class) definition
@@ -84,6 +86,8 @@
    sequence
    ; the interface type of this child node
    interface
+   ; object-level path to access
+   access
    ) #:transparent)
 
 ; attribute declaration
@@ -94,6 +98,8 @@
    name
    ; the identifier for the attribute value's type
    type
+   ; object-level path to access
+   access
    ) #:transparent)
 
 ; loop body
@@ -276,16 +282,27 @@
 (define (lookup-label decl-ast-list label)
   (findf (λ (decl-ast) (eq? (ag-label-name decl-ast) label)) decl-ast-list))
 
-; Look up the type of a label in a list of [attribute] declaration ASTs.
+; Look up the type of a label relative to a given class.
 (define (lookup-type grammar class-ast object label)
   (define label-ast-list
     (if (equal? object 'self)
         (get-labels grammar class-ast)
         (let* ([child-ast (lookup-child (ag-class-children class-ast) object)]
                [iface-ast (get-interface grammar (ag-child-interface child-ast))])
-          (ag-interface-labels iface-ast) label)))
+          (ag-interface-labels iface-ast))))
 
-  (ag-label-type (lookup-label label-ast-list)))
+  (ag-label-type (lookup-label label-ast-list label)))
+
+; Look up the access path of a label relative to a given class.
+(define (lookup-path grammar class-ast object label)
+  (define label-ast-list
+    (if (equal? object 'self)
+        (get-labels grammar class-ast)
+        (let* ([child-ast (lookup-child (ag-class-children class-ast) object)]
+               [iface-ast (get-interface grammar (ag-child-interface child-ast))])
+          (ag-interface-labels iface-ast))))
+
+  (ag-label-access (lookup-label label-ast-list label)))
 
 ; Look up an evaluation rule in a class.
 (define (lookup-rule class-ast object label)

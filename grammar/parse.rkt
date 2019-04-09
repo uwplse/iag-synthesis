@@ -27,6 +27,7 @@
                              CHILDREN
                              ATTRIBUTES
                              EVALUATION
+                             ACCESS
                              LOOP
                              DEFINE
                              FOLD
@@ -86,10 +87,22 @@
     ((_)
      (:or (integer) (float)))))
 
-(define-lex-trans ident
+(define-lex-trans alphabetic
   (syntax-rules ()
     ((_)
-     (:: (:or (char-range "a" "z") (char-range "A" "Z") "_" "&") (:* (:or (char-range "a" "z") (char-range "A" "Z") (char-range "0" "9") "_" "-"))))))
+     (:or (char-range "a" "z") (char-range "A" "Z") "_"))))
+
+(define-lex-trans alphanumeric
+  (syntax-rules ()
+    ((_)
+     (:or (char-range "a" "z") (char-range "A" "Z") (char-range "0" "9") "_"))))
+
+(define-lex-trans identifier
+  (syntax-rules ()
+    ((_)
+     (:: (alphabetic) (:* (alphanumeric))
+         (:? (:: "::" (alphabetic) (:* (alphanumeric))))
+         (:? (:: "<" (alphabetic) (:* (alphanumeric)) ">"))))))
 
 (define-lex-trans comment
   (syntax-rules ()
@@ -123,6 +136,7 @@
    ["children" (token-CHILDREN)]
    ["attributes" (token-ATTRIBUTES)]
    ["evaluation" (token-EVALUATION)]
+   ["@access" (token-ACCESS)]
    ["loop" (token-LOOP)]
    [":=" (token-DEFINE)]
    ["fold" (token-FOLD)]
@@ -154,7 +168,7 @@
    ["$-" (token-PREVIOUS)]
    ["$$" (token-LAST)]
    [(number) (token-LITERAL (string->number lexeme))]
-   [(ident) (token-IDENT (string->symbol lexeme))]
+   [(identifier) (token-IDENT (string->symbol lexeme))]
    [(string) (token-LITERAL (read lexeme))]
    [whitespace (ag-lex input-port)]
    [(eof) (token-EOF)]))
@@ -172,6 +186,22 @@
    (grammar
     (decl-list
      ((decl decl-list) (cons $1 $2))
+     (() null))
+
+    (annot-access
+     ((ACCESS LBRACE quot-path RBRACE) $3))
+
+    (quot-path
+     ((quot-path-item DOT quot-path) (cons $1 $3))
+     (() null))
+
+    (quot-path-item
+     ((IDENT LPAREN quot-const-list RPAREN) (cons $1 $3))
+     ((IDENT) $1))
+
+    (quot-const-list
+     ((IDENT COMMA quot-const-list) (cons $1 $3))
+     ((IDENT) (list $1))
      (() null))
 
     (decl
@@ -220,8 +250,8 @@
      ((IDENT) (list $1)))
 
     (iface-decl
-     ((INTERFACE IDENT
-                 LBRACE label-list RBRACE) (ag-interface $2 $4)))
+     ((annot-access INTERFACE IDENT LBRACE label-list RBRACE) (ag-interface $3 $5 $1))
+     ((INTERFACE IDENT LBRACE label-list RBRACE) (ag-interface $2 $4 #f)))
 
     (trait-decl
      ((TRAIT IDENT LBRACE class-body RBRACE) (ag-trait $2 $4)))
@@ -236,20 +266,24 @@
      ((EVALUATION LBRACE rule-or-loop-list RBRACE) (ag-body null null $3)))
 
     (child-list
-     ((IDENT COLON child-type SEMICOLON child-list) (cons (ag-child $1
-                                                                         (car $3)
-                                                                         (cdr $3))
-                                                          $5))
+     ((child child-list) (cons $1 $2))
      (() null))
+
+    (child
+     ((annot-access IDENT COLON child-type SEMICOLON) (ag-child $2 (car $4) (cdr $4) $1))
+     ((IDENT COLON child-type SEMICOLON) (ag-child $1 (car $3) (cdr $3) $1)))
 
     (child-type
      ((IDENT) (cons #f $1))
      ((LBRACKET IDENT RBRACKET) (cons #t $2)))
 
     (label-list
-     ((label-io IDENT COLON IDENT SEMICOLON
-               label-list) (cons (ag-label $1 $2 $4) $6))
+     ((label label-list) (cons $1 $2))
      (() null))
+
+    (label
+     ((annot-access label-io IDENT COLON IDENT SEMICOLON) (ag-label $2 $3 $5 $1))
+     ((label-io IDENT COLON IDENT SEMICOLON) (ag-label $1 $2 $4 $2)))
 
     (label-io
      ((INPUT) #t)
@@ -359,7 +393,7 @@
                "\n"))
 
 (define (ag-interface-serialize interface-ast)
-  (match-let ([(ag-interface name labels) interface-ast])
+  (match-let ([(ag-interface name labels _) interface-ast]) ; FIXME
     (string-append "interface "
                    (symbol->string name)
                    " {\n"
@@ -369,7 +403,7 @@
                    "\n}\n")))
 
 (define (ag-label-serialize label-ast)
-  (match-let ([(ag-label input name type) label-ast])
+  (match-let ([(ag-label input name type _) label-ast]) ; FIXME
     (string-append "    "
                    (if input "input" "var")
                    " "
@@ -420,7 +454,7 @@
                "\n"))
 
 (define (ag-child-serialize child-ast)
-  (match-let ([(ag-child name sequence interface) child-ast])
+  (match-let ([(ag-child name sequence interface _) child-ast]) ; FIXME
     (let* ([ident (symbol->string name)]
            [iface (symbol->string interface)]
            [type (if sequence

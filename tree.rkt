@@ -131,7 +131,7 @@
     (tree (tree-class node)
           (for/fold ([record (emp)])
                     ([label-ast (get-labels grammar class-ast)])
-            (match-let* ([(ag-label input label type) label-ast]
+            (match-let* ([(ag-label input label type _) label-ast]
                          [record (new record label)])
               (if input
                   (upd record label type)
@@ -186,7 +186,7 @@
     (define children-list
       (match (ag-class-children class-ast)
         [(list) (list null)]
-        [(list (ag-child names #t ifaces) ...)
+        [(list (ag-child names #t ifaces _) ...)
          (list
           (for/list ([name names]
                      [iface ifaces])
@@ -197,7 +197,7 @@
                   (let ([class-ast-list (set->list class-ast-set)])
                     (set-clear! class-ast-set)
                     (cons name (append-map construct class-ast-list)))))))]
-        [(list (ag-child name #f iface))
+        [(list (ag-child name #f iface _))
          (let ([class-ast-set (cdr (assoc (cons class-ast name) interactions))])
            (if (set-empty? class-ast-set)
                (let ([leaf-class (find-leaf-instance iface)])
