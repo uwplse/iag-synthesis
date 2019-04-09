@@ -11,16 +11,16 @@
 
 ; Generic program header
 
-(define header
-  (list ;`(extern crossbeam)
-        ;`(blank)
-        ;`(use std cell UnsafeCell)
-        ;`(use std time Instant)
-        ;`(blank)
-        ;`(use crossbeam thread *)
-        ;`(blank)
-        `(type int i32)
-        `(type float f32)))
+;(define header
+;  (list `(extern crossbeam)
+;        `(blank)
+;        `(use std cell UnsafeCell)
+;        `(use std time Instant)
+;        `(blank)
+;        `(use crossbeam thread *)
+;        `(blank)
+;        `(type int i32)
+;        `(type float f32)))
 
 ; Generation of traversal methods
 
@@ -132,7 +132,8 @@
            ,(recur schedule 'tree))))
 
 (define (build-program grammar schedule)
-  (append header
+  (append; header
+          (list '(blank))
           (add-between (build-visitors schedule) `(blank))
           ;(list `(blank) (build-evaluator (ag-grammar-root grammar) schedule 'evaluate))
           ))
