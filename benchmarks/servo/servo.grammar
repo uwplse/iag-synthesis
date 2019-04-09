@@ -1,0 +1,288 @@
+traversal bubble_inline_sizes {
+    BlockFlow { loop child { recur; visit }; visit }
+}
+
+traversal assign_inline_sizes {
+  BlockFlow { visit; loop child { visit; recur } }
+}
+
+traversal compute_stacking_relative_position {
+  BlockFlow { loop child { recur; visit }; visit }
+}
+
+@access{mut_base()}
+interface Flow {
+  //input restyle_damage : RestyleDamage;
+
+  @access{intrinsic_inline_sizes.minimum_inline_size}
+  output minimum_inline_size : Au;
+
+  @access{intrinsic_inline_sizes.preferred_inline_size}
+  output preferred_inline_size : Au;
+
+  @access{position.size.inline}
+  output inline_size : Au;
+
+  @access{position.size.block}
+  output block_size : Au;
+
+  @access{position.start.i}
+  output inline_coord : Au;
+
+  @access{position.start.b}
+  output block_coord : Au;
+
+  @access{overflow.scroll.origin.x}
+  output overscroll_x : Au;
+
+  @access{overflow.scroll.origin.y}
+  output overscroll_y : Au;
+
+  @access{overflow.scroll.origin.width}
+  output overscroll_w : Au;
+
+  @access{overflow.scroll.origin.height}
+  output overscroll_h : Au;
+
+  @access{overflow.paint.origin.x}
+  output overpaint_x : Au;
+
+  @access{overflow.paint.origin.y}
+  output overpaint_y : Au;
+
+  @access{overflow.paint.origin.width}
+  output overpaint_w : Au;
+
+  @access{overflow.paint.origin.height}
+  output overpaint_h : Au;
+
+  @access{speculated_float_placement_in.left}
+  output speculated_float_in_left : Au;
+
+  @access{speculated_float_placement_in.right}
+  output speculated_float_in_right : Au;
+
+  @access{speculated_float_placement_out.left}
+  output speculated_float_out_left : Au;
+
+  @access{speculated_float_placement_out.right}
+  output speculated_float_out_right : Au;
+
+  @access{stacking_relative_position.x}
+  output stacking_relative_x : Au;
+
+  @access{stacking_relative_position.y}
+  output stacking_relative_y : Au;
+
+  output block_container_inline_size : Au;
+
+  output block_container_writing_mode : WritingMode; // opaque
+
+  output block_container_explicit_block_size : Option<Au>; // opaque?
+
+  //output early_absolute_position_info : EarlyAbsolutePositionInfo;
+
+  @access{early_absolute_position_info.relative_containing_block_mode}
+  output relative_containing_block_mode : WritingMode;
+
+  @access{early_absolute_position_info.relative_containing_block_size.inline}
+  output relative_containing_block_width : Au;
+
+  @access{early_absolute_position_info.relative_containing_block_size.block}
+  output relative_containing_block_height : Au;
+
+  //output late_absolute_position_info : LateAbsolutePositionInfo;
+
+  @access{late_absolute_position_info.stacking_relative_position_of_absolute_containing_block.x}
+  output stacking_relative_x_of_absolute_container : Au;
+
+  @access{late_absolute_position_info.stacking_relative_position_of_absolute_containing_block.y}
+  output stacking_relative_y_of_absolute_container : Au;
+
+  @access{clip.origin.x}
+  output clip_x : Au;
+
+  @access{clip.origin.y}
+  output clip_y : Au;
+
+  @access{clip.size.width}
+  output clip_w : Au;
+
+  @access{clip.size.height}
+  output clip_h : Au;
+
+  @access{flags.contains(FlowFlags::IS_ABSOLUTELY_POSITIONED)}
+  input is_absolutely_positioned : bool;
+
+  @access{flags.contains(FlowFlags::MARGINS_CANNOT_COLLAPSE)}
+  input margins_cannot_collapse : bool;
+
+  @access{flags.contains(FlowFlags::BLOCK_POSITION_IS_STATIC)}
+  input block_position_is_static : bool;
+
+  @access{flags.contains(FlowFlags::INLINE_POSITION_IS_STATIC)}
+  input inline_position_is_static : bool;
+
+  //@access{is_float()}
+  //input is_float : bool;
+
+  @access{flags.contains(FlowFlags::FLOATS_LEFT)}
+  input floats_left : bool;
+
+  @access{flags.contains(FlowFlags::FLOATS_RIGHT)}
+  input floats_right : bool;
+
+  @access{flags.contains(FlowFlags::CLEARS_LEFT)}
+  input clears_left : bool;
+
+  @access{flags.contains(FlowFlags::CLEARS_RIGHT)}
+  input clears_right : bool;
+
+  @access{flags.contains(FlowFlags::CONTAINS_TEXT_OR_REPLACED_FRAGMENTS)}
+  input contains_text_or_replaced_fragments : bool;
+
+  output floats : Floats; // opaque datatype
+  //input abs_descendants : AbsoluteDescendants; // opaque datatype
+  input absolute_cb : ContainingBlockLink; // opaque datatype
+
+  input writing_mode : WritingMode; // opaque datatype
+  input collapsible_margins : CollapsibleMargins; // opaque datatype
+  input clipping_and_scrolling : Option<ClippingAndScrolling>; // opaque datatype
+
+  @access{shared_context.viewport_size()}
+  input viewport_size : LogicalRect<Au>;
+}
+
+class BlockFlow : Flow {
+  children {
+    @access{children}
+    child : [Flow];
+
+    //fragment : Fragment;
+  }
+
+  attributes {
+    //output float : Option<Box<FloatedBlockInfo>>;
+
+    @access{float.as_mut().unwrap().containing_inline_size}
+    output float_containing_inline_size : Au;
+
+    @access{is_fixed()}
+    input is_fixed : bool;
+
+    @access{is_root()}
+    input is_root : bool;
+
+    @access{has_scrolling_overflow()}
+    input has_scrolling_overflow : bool;
+
+    @access{fragment.border_box.size.inline}
+    output fragment_border_box_inline_size : Au;
+
+    @access{fragment.border_box.size.block}
+    output fragment_border_box_block_size : Au;
+
+    @access{fragment.border_box.start.i}
+    input fragment_border_box_inline_coord : Au;
+
+    @access{fragment.border_box.start.b}
+    input fragment_border_box_block_coord : Au;
+
+    //input border_padding: LogicalMargin<Au>,
+
+    @access{fragment.border_padding.inline_start_end()}
+    input fragment_border_padding : Au;
+
+    @access{fragment.margin.inline_start}
+    input fragment_margin_inline_start : Au;
+
+    @access{fragment.margin.inline_end}
+    input fragment_margin_inline_end : Au;
+
+    @access{fragment.style.writing_mode}
+    input fragment_writing_mode : WritingMode;
+
+    //input specific: SpecificFragmentInfo;
+
+    //@access{style()}
+    //input style : ComputedValues;
+  }
+
+  evaluation {
+
+    self.stacking_relative_x_of_absolute_container := Au(0);
+    self.stacking_relative_y_of_absolute_container := Au(0);
+
+    //self.floats := Floats::new(self.writing_mode);
+    self.float_containing_inline_size := self.block_container_inline_size;
+
+    self.fragment_border_box_inline_size :=
+        self.fragment_border_box_inline_size -
+        speculate_left_inline_space(self.speculated_float_in_left, self.fragment_margin_inline_start) -
+        speculate_right_inline_space(self.speculated_float_in_right, self.fragment_margin_inline_end);
+
+    loop child {
+      self.minimum_inline_size := fold Au(0) .. min(self$-.minimum_inline_size, child$i.minimum_inline_size);
+      self.preferred_inline_size := fold Au(0) .. max(self$-.preferred_inline_size, child$i.preferred_inline_size);
+
+      child.stacking_relative_x := Au(0);
+      child.stacking_relative_y := Au(0);
+
+      child.block_container_explicit_block_size :=
+        self.is_root
+        ? max(
+            (self.is_root || self.is_fixed
+              ? logical_size_from_physical_size(self.fragment_writing_mode, self.viewport_size)
+              : self.block_container_explicit_block_size),
+            explicit_block_content_size(
+              self.fragment_border_box_block_size,
+              (self.is_root || self.is_fixed
+                ? logical_size_from_physical_size(self.fragment_writing_mode, self.viewport_size)
+                : self.block_container_explicit_block_size)
+            )
+          )
+        : explicit_block_content_size(
+            self.fragment_border_box_block_size,
+            (self.is_root || self.is_fixed
+              ? logical_size_from_physical_size(self.fragment_writing_mode, self.viewport_size)
+              : self.block_container_explicit_block_size)
+          );
+
+      child.block_container_inline_size := self.fragment_border_box_inline_size - self.fragment_border_padding;
+
+      child.block_container_writing_mode := self.writing_mode;
+
+      child.inline_coord := self.fragment_border_box_inline_coord + self.fragment_border_padding;
+    }
+  }
+}
+
+/*
+class InlineFlow : Flow {
+  children {
+    @access{child_iter_mut()}
+    children : [Flow];
+
+    //fragments : InlineFragments;
+    //lines : [Line];
+  }
+
+  attributes {
+    output first_line_indentation : Au;
+    //input minimum_line_metrics : LineMetrics; // opaque datatype
+
+    @access{minimum_line_metrics.space_above_baseline}
+    input space_above_baseline : Au;
+
+    @access{minimum_line_metrics.space_below_baseline}
+    input space_below_baseline : Au;
+
+    @access{minimum_line_metrics.space_below_baseline}
+    input line_ascent : Au;
+  }
+
+  evaluation {
+    // ...
+  }
+}
+*/
