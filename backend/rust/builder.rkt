@@ -12,93 +12,35 @@
 ; Generic program header
 
 (define header
-  (list `(extern crossbeam)
-        `(blank)
-        `(use std cell UnsafeCell)
-        `(use std time Instant)
-        `(blank)
-        `(use crossbeam thread *)
-        `(blank)
+  (list ;`(extern crossbeam)
+        ;`(blank)
+        ;`(use std cell UnsafeCell)
+        ;`(use std time Instant)
+        ;`(blank)
+        ;`(use crossbeam thread *)
+        ;`(blank)
         `(type int i32)
         `(type float f32)))
 
-; Generation of data structures
-
-(define (build-label-field label-ast)
-  (let ([name (ag-label-name label-ast)]
-        [type (ag-label-type label-ast)])
-    `(: ,name ,type)))
-
-(define (build-child-field child-ast)
-  (let ([name (ag-child-name child-ast)]
-        [seq? (ag-child-sequence child-ast)]
-        [type (ag-child-interface child-ast)])
-    `(: ,name (gen ,(if seq? 'Vec 'Box) (,type)))))
-
-(define (build-virtual-field iface-name)
-  `(: class ,(symbol-append iface-name 'Kind)))
-
-(define (build-class-fields class-ast)
-  (append (map build-label-field (ag-class-labels class-ast))
-          (map build-child-field (ag-class-children class-ast))))
-
-(define (build-interface-fields iface-ast)
-  (append (map build-label-field (ag-interface-labels iface-ast))
-          (list (build-virtual-field (ag-interface-name iface-ast)))))
-
-(define (build-interface-structure iface-ast)
-  `(struct
-     (constructor ,(ag-interface-name iface-ast)
-                  (record . ,(build-interface-fields iface-ast)))))
-
-(define (build-class-variant class-name)
-  `(constructor ,(symbol-append 'Is class-name)
-                (tuple ,class-name)))
-
-(define (build-class-enumeration iface-name class-names)
-  `(enum ,(symbol-append iface-name 'Kind) .
-         ,(map build-class-variant class-names)))
-
-(define (build-class-structure class-ast)
-  `(struct
-     (constructor ,(ag-class-name class-ast)
-                  (record . ,(build-class-fields class-ast)))))
-
-(define (build-types grammar)
-  (append*
-   (for/list ([(iface-name class-ast-list)
-               (in-dict (associate-classes grammar))])
-     (let ([iface-ast (get-interface grammar iface-name)]
-           [class-names (map ag-class-name class-ast-list)])
-       (list*
-        `(blank)
-        `(blank)
-        (build-interface-structure iface-ast)
-        `(blank)
-        (build-class-enumeration iface-name class-names)
-        `(use ,(symbol-append iface-name 'Kind) *)
-        `(blank)
-        (add-between (map build-class-structure class-ast-list) `(blank)))))))
-
-; Generation of traversal functions
+; Generation of traversal methods
 
 (define (build-variable node label)
   (match node
     [`(public self)
-     `(select self ,label)]
+     `(select (call (select self mut_base) ()) label)]
     [`(private self)
-     `(select class ,label)]
+     `(select self label)]
     [`(child ,object)
-     `(select (select class ,object) ,label)]
+     `(select (call (select (select self ,object) mut_base) ()) ,label)]
     [`(first ,children)
-     `(select (index (select class ,children) 0) ,label)]
+     `(select (call (select (index (select self ,children) 0) mut_base) ()) ,label)]
     [`(last ,children)
-     (let ([length `(call (select (select class ,children) len) ())])
-       `(select (index (select class ,children) (- ,length 1)) ,label))]
+     (let ([length `(call (select (select self ,children) len) ())])
+       `(select (call (select (index (select self ,children) (- ,length 1)) mut_base) ()) ,label))]
     [`(virtual ,object)
      (symbol-append label '_acc)]
     [`(cursor ,children)
-     `(select ,(symbol-append children '_cur) ,label)]))
+     `(select (call (select ,(symbol-append children '_cur) mut_base) ()) ,label)]))
 
 (define (build-expression expression)
   (define/match (recur expr)
@@ -126,29 +68,31 @@
     [(`(:= (attr ,node ,label) ,expr))
      `(:= ,(build-variable node label) ,(build-expression expr))]
     [(`(iter ,children ,body))
-     `(for ,(symbol-append children '_cur) (call (select (select class ,children) iter_mut) ())
+     `(for ,(symbol-append children '_cur) (call (select (select self ,children) iter_mut) ())
         ,(recur body))]
     [(`(recur (cursor ,children)))
-     `(call (select ,(symbol-append children '_cur) ,trav-name) ())]
+     ;`(call (select ,(symbol-append children '_cur) ,trav-name) ())
+     `(skip)]
     [(`(recur (child ,child)))
      `(call (select (select class ,child) ,trav-name) ())])
   (recur statement))
 
-(define (build-class-visitor trav-name visitor-case)
-  (match visitor-case
-    [`(=> ,class-name ,visitor-stmt)
-     `(=> (constructor ,(symbol-append 'Is class-name) (tuple (ref (mut class))))
-          ,(build-statement trav-name visitor-stmt))]))
+;(define (build-class-visitor trav-name visitor-case)
+;  (match visitor-case
+;    [`(=> ,class-name ,visitor-stmt)
+;     `(=> (constructor ,(symbol-append 'Is class-name) (tuple (ref (mut class))))
+;          ,(build-statement trav-name visitor-stmt))]))
 
-(define (build-interface-visitor trav-name visitor)
+(define (build-visitors-for-interface trav-name visitor)
   (match visitor
     [`(: ,iface-name (case ,visitor-cases ...))
-     `(impl
-       ,iface-name
-       (fn ,trav-name ((: self (ref (mut Self)))) (unit)
-           (do (match (ref (mut (select self class))) .
-                 ,(map (curry build-class-visitor trav-name)
-                       visitor-cases)))))]))
+     (for/list ([visitor-case visitor-cases])
+       (match visitor-case
+         [`(=> ,class-name ,visitor-stmt)
+          `(impl
+            (for ,iface-name ,class-name)
+            (fn ,trav-name ((: self (ref (mut Self)))) (unit)
+                ,(build-statement trav-name visitor-stmt)))]))]))
 
 (define (build-visitors schedule)
   (define/match (recur sched)
@@ -157,7 +101,7 @@
     [(`(par ,left-sched ,right-sched))
      (append (recur left-sched) (recur right-sched))]
     [(`(trav ,order ,visitor-list ...))
-     (map (curry build-interface-visitor order) visitor-list)])
+     (append-map (curry build-visitors-for-interface order) visitor-list)])
   (recur schedule))
 
 ; Generation of whole program/module
@@ -189,6 +133,6 @@
 
 (define (build-program grammar schedule)
   (append header
-          (build-types grammar)
           (add-between (build-visitors schedule) `(blank))
-          (list `(blank) (build-evaluator (ag-grammar-root grammar) schedule 'evaluate))))
+          ;(list `(blank) (build-evaluator (ag-grammar-root grammar) schedule 'evaluate))
+          ))

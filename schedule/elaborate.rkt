@@ -24,6 +24,12 @@
 (define (public? label)
   (not (lookup-label (ag-class-labels class-ast) label)))
 
+(define (label->access object label)
+  (lookup-path grammar class-ast object label))
+
+(define (child->access child-name)
+  (ag-child-access (lookup-child (ag-class-children class-ast) child-name)))
+
 (define (associate-visitors visitors)
   (associate-by (compose ag-class-interface (curry get-class grammar) car)
                 visitors))
@@ -154,18 +160,19 @@
   (recur expression))
 
 (define (elab-attr object index label #:loop [child #f])
-  (cond
-    [(equal? index 'first)
-     `(attr (first ,object) ,label)]
-    [(equal? index 'last)
-     `(attr (last ,object) ,label)]
-    [(equal? index 'previous)
-     `(attr (virtual ,object) ,label)]
-    [(equal? object 'self)
-     (if (public? label)
-         `(attr (public self) ,label)
-         `(attr (private self) ,label))]
-    [(equal? object child)
-     `(attr (cursor ,object) ,label)]
-    [(not index)
-     `(attr (child ,object) ,label)]))
+  (let ([path (label->access object label)])
+    (cond
+      [(equal? index 'first)
+       `(attr (first ,object) ,path)]
+      [(equal? index 'last)
+       `(attr (last ,object) ,path)]
+      [(equal? index 'previous)
+       `(attr (virtual ,object) ,path)]
+      [(equal? object 'self)
+       (if (public? label)
+           `(attr (public self) ,path)
+           `(attr (private self) ,path))]
+      [(equal? object child)
+       `(attr (cursor ,object) ,path)]
+      [(not index)
+       `(attr (child ,object) ,path)])))

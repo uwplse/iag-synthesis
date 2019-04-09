@@ -183,6 +183,7 @@
 ;;        | `(match ,expr ,match-case ...)
 ;;        | `(for ,name ,expr ,body)
 ;;        | `(return ,expr)
+;;        | `(skip)
 ;;        | expr
 (define/match (print-statement statement)
   [(`(if ,cond-expr ,then-body ,else-body))
@@ -216,6 +217,8 @@
    (display "return ")
    (print-expression expr)
    (display ";")]
+  [(`(skip))
+   (void)]
   [(expr)
    (print-expression expr)
    (display ";")])
@@ -268,6 +271,7 @@
 ;;        | `(struct ,cons)
 ;;        | `(enum ,name ,cons ...)
 ;;        | `(impl ,name ,func ...)
+;;        | `(impl (for ,trait ,name) ,func ...)
 ;;        | func
 ;;        | `blank
 ;;        | `(comment ,text)
@@ -292,6 +296,10 @@
   [(`(enum ,name ,constructor-list ...))
    (printf "pub enum ~a" name)
    (print-each print-constructor constructor-list " {" "}" #:indent? #t)
+   (newline)]
+  [(`(impl (for ,trait ,name) ,function-list ...))
+   (printf "impl ~a for ~a" trait name)
+   (print-each print-function function-list " {" "}" #:separator "" #:indent? #t)
    (newline)]
   [(`(impl ,name ,function-list ...))
    (printf "impl ~a" name)
