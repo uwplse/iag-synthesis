@@ -182,7 +182,7 @@
    (start decl-list)
    (tokens tkns e-tkns)
    (end EOF)
-   (error (thunk (display "Error: could not parse attribute grammar source")))
+   (error (λ (_ token lexeme) (printf "Unexpected token: ~a(~a)~n" token lexeme)))
    (grammar
     (decl-list
      ((decl decl-list) (cons $1 $2))
@@ -193,11 +193,12 @@
 
     (quot-path
      ((quot-path-item DOT quot-path) (cons $1 $3))
-     (() null))
+     ((quot-path-item) (list $1)))
 
     (quot-path-item
      ((IDENT LPAREN quot-const-list RPAREN) (cons $1 $3))
-     ((IDENT) $1))
+     ((IDENT) $1)
+     ((CHILDREN) 'children))
 
     (quot-const-list
      ((IDENT COMMA quot-const-list) (cons $1 $3))
