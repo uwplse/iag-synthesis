@@ -35,7 +35,7 @@
   (let* ([port (open-input-file filename #:mode 'text)]
          [grammar (ag-normalize root (ag-parse port))])
     (close-input-port port)
-    (ag-typecheck grammar)
+    ;(ag-typecheck grammar)
     grammar))
 
 (define (display-grammar grammar)
