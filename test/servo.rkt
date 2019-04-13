@@ -51,7 +51,7 @@
 (when servo-schedule
   (displayln (serialize-schedule servo-schedule))
   (newline)
-  (displayln "Elaborating sample schedule...")
-  (newline)
-  (displayln "Generating Rust visitors to implement schedule...")
-  (rust:print (build-program servo-schedule)))
+  (displayln "Compiling traversal schedule into Rust...")
+  (parameterize ([current-output-port (open-output-file "synthesized.rs" #:mode 'text)])
+    (rust:print (build-program servo-schedule)))
+  (displayln "To use the generated source file, move it to 'servo/components/layout/'."))
