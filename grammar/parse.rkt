@@ -2,107 +2,48 @@
 
 ; Parser and serializer for language of attribute grammars
 
-(require "syntax.rkt"
+(require "../utility.rkt"
+         "syntax.rkt"
          parser-tools/lex
          (prefix-in : parser-tools/lex-sre)
          parser-tools/yacc)
 
-(provide ag-parse
-         ag-serialize)
+(provide parse-grammar
+         file->grammar
+         serialize-grammar)
 
 ; ----------------
 ; Lexer Definition
 ; ----------------
 
 (define-empty-tokens e-tkns (TRAVERSAL
+                             CASE
+                             ITERATE
                              RECUR
                              VISIT
                              INTERFACE
+                             CLASS
                              RBRACE
                              LBRACE
+                             CHILD
+                             CHILDREN
                              INPUT
                              OUTPUT
-                             TRAIT
-                             CLASS
-                             CHILDREN
-                             ATTRIBUTES
-                             EVALUATION
-                             ACCESS
-                             LOOP
-                             DEFINE
-                             FOLD
-                             FIRST
-                             CURRENT
-                             PREVIOUS
-                             LAST
-                             DOTDOT
+                             METHOD
+                             READ
+                             WRITE
+                             SELF
                              SEMICOLON
-                             CONDITION
                              COLON
-                             PLUS
-                             MINUS
-                             AND
-                             OR
-                             DIVIDE
-                             MULTIPLY
                              LPAREN
                              RPAREN
                              LBRACKET
                              RBRACKET
                              COMMA
                              DOT
-                             GT
-                             LT
-                             GE
-                             LE
-                             EQ
-                             NE
-                             NOT
                              EOF))
 
-(define-tokens tkns (IDENT
-                     LITERAL))
-
-(define-lex-trans integer
-  (syntax-rules ()
-    ((_)
-     (:: (:? (:or "-" "+"))
-         (:+ (char-range "0" "9"))))))
-
-(define-lex-trans exponent
-  (syntax-rules ()
-    ((_)
-     (:: (:or "e" "E") (:? (:or "+" "-")) (:+ (char-range "0" "9"))))))
-
-(define-lex-trans float
-  (syntax-rules ()
-    ((_)
-     (:: (:? (:or "-" "+"))
-         (:or (:: (:+ (char-range "0" "9")) "." (:* (char-range "0" "9")) (:? (exponent)) (:? "f"))
-              (:: "." (:+ (char-range "0" "9")) (:? (exponent)))
-              (:: (:+ (char-range "0" "9")) (exponent)))))))
-
-(define-lex-trans number
-  (syntax-rules ()
-    ((_)
-     (:or (integer) (float)))))
-
-(define-lex-trans alphabetic
-  (syntax-rules ()
-    ((_)
-     (:or (char-range "a" "z") (char-range "A" "Z") "_"))))
-
-(define-lex-trans alphanumeric
-  (syntax-rules ()
-    ((_)
-     (:or (char-range "a" "z") (char-range "A" "Z") (char-range "0" "9") "_"))))
-
-(define-lex-trans identifier
-  (syntax-rules ()
-    ((_)
-     (:: (alphabetic) (:* (alphanumeric))
-         (:? (:: "::" (alphabetic) (:* (alphanumeric))))
-         (:? (:: "<" (alphabetic) (:* (alphanumeric)) ">"))))))
+(define-tokens tkns (IDENT))
 
 (define-lex-trans comment
   (syntax-rules ()
@@ -110,423 +51,258 @@
      (:or (:: "//" (:* (char-complement (:or "\r" "\n"))) (:? "\r") "\n")
           (:: "/*" (complement (:: any-string "*/" any-string)) "*/")))))
 
-(define-lex-trans string
+(define-lex-trans integer
   (syntax-rules ()
     ((_)
-     (:: "\""
-         (:* (:? (:: "\\" (:or "\\" "\"")))
-             (char-complement (:or "\\" "\"")))
-         "\""))))
+     (:: (:? (:or "-" "+"))
+         (:+ (char-range "0" "9"))))))
 
-(define ag-lex
+(define-lex-trans identifier
+  (syntax-rules ()
+    ((_)
+     (:: (:or (char-range "a" "z") (char-range "A" "Z") "_")
+         (:* (:or (char-range "a" "z") (char-range "A" "Z") "_" (char-range "0" "9")))))))
+
+(define lex
   (lexer
-   [(comment) (ag-lex input-port)]
-   ["true" (token-LITERAL #t)]
-   ["false" (token-LITERAL #f)]
+   [(comment) (lex input-port)]
    ["traversal" (token-TRAVERSAL)]
+   ["case" (token-CASE)]
+   ["iterate" (token-ITERATE)]
    ["recur" (token-RECUR)]
    ["visit" (token-VISIT)]
    ["interface" (token-INTERFACE)]
    ["}" (token-RBRACE)]
    ["{" (token-LBRACE)]
+   ["child" (token-CHILD)]
+   ["children" (token-CHILDREN)]
    ["input" (token-INPUT)]
    ["output" (token-OUTPUT)]
-   ["trait" (token-TRAIT)]
    ["class" (token-CLASS)]
-   ["children" (token-CHILDREN)]
-   ["attributes" (token-ATTRIBUTES)]
-   ["evaluation" (token-EVALUATION)]
-   ["@access" (token-ACCESS)]
-   ["loop" (token-LOOP)]
-   [":=" (token-DEFINE)]
-   ["fold" (token-FOLD)]
-   [".." (token-DOTDOT)]
+   ["method" (token-METHOD)]
+   ["read" (token-READ)]
+   ["write" (token-WRITE)]
+   ["self" (token-SELF)]
    [";" (token-SEMICOLON)]
-   ["?" (token-CONDITION)]
    [":" (token-COLON)]
-   ["+" (token-PLUS)]
-   ["-" (token-MINUS)]
-   ["&&" (token-AND)]
-   ["||" (token-OR)]
-   ["/" (token-DIVIDE)]
-   ["*" (token-MULTIPLY)]
    ["(" (token-LPAREN)]
    [")" (token-RPAREN)]
    ["[" (token-LBRACKET)]
    ["]" (token-RBRACKET)]
-   ["," (token-COMMA)]
    ["." (token-DOT)]
-   [">" (token-GT)]
-   ["<" (token-LT)]
-   [">=" (token-GE)]
-   ["<=" (token-LE)]
-   ["==" (token-EQ)]
-   ["!=" (token-NE)]
-   ["!" (token-NOT)]
-   ["$0" (token-FIRST)]
-   ["$i" (token-CURRENT)]
-   ["$-" (token-PREVIOUS)]
-   ["$$" (token-LAST)]
-   [(number) (token-LITERAL (string->number lexeme))]
+   ["," (token-COMMA)]
    [(identifier) (token-IDENT (string->symbol lexeme))]
-   [(string) (token-LITERAL (read lexeme))]
-   [whitespace (ag-lex input-port)]
+   [whitespace (lex input-port)]
    [(eof) (token-EOF)]))
 
 ; -----------------
 ; Parser Definition
 ; -----------------
 
-(define ag-parse-lexed
+(define parse
   (parser
-   (start decl-list)
+   (start program)
    (tokens tkns e-tkns)
    (end EOF)
    (error (λ (_ token lexeme) (printf "Unexpected token: ~a(~a)~n" token lexeme)))
    (grammar
-    (decl-list
-     ((decl decl-list) (cons $1 $2))
+    (program
+     ((traversal-list interface-list class-list) (ag-grammar $2 $3 $1)))
+
+    (traversal-list
+     ((traversal traversal-list) (cons $1 $2))
      (() null))
 
-    (annot-access
-     ((ACCESS LBRACE quot-path RBRACE) $3))
-
-    (quot-path
-     ((quot-path-item DOT quot-path) (cons $1 $3))
-     ((quot-path-item) (list $1)))
-
-    (quot-path-item
-     ((IDENT LPAREN quot-const-list RPAREN) (cons $1 $3))
-     ((IDENT) $1)
-     ((CHILDREN) 'children))
-
-    (quot-const-list
-     ((IDENT COMMA quot-const-list) (cons $1 $3))
-     ((IDENT) (list $1))
+    (interface-list
+     ((interface interface-list) (cons $1 $2))
      (() null))
 
-    (decl
-     ((trav-decl) $1)
-     ((iface-decl) $1)
-     ((trait-decl) $1)
-     ((class-decl) $1))
-
-    (trav-decl
-     ((TRAVERSAL IDENT LBRACE trav-form-list RBRACE) (ag-traversal $2 $4)))
-
-    (trav-form-list
-     ((trav-form trav-form-list) (cons $1 $2))
+    (class-list
+     ((class class-list) (cons $1 $2))
      (() null))
 
-    (trav-form
-     ((IDENT LBRACE trav-part-list RBRACE) (cons $1 $3)))
+    (traversal
+     ((TRAVERSAL IDENT LBRACE traversal-case-list RBRACE) (cons $2 $4)))
 
-    (trav-part-list
-     ((trav-part SEMICOLON trav-part-list) (cons $1 $3))
-     ((trav-part trav-part-list) (cons $1 $2))
+    (traversal-case-list
+     ((traversal-case traversal-case-list) (cons $1 $2))
      (() null))
 
-    (trav-part
-     ((VISIT) (ag-trav-visit))
-     ((RECUR IDENT) (ag-trav-recur $2))
-     ((LOOP IDENT LBRACE trav-loop-part-list RBRACE) (ag-trav-loop $2 $4)))
+    (traversal-case
+     ((CASE IDENT LBRACE traversal-step-list RBRACE) (cons $2 $4)))
 
-    (trav-loop-part-list
-     ((trav-loop-part SEMICOLON trav-loop-part-list) (cons $1 $3))
-     ((trav-loop-part trav-loop-part-list) (cons $1 $2))
+    (traversal-step-list
+     ((traversal-step traversal-step-list) (cons $1 $2))
      (() null))
 
-    (trav-loop-part
-     ((VISIT) (ag-trav-visit))
-     ((RECUR) (ag-trav-recur (void))))
+    (traversal-step
+     ((VISIT SELF SEMICOLON) (ag-visit)) ; TODO: Support visits of other nodes?
+     ((RECUR field SEMICOLON) (ag-recur $2))
+     ((ITERATE field LBRACE traversal-step-list RBRACE) (ag-iterate $2 $4)))
 
-    (class-decl
+    (interface
+     ((INTERFACE IDENT LBRACE input-list output-list RBRACE)
+      (cons $2 (ag-interface $4 $5))))
+
+    (class
      ((CLASS IDENT COLON IDENT
-             LBRACE class-body RBRACE) (ag-class $2 null $4 $6))
-     ((CLASS IDENT LPAREN trait-list RPAREN COLON IDENT
-             LBRACE class-body RBRACE) (ag-class $2 $4 $7 $9)))
-
-    (trait-list
-     ((IDENT COMMA trait-list) (cons $1 $3))
-     ((IDENT) (list $1)))
-
-    (iface-decl
-     ((annot-access INTERFACE IDENT LBRACE label-list RBRACE) (ag-interface $3 $5 $1))
-     ((INTERFACE IDENT LBRACE label-list RBRACE) (ag-interface $2 $4 #f)))
-
-    (trait-decl
-     ((TRAIT IDENT LBRACE class-body RBRACE) (ag-trait $2 $4)))
-
-    (class-body
-     ((class-body-block class-body) (ag-body-merge $1 $2))
-     (() (ag-body null null null)))
-
-    (class-body-block
-     ((CHILDREN LBRACE child-list RBRACE) (ag-body $3 null null))
-     ((ATTRIBUTES LBRACE label-list RBRACE) (ag-body null $3 null))
-     ((EVALUATION LBRACE rule-or-loop-list RBRACE) (ag-body null null $3)))
+             LBRACE child-list children-list input-list output-list method-list RBRACE)
+      (cons $2 (ag-class $4 $6 $7 $8 $9 $10))))
 
     (child-list
      ((child child-list) (cons $1 $2))
      (() null))
 
-    (child
-     ((annot-access IDENT COLON child-type SEMICOLON) (ag-child $2 (car $4) (cdr $4) $1))
-     ((IDENT COLON child-type SEMICOLON) (ag-child $1 (car $3) (cdr $3) $1)))
-
-    (child-type
-     ((IDENT) (cons #f $1))
-     ((LBRACKET IDENT RBRACKET) (cons #t $2)))
-
-    (label-list
-     ((label label-list) (cons $1 $2))
+    (children-list
+     ((children children-list) (cons $1 $2))
      (() null))
+
+    (input-list
+     ((input input-list) (cons $1 $2))
+     (() null))
+
+    (output-list
+     ((output output-list) (cons $1 $2))
+     (() null))
+
+    (method-list
+     ((method method-list) (cons $1 $2))
+     (() null))
+
+    (child
+     ((CHILD field COLON IDENT SEMICOLON) (cons $2 $4)))
+
+    (children
+     ((CHILDREN field COLON IDENT SEMICOLON) (cons $2 $4)))
+
+    (input
+     ((INPUT field SEMICOLON) $2))
+
+    (output
+     ((OUTPUT field SEMICOLON) $2))
+
+    (method
+     ((METHOD SELF DOT IDENT parameter LBRACE read-list write-list RBRACE)
+      (cons (list 'self $4) (ag-method $5 $7 $8))))
+
+    (parameter
+     ((LPAREN RPAREN) null)
+     ((LPAREN IDENT RPAREN) (list $2)))
+
+    (read-list
+     ((read read-list) (cons $1 $2))
+     (() null))
+
+    (read
+     ((READ field SEMICOLON) $2))
+
+    (write-list
+     ((write write-list) (cons $1 $2))
+     (() null))
+
+    (write
+     ((WRITE field SEMICOLON) $2))
+
+    (field
+     ((SELF selector) (cons 'self $2)))
+
+    (selector
+     ((DOT label selector) (cons $2 $3))
+     ((DOT label) (list $2)))
 
     (label
-     ((annot-access label-io IDENT COLON IDENT SEMICOLON) (ag-label $2 $3 $5 $1))
-     ((label-io IDENT COLON IDENT SEMICOLON) (ag-label $1 $2 $4 $2)))
-
-    (label-io
-     ((INPUT) #t)
-     ((OUTPUT) #f))
-
-    (rule-or-loop-list
-     ((rule-or-loop rule-or-loop-list) (cons $1 $2))
-     (() null))
-
-    (rule-or-loop
-     ((rule) $1)
-     ((loop) $1))
-
-    (rule
-      ((IDENT DEFINE expr SEMICOLON) (ag-rule (cons 'self $1) $3))
-      ((IDENT DOT IDENT DEFINE expr SEMICOLON) (ag-rule (cons $1 $3) $5)))
-
-    (loop
-     ((LOOP IDENT LBRACE loop-rule-list RBRACE) (ag-loop $2 $4)))
-
-    (loop-rule-list
-     ((loop-rule loop-rule-list) (cons $1 $2))
-     (() null))
-
-    (loop-rule
-     ((IDENT DEFINE fold SEMICOLON) (ag-rule (cons 'self $1) $3))
-     ((IDENT DOT IDENT DEFINE fold SEMICOLON) (ag-rule (cons $1 $3) $5)))
-
-    (fold
-     ((expr) $1)
-     ((FOLD expr DOTDOT expr) (ag-fold $2 $4)))
-
-    (expr
-     ((cond-expr) $1))
-
-    (cond-expr
-     ((and-expr) $1)
-     ((and-expr CONDITION and-expr COLON and-expr) (ag-expr-condition $1 $3 $5)))
-
-    (and-expr
-     ((or-expr) $1)
-     ((or-expr AND and-expr) (ag-expr-binary $1 '&& $3)))
-
-    (or-expr
-     ((comp-expr) $1)
-     ((comp-expr OR or-expr) (ag-expr-binary $1 '|| $3)))
-
-    (comp-expr
-     ((term) $1)
-     ((NOT term) (ag-expr-unary '! $2))
-     ((term GT term) (ag-expr-binary $1 '> $3))
-     ((term LT term) (ag-expr-binary $1 '< $3))
-     ((term GE term) (ag-expr-binary $1 '>= $3))
-     ((term LE term) (ag-expr-binary $1 '<= $3))
-     ((term EQ term) (ag-expr-binary $1 '== $3))
-     ((term NE term) (ag-expr-binary $1 '!= $3)))
-
-    (term
-     ((factor) $1)
-     ((factor PLUS term) (ag-expr-binary $1 '+ $3))
-     ((factor MINUS term) (ag-expr-binary $1 '- $3)))
-
-    (factor
-     ((prim-expr) $1)
-     ((prim-expr MULTIPLY factor) (ag-expr-binary $1 '* $3))
-     ((prim-expr DIVIDE factor) (ag-expr-binary $1 '/ $3)))
-
-    (prim-expr
-     ((MINUS prim-expr) (ag-expr-unary '- $2))
-     ((attr-expr) $1)
-     ((LITERAL) $1)
-     ((IDENT LPAREN arg-list RPAREN) (ag-expr-call $1 $3))
-     ((IDENT LPAREN RPAREN) (ag-expr-call $1 null))
-     ((LPAREN expr RPAREN) $2))
-
-    (attr-expr
-     ((IDENT) (ag-expr-reference 'self #f $1))
-     ((IDENT DOT IDENT) (ag-expr-reference $1 #f $3))
-     ((IDENT FIRST DOT IDENT) (ag-expr-reference $1 'first $4))
-     ((IDENT CURRENT DOT IDENT) (ag-expr-reference $1 'current $4))
-     ((IDENT PREVIOUS DOT IDENT) (ag-expr-reference $1 'previous $4))
-     ((IDENT LAST DOT IDENT) (ag-expr-reference $1 'last $4)))
-
-    (arg-list
-     ((expr COMMA arg-list) (cons $1 $3))
-     ((expr) (list $1))))))
+     ((IDENT) $1)
+     ((TRAVERSAL) 'traversal)
+     ((CASE) 'case)
+     ((ITERATE) 'iterate)
+     ((RECUR) 'recur)
+     ((VISIT) 'visit)
+     ((INTERFACE) 'interface)
+     ((CLASS) 'class)
+     ((CHILD) 'child)
+     ((CHILDREN) 'children)
+     ((INPUT) 'input)
+     ((OUTPUT) 'output)
+     ((READ) 'read)
+     ((WRITE) 'write)
+     ((METHOD) 'method)))))
 
 ; Take an input port and return an abstract syntax tree for the attribute grammar.
-(define (ag-parse input)
-  (ag-parse-lexed (thunk (ag-lex input))))
+(define (parse-grammar port)
+  (parse (thunk (lex port))))
+
+(define file->grammar (curry with-input-file parse-grammar))
 
 ; -----------------
 ; AST Serialization
 ; -----------------
 
-(define (ag-serialize ast-list)
-  (string-join (for/list ([decl ast-list])
-                 (cond
-                   [(ag-traversal? decl)
-                    (error 'ag-serialize "Traversal serialization is unimplemented")]
-                   [(ag-interface? decl)
-                    (ag-interface-serialize decl)]
-                   [(ag-trait? decl)
-                    (ag-trait-serialize decl)]
-                   [(ag-class? decl)
-                    (ag-class-serialize decl)]))
-               "\n"))
+(define/match (serialize-grammar grammar)
+  [((ag-grammar iface-list class-list trav-list))
+   (string-append
+    (string-append* (map serialize-traversal trav-list))
+    (string-append* (map serialize-interface iface-list))
+    (string-append* (map serialize-class class-list)))])
 
-(define (ag-interface-serialize interface-ast)
-  (match-let ([(ag-interface name labels _) interface-ast]) ; FIXME
-    (string-append "interface "
-                   (symbol->string name)
-                   " {\n"
-                   (string-join (map ag-label-serialize
-                                     labels)
-                                "\n")
-                   "\n}\n")))
+(define/match (serialize-traversal trav)
+  [((cons name case-list))
+   (format "\ntraversal ~a {\n~a\n}\n"
+           name
+           (string-join (map serialize-traversal-case case-list) "\n"))])
 
-(define (ag-label-serialize label-ast)
-  (match-let ([(ag-label input name type _) label-ast]) ; FIXME
-    (string-append "    "
-                   (if input "input" "var")
-                   " "
-                   (symbol->string name)
-                   " : "
-                   (symbol->string type) ";")))
+(define/match (serialize-traversal-case case)
+  [((cons class-name step-list))
+    (format "  case ~a {\n~a\n  }"
+            class-name
+            (string-join (map serialize-traversal-step step-list) "\n"))])
 
-(define (ag-trait-serialize trait-ast)
-  (match-let ([(ag-trait name body) trait-ast])
-    (string-append "trait "
-                   (symbol->string name)
-                   " {\n"
-                   (ag-body-serialize body)
-                   "\n}\n")))
+(define/match (serialize-traversal-step step)
+  [((ag-visit))
+   (format "    visit self;")]
+  [((ag-recur node))
+   (format "    recur ~a;"
+           (path->string node))]
+  [((ag-iterate node step-list))
+   (format "    iterate ~a {\n~a\n    }"
+           (path->string node)
+           (string-join (map serialize-traversal-step step-list) "\n"))])
 
-(define (ag-class-serialize class-ast)
-  (match-let ([(ag-class name traits interface body) class-ast])
-    (define trait-list
-      (if (null? traits)
-          ""
-          (string-append "(" (string-join (map symbol->string traits) ",") ")")))
+(define/match (serialize-interface iface)
+  [((cons name (ag-interface input-list output-list)))
+   (format "\ninterface ~a {\n~a\n~a\n}\n"
+           name
+           (string-join (map serialize-input input-list) "\n")
+           (string-join (map serialize-output output-list) "\n"))])
 
-    (string-append "class "
-                   (symbol->string name)
-                   trait-list
-                   " : "
-                   (symbol->string interface)
-                   " {\n"
-                   (ag-body-serialize body)
-                   "}\n")))
+(define (serialize-input field)
+  (format "  input ~a;" (path->string field)))
 
-(define (ag-body-serialize body-ast)
-  (match-let ([(ag-body children labels rules) body-ast])
-    (string-append "    children {\n"
-                   (serialize-children children)
-                   "\n    }\n"
-                   "    attributes {\n"
-                   (serialize-labels labels)
-                   "\n    }\n"
-                   "    evaluation {\n"
-                   (serialize-rules rules 8)
-                   "\n    }\n")))
+(define (serialize-output field)
+  (format "  output ~a;" (path->string field)))
 
-(define (serialize-labels label-ast-list)
-  (string-join (for/list ([label-ast label-ast-list])
-                 (string-append (spaces 4)
-                                (ag-label-serialize label-ast)))
-               "\n"))
+(define/match (serialize-class class-ast)
+  [((cons name (ag-class iface child-list children-list input-list output-list method-list)))
+   (format "\nclass ~a : ~a {\n~a\n~a\n~a\n~a\n~a\n}\n"
+           name
+           iface
+           (string-join (map serialize-child child-list) "\n")
+           (string-join (map serialize-children children-list) "\n")
+           (string-join (map serialize-input input-list) "\n")
+           (string-join (map serialize-output output-list) "\n")
+           (string-join (map serialize-method method-list) "\n"))])
 
-(define (ag-child-serialize child-ast)
-  (match-let ([(ag-child name sequence interface _) child-ast]) ; FIXME
-    (let* ([ident (symbol->string name)]
-           [iface (symbol->string interface)]
-           [type (if sequence
-                     (string-append "[" iface "]")
-                     iface)])
-      (string-append "        " ident " : " type ";"))))
+(define/match (serialize-child child-ast)
+  [((cons name interface))
+   (format "  child ~a : ~a;" (path->string name) interface)])
 
-(define (serialize-children children-ast-list)
-  (string-join (map ag-child-serialize children-ast-list) "\n"))
+(define/match (serialize-children child-ast)
+  [((cons name interface))
+   (format "  children ~a : ~a;" (path->string name) interface)])
 
-(define (spaces depth)
-  (if (equal? depth 0)
-      ""
-      (string-append (spaces (- depth 1)) " ")))
-
-; This will accept folds, regardless of whether the evaluation rule was actually
-; in a loop context or not.
-(define (ag-rule-serialize rule-ast depth)
-  (match-let ([(ag-rule (cons object label) value) rule-ast])
-    (string-append (spaces depth)
-                   (symbol->string object)
-                   "."
-                   (symbol->string label)
-                   " := "
-                   (ag-fold-serialize value)
-                   ";")))
-
-(define (ag-loop-serialize loop-ast depth)
-  (match-let ([(ag-loop object rules) loop-ast])
-    (string-append (spaces depth)
-                   "loop "
-                   (symbol->string object)
-                   " {\n"
-                   (serialize-rules rules (+ depth 4))
-                   ;(spaces depth) ; FIXME: delete?
-                   "\n        }")))
-
-(define (serialize-rules rule-or-loop-ast-list depth)
-  (string-join (for/list ([rule-or-loop-ast rule-or-loop-ast-list])
-                 (if (ag-rule? rule-or-loop-ast)
-                     (ag-rule-serialize rule-or-loop-ast depth)
-                     (ag-loop-serialize rule-or-loop-ast depth)))
-               "\n"))
-
-(define/match (ag-fold-serialize fold-ast)
-  [((ag-fold seed step))
-   (string-append "fold (" (ag-expr-serialize seed) ") .. "
-                  "(" (ag-expr-serialize step) ")")]
-  [(expr)
-   (ag-expr-serialize expr)])
-
-(define/match (ag-expr-serialize expr-ast)
-  [((ag-expr-condition if then else))
-   (string-append "(" (ag-expr-serialize if) ") ? "
-                  "(" (ag-expr-serialize then) ") : "
-                  "(" (ag-expr-serialize else) ")")]
-  [((ag-expr-unary op e))
-   (string-append (symbol->string op)
-                  "(" (ag-expr-serialize e) ")")]
-  [((ag-expr-binary e1 op e2))
-   (string-append "(" (ag-expr-serialize e1) ") "
-                  (symbol->string op)
-                  " (" (ag-expr-serialize e2) ")")]
-  [((ag-expr-call name args))
-   (string-append (symbol->string name)
-                  "("
-                  (string-join (map ag-expr-serialize args) ",")
-                  ")")]
-  [((? ag-expr-reference?))
-   (ag-expr-reference->string expr-ast)]
-  [((? number?))
-   (number->string expr-ast)]
-  [((? boolean?))
-   (if expr-ast "true" "false")])
+(define/match (serialize-method method-ast)
+  [((cons name (ag-method params reads writes)))
+   (format "  method ~a(~a) {\n~a\n~a\n  }"
+           (path->string name)
+           (string-join (map symbol->string params) ", ")
+           (string-join (map (curry format "    read ~a;") (map path->string reads)) "\n")
+           (string-join (map (curry format "    write ~a;") (map path->string writes)) "\n"))])

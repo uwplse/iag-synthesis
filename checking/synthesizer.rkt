@@ -14,25 +14,15 @@
 (define (multichoose* n xs)
   (build-list n (thunk* (apply choose* xs))))
 
-(define (complete-sketch grammar hole-range sketch examples)
-  (let ([schedule (instantiate-sketch multichoose* hole-range grammar sketch)]
+(define (complete-sketch G sketch examples)
+  (let ([schedule (instantiate-sketch multichoose* G sketch)]
         [initial-time (current-milliseconds)])
 
     (for ([tree examples])
       (with-handlers ([exn:fail? (const #f)])
-        (let* (;; [allocate (λ (store name)
-               ;;             (cons (cons name (box #f)) store))]
-               ;; [initialize (λ (store name type)
-               ;;               (set-box! (lookup name store) #t)
-               ;;               store)]
-               ;; [validate (λ (store name)
-               ;;             (assert (unbox (lookup name store))))]
-               [allocate (λ (record label) record)]
-               [initialize (λ (record label type) (cons (cons label #t) record))]
-               [validate (λ (record label) (assert (lookup record label)))]
-               [tree (tree-annotate grammar tree (const null) allocate initialize)])
-          (interpret grammar schedule tree)
-          (tree-validate grammar tree validate))))
+        (let ([tree (tree-annotate G tree emp new upd)])
+          (interpret G schedule tree)
+          (tree-validate G tree lkup))))
 
     (match-let-values ([(running-time) (- (current-milliseconds) initial-time)]
                        [(nodes variables) (formula-size)]

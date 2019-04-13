@@ -1,11 +1,11 @@
-post {
-  Root { },
-  HBox { childs.width_out, childs.height_out } { self.width, self.height },
-  VBox { childs.width_out, childs.height_out } { self.width, self.height },
-  Leaf { self.width, self.height }
-} ;; pre {
-  Root { root.right, root.bottom, root.width_out, root.height_out },
-  HBox { childs.right, childs.bottom },
-  VBox { childs.right, childs.bottom },
-  Leaf { }
+traversal post {
+  case Root { recur self.root; self.init(); }
+  case HBox { recur self.childs; self.bound(); }
+  case VBox { recur self.childs; self.bound(); }
+  case Leaf { self.init(); }
+} ;; traversal pre {
+  case Root { recur self.root; }
+  case HBox { self.place(); recur self.childs; }
+  case VBox { self.place(); recur self.childs; }
+  case Leaf { skip; }
 }

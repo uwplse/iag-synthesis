@@ -3,106 +3,84 @@
 (require "../grammar/syntax.rkt"
          "syntax.rkt")
 
-(provide (all-defined-out))
+(provide instantiate-sketch
+         enumerate-sketches
+         synthesize-schedules)
 
-(define (block-contexts form)
-  (reverse
-   (for/fold ([result null])
-             ([part form])
-     (match part
-       [(ag-trav-visit) (cons #f result)]
-       [(ag-trav-loop child-seq loop-form)
-        (for/fold ([result result])
-                  ([loop-part loop-form])
-          (match loop-part
-            [(ag-trav-visit) (cons child-seq result)]
-            [_ result]))]
-       [_ result]))))
+; Collect the possible method calls in a class's visitor.
+(define (hole-range G class-name)
+  (map car (ag-class-methods (get-class G class-name))))
 
-; Analyze an attribute grammar and return a function mapping a classname and a
-; loop context (child-sequence name or #f) to the range of a program hole for a
-; slot in a visitor block for that class for a loop over the named child, if given.
-(define (make-hole-range grammar)
-  (define (rule->slot rule)
-    (match-let ([(ag-rule (cons object label) _) rule])
-      (sched-slot-eval object label)))
-
-  (define looped? (compose ag-loop? ag-rule-right))
-
-  (define loops-over (compose ag-loop-object ag-rule-right))
-
-  (define unlooped-slots-by-class
-    (for/list ([class-ast (ag-grammar-classes grammar)])
-      (let ([unlooped-rules (filter-not looped? (ag-class-rules class-ast))])
-        (cons (ag-class-name class-ast)
-              (cons (sched-slot-skip) (map rule->slot unlooped-rules))))))
-
-  (define looped-slots-by-child-by-class
-    (for/list ([class-ast (ag-grammar-classes grammar)])
-      (let ([looped-rules (filter looped? (ag-class-rules class-ast))])
-        (cons (ag-class-name class-ast)
-              (for/list ([looped-rules-for-child (group-by loops-over looped-rules)])
-                (cons (loops-over (first looped-rules-for-child))
-                      (cons (sched-slot-skip) (map rule->slot looped-rules-for-child))))))))
-
-  (λ (classname context)
-    (if context
-        (cdr (assoc context (cdr (assoc classname looped-slots-by-child-by-class))))
-        (cdr (assoc classname unlooped-slots-by-class)))))
-
-(define (instantiate-traversal-sketch multichoose hole-range grammar order visitors split)
-  (let ([traversal (get-traversal grammar order)])
+; Instantiate a traversal sketch for an attribute grammar G, given an
+; interpretation of (multi-)choice. Used to denote a traversal sketch as a
+; symbolic traversal.
+(define (instantiate-traversal-sketch multichoose G order visitors)
+  (let ([traversal (get-traversal G order)])
     (sched-traversal order
-                     (for/list ([visitor visitors])
-                       (let* ([classname (car visitor)]
-                              [form (cdr (assoc classname (ag-traversal-forms traversal)))])
-                         (cons classname
-                               (for/list ([block (cdr visitor)]
-                                          [context (block-contexts form)])
-                                 (let* ([range (hole-range classname context)]
-                                        [n (length range)]
-                                        [k (min n (ceiling (/ n split)))])
-                                   (if (sched-hole? block)
-                                       (multichoose k range)
-                                       (for/list ([slot block])
-                                         (if (sched-hole? slot)
-                                             (multichoose 1 range)
-                                             slot)))))))))))
+                     (for/list ([(class-name visitor-body) (in-dict visitors)])
+                       (cons class-name
+                             (for/list ([slot visitor-body])
+                               (if (sched-slot-hole? slot)
+                                   (let* ([range (hole-range G class-name)]
+                                          [k (length range)])
+                                     (multichoose k range))
+                                   ; TODO: What about iteration?
+                                   slot)))))))
 
-; Instantiate a schedule sketch using a provided construct for (multi-)choice to
-; construct symbolic representations of program holes of slots and/or blocks.
-(define (instantiate-sketch multichoose hole-range grammar sketch [split 1])
+; Instantiate a schedule sketch for an attribute grammar G, given an
+; interpretation of (multi-)choice. Used to denote a schedule sketch as a
+; symbolc schedule.
+(define (instantiate-sketch multichoose G sketch)
   (match sketch
     [(sched-sequential left right)
-     (sched-sequential (instantiate-sketch multichoose hole-range grammar left split)
-                       (instantiate-sketch multichoose hole-range grammar right split))]
+     (sched-sequential (instantiate-sketch multichoose G left)
+                       (instantiate-sketch multichoose G right))]
     [(sched-parallel left right)
-     (sched-parallel (instantiate-sketch multichoose hole-range grammar left split)
-                     (instantiate-sketch multichoose hole-range grammar right split))]
+     (sched-parallel (instantiate-sketch multichoose G left)
+                     (instantiate-sketch multichoose G right))]
     [(sched-traversal order visitors)
-     (instantiate-traversal-sketch multichoose hole-range grammar order visitors split)]))
+     (instantiate-traversal-sketch multichoose G order visitors)]))
 
-(define (enumerate-traversal-sketches grammar)
-  (for/list ([traversal (ag-grammar-traversals grammar)])
-    (sched-traversal (ag-traversal-name traversal)
-                     (for/list ([classname-form (ag-traversal-forms traversal)])
-                       (match-let ([(cons classname form) classname-form])
-                         (cons classname
-                               (map (const (sched-hole)) (block-contexts form))))))))
+(define/match (sketch-traversal statement)
+  [((ag-recur child))
+   (sched-recur child)]
+  [((ag-visit))
+   (sched-slot-hole)]
+  [((ag-iterate child body))
+   (sched-iterate child (sketch-traversal body))])
 
-(define (enumerate-schedule-sketches grammar passes traversals)
-  (if (= passes 1)
-      traversals
+; Enumerate traversal sketches for an attribute grammar G.
+(define (enumerate-traversal-sketches G)
+  (for/list ([(order visitor-list) (in-dict (ag-grammar-traversals G))])
+    (sched-traversal order
+                     null ; FIXME
+                     (for/list ([(class-name visitor-body) (in-dict visitor-list)])
+                       (cons class-name (map sketch-traversal visitor-body))))))
+
+; Enumerate schedule sketches for an attribute grammar G, bounded by the number
+; of traversal passes up to n, using the provided list of traversal sketches.
+(define (enumerate-schedule-sketches G n trav-sketch-list)
+  (if (= n 1)
+      trav-sketch-list
       (append
-       (if (= passes 2)
-           (for*/list ([left traversals]
-                       [right traversals])
+       (if (= n 2)
+           (for*/list ([left trav-sketch-list]
+                       [right trav-sketch-list])
              (sched-parallel left right))
            null)
-       (for*/list ([left traversals]
-                   [right (enumerate-schedule-sketches grammar (- passes 1) traversals)])
+       (for*/list ([left trav-sketch-list]
+                   [right (enumerate-schedule-sketches G (- n 1) trav-sketch-list)])
          (sched-sequential left right)))))
 
-(define (enumerate-sketches grammar passes)
-  (enumerate-schedule-sketches grammar passes (enumerate-traversal-sketches grammar)))
+; Enumerate schedule sketches for an attribute grammar G, bounded by the number
+; of traversal passes up to n.
+(define (enumerate-sketches G n)
+  (enumerate-schedule-sketches G n (enumerate-traversal-sketches G)))
+
+(define (synthesize-schedules G examples n synthesizer)
+  (for ([sketch (shuffle (enumerate-sketches G n))])
+    (printf "\n\n\n--------------------------------\n")
+    (displayln sketch)
+    (synthesizer G sketch examples)
+    (clear-asserts!)))
 

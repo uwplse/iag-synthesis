@@ -1,18 +1,17 @@
-bubble_inline_sizes {
-  BlockFlow { self.minimum_inline_size, self.preferred_inline_size } {  }
-} ;; assign_inline_sizes {
-  BlockFlow { } {
-    child.block_container_explicit_block_size,
-    child.block_container_inline_size,
-    child.block_container_writing_mode,
-    child.inline_coord
+traversal postorder {
+  case BlockFlow {
+    self.bubble_inline_sizes();
   }
-} ;; compute_stacking_relative_position {
-  BlockFlow {
-    child.stacking_relative_x,
-    child.stacking_relative_y
-  } {
-    self.stacking_relative_x_of_absolute_container,
-    self.stacking_relative_x_of_absolute_container
+} ;; traversal preorder {
+ case BlockFlow {
+   self.assign_inline_sizes(layout_context);
+ }
+} ;; traversal postorder {
+  case BlockFlow {
+    self.assign_block_size(layout_context);
+  }
+} ;; traversal preorder {
+  case BlockFlow {
+    self.compute_stacking_relative_position(layout_context);
   }
 }

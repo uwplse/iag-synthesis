@@ -5,9 +5,11 @@
 (provide (struct-out sched-parallel)
          (struct-out sched-sequential)
          (struct-out sched-traversal)
+         (struct-out sched-iterate)
+         (struct-out sched-recur)
          (struct-out sched-slot-skip)
-         (struct-out sched-slot-eval)
-         (struct-out sched-hole)
+         (struct-out sched-slot-call)
+         (struct-out sched-slot-hole)
          sched?
          sched-flatten)
 
@@ -20,12 +22,16 @@
 ; tree traversal
 (struct sched-traversal (order visitors) #:transparent)
 
-; block slots
-(struct sched-slot-skip () #:transparent)
-(struct sched-slot-eval (object label) #:transparent)
+; iterative loop
+(struct sched-iterate (child body) #:transparent)
 
-; program hole (for intermediate sketches only; will crash interpreter)
-(struct sched-hole () #:transparent)
+; recursive call (iterative when necessary)
+(struct sched-recur (child) #:transparent)
+
+; statement slots
+(struct sched-slot-hole () #:transparent)
+(struct sched-slot-skip () #:transparent)
+(struct sched-slot-call (method params) #:transparent)
 
 (define (sched? s)
   (or (sched-parallel? s) (sched-sequential? s) (sched-traversal? s)))

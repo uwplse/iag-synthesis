@@ -3,16 +3,16 @@
 ; Script to test Servo layout.
 
 (require racket/pretty
-         "../engine.rkt"
-         "../schedule/elaborate.rkt"
+         "../grammar/parse.rkt"
+         "../schedule/parse.rkt"
          "../backend/rust/builder.rkt"
          "../backend/rust/printer.rkt")
 
 (displayln "Parsing attribute grammar...")
-(define servo-grammar (read-grammar "benchmarks/servo/servo.grammar" 'Flow))
+(define servo-grammar (file->grammar "benchmarks/servo/servo.grammar"))
 
 (displayln "Parsing sample schedule...")
-(define servo-schedule (read-schedule "benchmarks/servo/servo.sched"))
+(define servo-schedule (file->schedule "benchmarks/servo/servo.sched"))
 
 ;(displayln "Generating attribute trees...")
 ;(define servo-examples (tree-examples servo-grammar))
@@ -49,11 +49,9 @@
 ;(displayln "Synthesizing a schedule to complete sketch...")
 ;(define servo-schedule (tracing:test-servo))
 (when servo-schedule
-  (display-schedule servo-schedule)
+  (displayln (serialize-schedule servo-schedule))
   (newline)
   (displayln "Elaborating sample schedule...")
-  (let ([servo-program (elaborate-schedule servo-grammar servo-schedule)])
-    (pretty-print servo-program)
-    (newline)
-    (displayln "Generating Rust visitors to implement schedule...")
-    (rust:print (build-program servo-grammar servo-program))))
+  (newline)
+  (displayln "Generating Rust visitors to implement schedule...")
+  (rust:print (build-program servo-schedule)))

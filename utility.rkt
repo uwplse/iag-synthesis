@@ -35,6 +35,12 @@
 
 (define (const* f) (thunk* (f)))
 
+(define (with-input-file f filename #:mode [mode 'text])
+  (let* ([port (open-input-file filename #:mode mode)]
+         [res (f port)])
+    (close-input-port port)
+    res))
+
 ; Compute the approximate size of a formula, where each unique occurrence of an
 ; AST node counts as 1. Returns two values: the number of unique AST nodes in the
 ; assertion store and the number of unique variables in the assertion store.
@@ -65,6 +71,10 @@
   (begin
     (set! x (+ x 1))
     x))
+
+(define (lookup lst x [same? equal?])
+  (let ([y (assoc x lst same?)])
+    (and y (cdr y))))
 
 (define (associate-by key lst [same? equal?])
   (map (λ (grp) (cons (key (first grp)) grp))

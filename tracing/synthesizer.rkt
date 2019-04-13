@@ -10,16 +10,16 @@
 
 (provide complete-sketch)
 
-(define (complete-sketch grammar hole-range sketch examples)
-  (let ([schedule (instantiate-sketch permute hole-range grammar sketch)]
+(define (complete-sketch G sketch examples)
+  (let ([schedule (instantiate-sketch permute G sketch)]
         [initial-time (current-milliseconds)])
 
     (for ([tree examples])
       (let* ([allocate (λ (table name) table)]
-             [initialize (λ (table name type) (table-def! table name) table)]
-             [tree (tree-annotate grammar tree make-table allocate initialize)])
-        (interpret grammar schedule tree)
-        (tree-validate grammar tree table-ref!)
+             [initialize (λ (table name) (table-def! table name))]
+             [tree (tree-annotate G tree make-table allocate initialize)])
+        (interpret G schedule tree)
+        (tree-validate G tree table-ref!)
         (break)))
 
     (match-let-values ([(running-time) (- (current-milliseconds) initial-time)]

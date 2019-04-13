@@ -39,7 +39,8 @@
    (display var)])
 
 ;; type ::= `(unit) | ref-type
-;; ref-type ::= `(ref ,gen-type) | `(ref (mut ,gen-type)) | gen-type
+;; ref-type ::= `(ref ,dyn-type) | `(ref (mut ,dyn-type)) | gen-type
+;; dyn-type ::= `(dyn ,gen-type) | gen-type
 ;; gen-type ::= `(gen ,global (,type ...)) | global
 (define/match (print-type type)
   [(`(unit))
@@ -49,6 +50,9 @@
    (print-type type)]
   [(`(mut ,type))
    (display "mut ")
+   (print-type type)]
+  [(`(dyn ,type))
+   (display "dyn ")
    (print-type type)]
   [(`(gen ,global ,arg-type-list))
    (print-global global)
@@ -280,6 +284,11 @@
    (newline)]
   [(`(extern ,package))
    (printf "extern crate ~a;" package)
+   (newline)]
+  [(`(use ,namespace ... (,identifier ...)))
+   (printf "use ~a::{~a};"
+           (string-join (map symbol->string namespace) "::")
+           (string-join (map symbol->string identifier) ", "))
    (newline)]
   [(`(use ,namespace ...))
    (printf "use ~a;" (string-join (map symbol->string namespace) "::"))

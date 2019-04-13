@@ -120,7 +120,7 @@
      (let ([value expr])
        (if (permuted? value)
            (iter-permuted value (λ (name) body ...))
-           (for ([name value])
+           (let ([name value])
              body ...)))]
     [(for/permuted (binder bindings ...) body ...)
      (for/permuted (binder)

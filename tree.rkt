@@ -2,7 +2,8 @@
 
 ; Tree Data Structure
 
-(require xml
+(require racket/dict
+         xml
          "utility.rkt"
          "grammar/syntax.rkt")
 
@@ -10,13 +11,14 @@
          tree-copy
          xml->tree
          xexpr->tree
-         tree-object
-         tree-load
+         file->tree
+         tree-bind
          tree-annotate
          tree-validate
          tree-gather
          tree-examples)
 
+; TODO: Should really represent contents with a prefix tree.
 (struct tree (class [fields #:mutable] children) #:transparent)
 
 (define (tree-copy node #:rebox? [rebox? #f])
@@ -24,26 +26,22 @@
     (if rebox? (compose box unbox) identity))
 
   (define fields
-    (for/list ([field (tree-fields node)])
-      (let ([label (car field)]
-            [value (cdr field)])
-        (cons label (rebox value)))))
+    (for/list ([(label value) (in-dict (tree-fields node))])
+      (cons label (rebox value))))
 
   (define children
-    (for/list ([child (tree-children node)])
-      (let ([name (car child)]
-            [nodes (cdr child)])
-        (cons name
-              (if (list? nodes)
-                  (map tree-copy nodes)
-                  (tree-copy nodes #:rebox? rebox?))))))
+    (for/list ([(name subtree) (in-dict (tree-children node))])
+      (cons name
+            (if (list? subtree)
+                (map (λ (t) (tree-copy t #:rebox? rebox?)) subtree)
+                (tree-copy subtree #:rebox? rebox?)))))
 
   (tree (tree-class node) fields children))
 
 ; derive a quoted instance of an FTL tree structure for a grammar in IR form
 ; given an XML string
-(define (xml->tree grammar xml-string)
-  (xexpr->tree grammar (string->xexpr xml-string)))
+(define (xml->tree G xml-string)
+  (xexpr->tree G (string->xexpr xml-string)))
 
 ; Convert the X-expression tree into the internal tree representation. Tags are
 ; interpreted as classnames, and attribute values are parsed as Racket-serialized
@@ -52,106 +50,98 @@
 ; remaining child X-expressions. Therefore, this procedure only supports
 ; attribute grammars whose classes have at most one sequence child as their last-
 ; declared child.
-(define (xexpr->tree grammar xexpr #:boxed? [boxed? #f])
-  (match xexpr
-    [(list-rest classname
-                (and xattributes (list (list (? symbol?) (? string?))...))
-                xcontent)
-     (let* ([child-xexpr-list (filter list? xcontent)] ; filter out text
-            [child-tree-list (map (curry xexpr->tree grammar #:boxed? boxed?) child-xexpr-list)]
-            [class-ast (get-class grammar classname)]
-            [child-ast-list (ag-class-children class-ast)]
-            [label-ast-list (get-labels grammar class-ast)]
-            [read-value (compose read open-input-string)])
-
-       (define-values (_ children)
-         (for/fold ([input child-tree-list]
-                    [output null])
-                   ([child-ast child-ast-list])
-           (let ([label (ag-child-name child-ast)])
-             (if (ag-child-sequence child-ast)
-                 (values null
-                         (cons (cons label input) output))
-                 (values (rest input)
-                         (cons (cons label (first input)) output))))))
+(define (xexpr->tree G xexpr #:boxed? [boxed? #f])
+  (let ([recur (curry xexpr->tree G #:boxed? boxed?)])
+    (match xexpr
+      [(list-rest class-name
+                  (and xattributes (list (list (? symbol?) (? string?)) ...))
+                  xcontent)
+       (define children
+         (let*-values ([(subtrees) (map recur (filter list? xcontent))]
+                       [(child-nodes child-sequences)
+                        (get-class-children G class-name)]
+                       [(singles sequence)
+                        (split-at subtrees (length child-nodes))])
+           (append (for/list ([(child-name _) (in-dict child-nodes)]
+                              [subtree singles])
+                     (cons child-name subtree))
+                   (match child-sequences
+                     [null null]
+                     [(list name) (cons name sequence)]
+                     [_
+                      (raise-user-error 'xexpr->tre
+                                        "class ~a has multiple child sequences"
+                                        class-name)]))))
 
        (define attributes
          (if boxed?
-             (for/list ([label-ast label-ast-list])
-               (cons (ag-label-name label-ast) (box (void))))
+             (for/list ([attribute (get-class-attributes G class-name)])
+               (cons (attribute (box (void)))))
              null))
 
-       (for ([xattribute xattributes])
-         (match-let ([(list label value) xattribute])
+       (for ([(label value) (in-dict xattributes)])
+         (let ([value (read (open-input-string (first value)))])
            (if boxed?
-               (set-box! (cdr (assoc label attributes)) (read-value value))
-               (set! attributes (cons (cons label (read-value value)) attributes)))))
+               (set-box! (cdr (assoc label attributes)) value)
+               (set! attributes (cons (cons label value) attributes)))))
 
-       (tree classname attributes children))]
+       (tree class-name attributes children)]
+    
+      [(list-rest classname children)
+       (recur (list classname null children))]
 
-    [(list-rest classname children)
-     (xexpr->tree grammar (list classname null children))]
+      [_
+       (raise-arguments-error 'xexpr->tree
+                              "could not convert X-expression to tree"
+                              'xexpr xexpr)])))
 
-    [_
-     (raise-arguments-error 'xexpr->tree
-                            "could not convert X-expression to tree"
-                            'xexpr xexpr)]))
+(define (file->tree G filename)
+  (xml->tree G (file->string filename #:mode 'text)))
 
 ; Find the object (self, child node, or child node sequence) with the given name.
-(define (tree-object self object)
-  (if (eq? object 'self)
-      self
-      (cdr (assoc object (tree-children self)))))
+;(define (tree-object self object)
+;  (if (eq? object 'self)
+;      self
+;      (cdr (assoc object (tree-children self)))))
+
+(define/match (search lst p)
+  [((cons (cons q v) lst) p)
+   (let ([r (shift p q)])
+     (if r (cons r v) (search lst p)))]
+  [(null _)
+   #f])
+  
 
 ; Select the appropriate store for the object and index.
-(define (tree-load self reference lookup child-seq previous current virtual)
-  (let ([object (ag-expr-reference-object reference)]
-        [index (ag-expr-reference-index reference)]
-        [label (ag-expr-reference-label reference)])
-    (cond
-      [(equal? index 'previous)
-       (lookup previous (cons object label))]
-      [(and (equal? object child-seq) (or (equal? index 'current) (not index)))
-       (lookup (tree-fields current) label)]
-      [(equal? index 'current)
-       ;(lookup current label)
-       (lookup virtual (cons object label))
-       ]
-      [(not index)
-       (lookup (tree-fields (tree-object self object)) label)]
-      [(equal? index 'first)
-       (lookup (tree-fields (first (tree-object self object))) label)]
-      [(equal? index 'last)
-       (lookup (tree-fields (last (tree-object self object))) label)])))
+(define (tree-bind self proc path)
+  (match (search (tree-children self) path)
+    [(cons rest subtree)
+     (proc (tree-fields subtree) rest)]
+    [#f
+     (proc (tree-fields self) path)]))
 
 ; Annotate the tree with attribute information.
-(define (tree-annotate grammar node emp new upd)
-  (let ([class-ast (get-class grammar (tree-class node))]
-        [recurse (λ (node) (tree-annotate grammar node emp new upd))])
-    (tree (tree-class node)
-          (for/fold ([record (emp)])
-                    ([label-ast (get-labels grammar class-ast)])
-            (match-let* ([(ag-label input label type _) label-ast]
-                         [record (new record label)])
-              (if input
-                  (upd record label type)
-                  record)))
-          (for/list ([child (tree-children node)])
-            (cons (car child)
-                  (if (list? (cdr child))
-                      (map recurse (cdr child))
-                      (recurse (cdr child))))))))
+(define (tree-annotate G tree emp new upd)
+  (let* ([inputs (get-class-inputs G (tree-class tree))]
+         [outputs (get-class-outputs G (tree-class tree))]
+         [store (foldl (λ (l s) (new s l)) (emp) (append inputs outputs))])
+    (for-each (curry upd store) inputs)
+    (tree (tree-class tree)
+          store
+          (for/list ([(child subtree) (in-dict (tree-children tree))])
+            (cons child
+                  (if (list? subtree)
+                      (for ([node subtree])
+                        (tree-annotate G node emp new upd))
+                      (tree-annotate G subtree emp new upd)))))))
 
 ; Validate some property of every output attribute value.
-(define (tree-validate grammar tree validate)
-  (let ([class-ast (get-class grammar (tree-class tree))]
-        [store (tree-fields tree)])
-    (for ([label-ast (get-labels grammar class-ast)]
-          #:unless (ag-label-input label-ast))
-      (validate store (ag-label-name label-ast)))
-    (for* ([child (tree-children tree)]
-           [node (listify (cdr child))])
-      (tree-validate grammar node validate))))
+(define (tree-validate G tree validate)
+  (for ([label (get-class-outputs G (tree-class tree))])
+    (validate (tree-fields tree) label))
+  (for* ([(_ subtree) (in-dict (tree-children tree))]
+         [node (listify subtree)])
+    (tree-validate G node validate)))
 
 ; Collect all the nodes in the tree into a post-order list.
 (define (tree-gather tree [nodes null])
@@ -169,45 +159,45 @@
 
 ; Return a set of example tree skeletons that include every parent-child class
 ; pairing permitted by the grammar.
-(define (tree-examples grammar)
-  (define instances (associate-classes grammar))
+(define (tree-examples G root)
+  (define instances (associate-classes G))
 
   (define (find-leaf-instance iface)
     (let ([class-ast-list (cdr (assoc iface instances))])
-      (findf (compose null? ag-class-children) class-ast-list)))
+      (findf (compose null? ag-class-singletons) class-ast-list)))
 
   (define interactions
-    (for*/list ([parent-class-ast (ag-grammar-classes grammar)]
-                [child-ast (ag-class-children parent-class-ast)])
-      (cons (cons parent-class-ast (ag-child-name child-ast))
-            (list->mutable-set (cdr (assoc (ag-child-interface child-ast) instances))))))
+    (for*/list ([(class-name class-body) (in-dict (ag-grammar-classes G))]
+                [(child-name child-kind)
+                 (in-dict (append (ag-class-singletons class-body)
+                                  (ag-class-sequences class-body)))])
+      (cons (cons class-name child-name)
+            (list->mutable-set (lookup instances child-kind)))))
 
-  (define (construct class-ast)
-    (define children-list
-      (match (ag-class-children class-ast)
-        [(list) (list null)]
-        [(list (ag-child names #t ifaces _) ...)
-         (list
-          (for/list ([name names]
-                     [iface ifaces])
-            (let ([class-ast-set (cdr (assoc (cons class-ast name) interactions))])
-              (if (set-empty? class-ast-set)
-                  (let ([leaf-class (find-leaf-instance iface)])
-                    (cons name (construct leaf-class)))
-                  (let ([class-ast-list (set->list class-ast-set)])
-                    (set-clear! class-ast-set)
-                    (cons name (append-map construct class-ast-list)))))))]
-        [(list (ag-child name #f iface _))
-         (let ([class-ast-set (cdr (assoc (cons class-ast name) interactions))])
-           (if (set-empty? class-ast-set)
-               (let ([leaf-class (find-leaf-instance iface)])
-                 (map (curry cons name) (construct leaf-class)))
-               (for*/list ([class-ast class-ast-set]
-                           #:when (set-member? class-ast-set class-ast)
-                           [subtree (construct class-ast)])
-                 (list (cons name subtree)))))]))
+  (define (construct class-name class-body)
+    (define singleton-children
+      (for/list ([(child-name child-kind) (in-dict (ag-class-singletons class-body))])
+        (let ([class-set (lookup interactions (cons class-name child-name))])
+          (if (set-empty? class-set)
+              (let ([leaf-class (find-leaf-instance child-kind)])
+                (map (curry cons child-name) (construct leaf-class)))
+              (for*/list ([class-ast class-set]
+                          #:when (set-member? class-set class-ast)
+                          [subtree (construct class-ast)])
+                (cons child-name subtree))))))
 
-    (for/list ([children children-list])
-      (tree (ag-class-name class-ast) #f children)))
+    (define sequence-children
+      (for/list ([(child-name child-kind) (in-dict (ag-class-sequences class-body))])
+        (let ([class-set (lookup interactions (cons class-name child-name))])
+          (if (set-empty? class-set)
+              (let ([leaf-class (find-leaf-instance child-kind)])
+                (list (cons child-name (construct leaf-class))))
+              (let ([class-list (set->list class-set)])
+                (set-clear! class-set)
+                (list (cons child-name (append-map construct class-list))))))))
 
-  (append-map construct (cdr (assoc (ag-grammar-root grammar) instances))))
+    (for/list ([subtree-list
+                (apply cartesian-product (append singleton-children sequence-children))])
+      (tree class-name #f subtree-list)))
+
+  (append-map construct (lookup instances root)))
