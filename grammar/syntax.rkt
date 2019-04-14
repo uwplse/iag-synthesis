@@ -75,8 +75,8 @@
   [(null r) r]
   [(_ _) #f])
 
-(define (uniquely-associated? alist [same? equal?])
-  (check-duplicates alist same? #:key car))
+(define (uniquely-associated? lst [same? equal?])
+  (check-duplicates lst same? #:key car))
 
 (define (get-method G class-name method-name)
   (lookup (ag-class-methods (get-class G class-name)) method-name eq?))
@@ -128,8 +128,11 @@
 
 ; Return an association list from interface names to class ASTs.
 (define (associate-classes grammar)
-  (map (λ (group) (cons (ag-class-interface (first group)) group))
-       (group-by ag-class-interface (ag-grammar-classes grammar) eq?)))
+  (map (λ (group)
+         (cons (ag-class-interface (cdar group)) group))
+       (group-by (compose ag-class-interface cdr)
+                 (ag-grammar-classes grammar)
+                 eq?)))
 
 ; TODO: Implement some sanity checks 
 (define (check-grammar grammmar)
