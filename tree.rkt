@@ -157,47 +157,46 @@
        (tree-size node))
      1))
 
+(define (set-remove? st v)
+  (begin0
+    (set-member? st v)
+    (set-remove! st v)))
+
 ; Return a set of example tree skeletons that include every parent-child class
 ; pairing permitted by the grammar.
 (define (tree-examples G root)
   (define instances (associate-classes G))
 
-  (define (find-leaf-instance iface)
-    (let ([class-ast-list (cdr (assoc iface instances))])
-      (findf (compose null? ag-class-singletons) class-ast-list)))
+  (define leaf-instances
+    (for/list ([(iface-name class-list) (in-dict instances)])
+      (cons iface-name
+            (for/list ([(class-name class-body) (in-dict class-list)]
+                       #:when (null? (ag-class-singletons class-body))
+                       #:when (null? (ag-class-sequences class-body)))
+              (cons class-name class-body)))))
 
-  (define interactions
-    (for*/list ([(class-name class-body) (in-dict (ag-grammar-classes G))]
-                [(child-name child-kind)
-                 (in-dict (append (ag-class-singletons class-body)
-                                  (ag-class-sequences class-body)))])
-      (cons (cons class-name child-name)
-            (list->mutable-set (lookup instances child-kind)))))
+  (define pending (list->mutable-set (map car (ag-grammar-classes G))))
 
-  (define (construct class-name class-body)
-    (define singleton-children
-      (for/list ([(child-name child-kind) (in-dict (ag-class-singletons class-body))])
-        (let ([class-set (lookup interactions (cons class-name child-name))])
-          (if (set-empty? class-set)
-              (let ([leaf-class (find-leaf-instance child-kind)])
-                (map (curry cons child-name) (construct leaf-class)))
-              (for*/list ([class-ast class-set]
-                          #:when (set-member? class-set class-ast)
-                          [subtree (construct class-ast)])
-                (cons child-name subtree))))))
+  (define (get-child-classes class-name child-name child-kind)
+    (lookup (if (set-remove? pending (cons class-name child-name))
+                instances
+                leaf-instances)
+            child-kind))
 
-    (define sequence-children
-      (for/list ([(child-name child-kind) (in-dict (ag-class-sequences class-body))])
-        (let ([class-set (lookup interactions (cons class-name child-name))])
-          (if (set-empty? class-set)
-              (let ([leaf-class (find-leaf-instance child-kind)])
-                (list (cons child-name (construct leaf-class))))
-              (let ([class-list (set->list class-set)])
-                (set-clear! class-set)
-                (list (cons child-name (append-map construct class-list))))))))
+  (define/match (construct class)
+    [((cons class-name class-body))
+     (define singleton-children
+       (for/list ([(child-name child-kind) (in-dict (ag-class-singletons class-body))])
+         (map (compose (curry cons child-name) construct)
+              (get-child-classes class-name child-name child-kind))))
 
-    (for/list ([subtree-list
-                (apply cartesian-product (append singleton-children sequence-children))])
-      (tree class-name #f subtree-list)))
+     (define sequence-children
+       (for/list ([(child-name child-kind) (in-dict (ag-class-sequences class-body))])
+         (let ([child-classes (get-child-classes class-name child-name child-kind)])
+           (list (cons child-name (append-map construct child-classes))))))
+
+     (for/list ([subtree-list
+                 (apply cartesian-product (append singleton-children sequence-children))])
+       (tree class-name #f subtree-list))])
 
   (append-map construct (lookup instances root)))
