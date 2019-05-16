@@ -2,9 +2,9 @@
 
 ; Script to test Servo layout.
 
-(require racket/pretty
-         "../grammar/parse.rkt"
+(require "../grammar/parse.rkt"
          "../schedule/parse.rkt"
+         "../tree.rkt"
          "../backend/rust/builder.rkt"
          "../backend/rust/printer.rkt")
 
@@ -14,26 +14,8 @@
 (displayln "Parsing sample schedule...")
 (define servo-schedule (file->schedule "benchmarks/servo/servo.sched"))
 
-;(displayln "Generating attribute trees...")
-;(define servo-examples (tree-examples servo-grammar))
-
-; The schedule sketch for which to synthesize a completion.
-;(define servo-sketch
-;  (sched-sequential (sched-traversal 'post
-;                                     `((Root ,(sched-hole))
-;                                       (HBox ,(sched-hole) ,(sched-hole))
-;                                       (VBox ,(sched-hole) ,(sched-hole))
-;                                       (Leaf ,(sched-hole))))
-;                    (sched-traversal 'pre
-;                                     `((Root ,(sched-hole))
-;                                       (HBox ,(sched-hole))
-;                                       (VBox ,(sched-hole))
-;                                       (Leaf ,(sched-hole))))))
-
-
-; Another schedule sketch, this time using parallel composition.
-;(define servo-sketch-parallel
-;  (sched-parallel servo-sketch servo-sketch))
+(displayln "Generating attribute trees...")
+(define servo-examples (tree-examples servo-grammar 'Flow))
 
 ; Synthesis with dataflow-tracing symbolic evaluation.
 ;(define (tracing:test-servo)
@@ -51,7 +33,7 @@
 (when servo-schedule
   (displayln (serialize-schedule servo-schedule))
   (newline)
-  (displayln "Compiling traversal schedule into Rust...")
+  (displayln "Compiling traversal schedule into Rust (file 'synthesized.rs')...")
   (parameterize ([current-output-port (open-output-file "synthesized.rs" #:mode 'text)])
     (rust:print (build-program servo-schedule)))
   (displayln "To use the generated source file, move it to 'servo/components/layout/'."))

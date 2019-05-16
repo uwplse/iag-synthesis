@@ -80,6 +80,12 @@
   (map (λ (grp) (cons (key (first grp)) grp))
        (group-by key lst same?)))
 
+(define (on-car f)
+  (match-lambda [(cons x y) (cons (f x) y)]))
+
+(define (on-cdr f)
+  (match-lambda [(cons x y) (cons x (f y))]))
+
 (define (vector-sum vec)
   (apply + (vector->list vec)))
 

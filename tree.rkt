@@ -98,12 +98,6 @@
 (define (file->tree G filename)
   (xml->tree G (file->string filename #:mode 'text)))
 
-; Find the object (self, child node, or child node sequence) with the given name.
-;(define (tree-object self object)
-;  (if (eq? object 'self)
-;      self
-;      (cdr (assoc object (tree-children self)))))
-
 (define/match (search lst p)
   [((cons (cons q v) lst) p)
    (let ([r (shift p q)])
@@ -111,12 +105,11 @@
   [(null _)
    #f])
   
-
 ; Select the appropriate store for the object and index.
 (define (tree-bind self proc path)
   (match (search (tree-children self) path)
     [(cons rest subtree)
-     (proc (tree-fields subtree) rest)]
+     (proc (tree-fields subtree) `(self . ,rest))]
     [#f
      (proc (tree-fields self) path)]))
 
@@ -162,6 +155,25 @@
     (set-member? st v)
     (set-remove! st v)))
 
+(define (build-leaves G)
+  (for/list ([(iface-name class-list) (in-dict (associate-classes G))])
+    (cons iface-name
+          ; TODO: Could support interior-only node classes too
+          (for/list ([(class-name class-body) (in-dict class-list)]
+                     #:when (ag-class-leaf? class-body))
+            (tree class-name #f null)))))
+
+(define (build-children G)
+  (let ([make-leaf (curry lookup (build-leaves G))])
+    (for/list ([(class-name class-body) (in-dict (ag-grammar-classes G))])
+      (let ([singletons
+             (map (on-cdr make-leaf)
+                  (ag-class-singletons class-body))]
+            [sequences
+             (map (on-cdr (compose list make-leaf))
+                  (ag-class-sequences class-body))])
+        (cons class-name (tree class-name #f (append singletons sequences)))))))
+
 ; Return a set of example tree skeletons that include every parent-child class
 ; pairing permitted by the grammar.
 (define (tree-examples G root)
@@ -171,9 +183,10 @@
     (for/list ([(iface-name class-list) (in-dict instances)])
       (cons iface-name
             (for/list ([(class-name class-body) (in-dict class-list)]
-                       #:when (null? (ag-class-singletons class-body))
-                       #:when (null? (ag-class-sequences class-body)))
+                       #:when (ag-class-leaf? class-body))
               (cons class-name class-body)))))
+
+  (define memo (make-hash))
 
   (define pending (list->mutable-set (map car (ag-grammar-classes G))))
 
@@ -182,6 +195,18 @@
                 instances
                 leaf-instances)
             child-kind))
+
+  (define child-nodes (build-children G))
+
+;  (define (build iface-name)
+;    (for/list ([(class-name class-body) (lookup instances iface-name)])
+;      (if (hash-has-key? memo class-name)
+;          (hash-ref memo class-name)
+;          (begin
+;            (hash-set! memo class-name (lookup child-nodes class-name))
+;            (tree class-name
+;                  #f
+;                  ??)))))
 
   (define/match (construct class)
     [((cons class-name class-body))
@@ -199,4 +224,6 @@
                  (apply cartesian-product (append singleton-children sequence-children))])
        (tree class-name #f subtree-list))])
 
-  (append-map construct (lookup instances root)))
+  (append-map construct (lookup instances root))
+
+  )

@@ -75,6 +75,10 @@
   [(null r) r]
   [(_ _) #f])
 
+(define (ag-class-leaf? class-body)
+  (and (null? (ag-class-singletons class-body))
+       (null? (ag-class-sequences class-body))))
+
 (define (uniquely-associated? lst [same? equal?])
   (check-duplicates lst same? #:key car))
 
