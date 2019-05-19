@@ -6,129 +6,261 @@
 
 (provide (all-defined-out))
 
-; NOTE: Identifiers are symbols.
-
+; attribute grammar
 (struct ag-grammar
-  (; association list of interface ASTs
-   interfaces
-   ; association list of class ASTs
-   classes
-   ; association list of traversal templates
-   traversals
+   (interfaces ; (--> iface-name iface-body)
+    classes ; (--> class-name class-body)
+    traversals ; (--> trav-name trav-decl)
+    ) #:transparent)
+
+; traversal declaration
+(struct ag-traversal
+  (cases ; (--> class-name (* (| `(visit ,node) `(recur ,node) `(iterate ,node ,body))))
    ) #:transparent)
 
-(struct ag-recur
-  (; on what child node to recur
-   child
-   ) #:transparent)
-
-(struct ag-visit () #:transparent)
-
-(struct ag-iterate
-  (child ; through what child sequence to loop
-   body ; iterated traversal components: recur on indexed node (void) or visit self
-   ) #:transparent)
-
-; interface definition
+; interface declaration
 (struct ag-interface
-  (inputs ; list of input attributes
-   outputs ; list of output attributes
+  (attributes ; (--> label (| `(in ,type) `(out ,type)))
    ) #:transparent)
 
-; class definition
+; class declaration
 (struct ag-class
-  (interface ; the nonterminal symbol
-   singletons ; list associating each singleton child's name to an interface
-   sequences ; list associating each sequence child's name to an interface
-   inputs ; list of input attributes
-   outputs ; list of output attributes
-   methods ; association list of method signatures
+  (interface ; iface-name
+   children ; (--> child-name (| `(unit ,iface-name) `(star ,iface-name) `(plus ,iface-name)))
+   attributes ; (--> label (| `(in ,type) `(out ,type)))
+   methods ; (--> method-name `(,(* var) . ,(* var)))
+   rules ; (--> var (| expr `(fold ,expr ,expr)))
    ) #:transparent)
 
-; method signature
-(struct ag-method
-  (parameters ; list of required traversal parameters
-   reads ; list of attributes read
-   writes ; list of attributes written
-   ) #:transparent)
+; ------------------------------
+; Utilities for identifier paths
+; ------------------------------
 
-(define (path->string path)
-  (string-join (map symbol->string path) "."))
+;(define (path->string path)
+;  (string-join (map symbol->string path) "."))
+;
+;(define (path->symbol path)
+;  (compose string->symbol path->string))
+;
+;; Does the second path extend/refine the first path?
+;(define (extends? shorter longer)
+;  (list-prefix? shorter longer eq?))
+;
+;; Return r s.t. p = q ++ r or #f if no such r exists
+;(define/match (shift p q)
+;  [((cons l1 p) (cons l2 q)) #:when (equal? l1 l2) (shift p q)]
+;  [(r null) r]
+;  [(_ _) #f])
+;
+;; Return r s.t. p = q ++ r or q = p ++ r or #f if no such r exists
+;(define/match (trail p q)
+;  [((cons l1 p) (cons l2 q)) #:when (equal? l1 l2) (shift p q)]
+;  [(r null) r]
+;  [(null r) r]
+;  [(_ _) #f])
 
-(define (path->symbol path)
-  (compose string->symbol path->string))
-
-; Does the second path extend/refine the first path?
-(define (extends? shorter longer)
-  (list-prefix? shorter longer eq?))
-
-; Return r s.t. p = q ++ r or #f if no such r exists
-(define/match (shift p q)
-  [((cons l1 p) (cons l2 q)) #:when (equal? l1 l2) (shift p q)]
-  [(r null) r]
-  [(_ _) #f])
-
-; Return r s.t. p = q ++ r or q = p ++ r or #f if no such r exists
-(define/match (trail p q)
-  [((cons l1 p) (cons l2 q)) #:when (equal? l1 l2) (shift p q)]
-  [(r null) r]
-  [(null r) r]
-  [(_ _) #f])
-
-(define (ag-class-leaf? class-body)
-  (and (null? (ag-class-singletons class-body))
-       (null? (ag-class-sequences class-body))))
-
+; TODO: Is this actually used anywhere?
 (define (uniquely-associated? lst [same? equal?])
   (check-duplicates lst same? #:key car))
 
-(define (get-method G class-name method-name)
-  (lookup (ag-class-methods (get-class G class-name)) method-name eq?))
+; ---------------------
+; Utilities for look-up
+; ---------------------
 
-(define (get-class G name)
-  (lookup (ag-grammar-classes G) name eq?))
+(define (grammar-traversal G trav-name)
+  (lookup (ag-grammar-traversals G) trav-name eq?))
 
-(define (get-interface G name)
-  (lookup (ag-grammar-interfaces G)) name eq?)
+(define (grammar-interface G iface-name)
+  (lookup (ag-grammar-interfaces G)) iface-name eq?)
 
-(define (get-traversal G name)
-  (lookup (ag-grammar-traversals G) name eq?))
+(define (grammar-class G class-name)
+  (lookup (ag-grammar-classes G) class-name eq?))
 
-(define (get-interface-inputs G name)
-  (ag-interface-inputs (get-interface G name)))
+; ------------------------------------
+; Utilities for attribute declarations
+; ------------------------------------
 
-(define (get-class-inputs G name)
-  (let* ([class (get-class G name)]
-         [iface (get-interface G (ag-class-interface class))])
-    (append (ag-interface-inputs iface)
-            (ag-class-inputs class))))
+(define-match-expander attribute
+  (syntax-rules ()
+    [(attribute mode name type)
+     (cons (symbol name) (cons mode (symbol type)))]))
 
-(define (get-interface-outputs G name)
-  (ag-interface-outputs (get-interface G name)))
+(define-match-expander input
+  (syntax-rules ()
+    [(input name type) (attribute 'in name type)]))
 
-(define (get-class-outputs G name)
-  (let* ([class (get-class G name)]
-         [iface (get-interface G (ag-class-interface class))])
-    (append (ag-interface-outputs iface)
-            (ag-class-outputs class))))
+(define-match-expander output
+  (syntax-rules ()
+    [(output name type) (attribute 'out name type)]))
 
-(define (get-interface-attributes G name)
-  (let ([iface (get-interface G name)])
-    (append (ag-interface-inputs iface)
-            (ag-interface-outputs iface))))
+(define/match (attribute-name v)
+  [((attribute _ name _)) name])
 
-(define (get-class-attributes G name)
-  (let* ([class (get-class G name)]
-         [iface (get-interface G (ag-class-interface class))])
-    (append (ag-interface-inputs iface)
-            (ag-interface-outputs iface)
-            (ag-class-inputs class)
-            (ag-class-outputs class))))
+(define/match (attribute-mode v)
+  [((attribute mode _ _)) mode])
 
-(define (get-class-children G name)
-  (let ([class-ast (get-class G name)])
-    (values (ag-class-singletons class-ast)
-            (ag-class-sequences class-ast))))
+(define/match (attribute-type v)
+  [((attribute _ _ type)) type])
+
+(define/match (attribute? v)
+  [((attribute _ _ _)) #t]
+  [(_) #f])
+
+(define (input? v)
+  (eq? (attribute-mode v) 'in))
+
+(define (output? v)
+  (eq? (attribute-mode v) 'out))
+
+; ----------------------------------
+; Utilities for attribute references
+; ----------------------------------
+
+(define-match-expander reference
+  (syntax-rules ()
+    [(reference object label) (cons object (symbol label))]))
+
+(define/match (reference-object v)
+  [((reference object _)) object])
+
+(define/match (reference-label v)
+  [((reference _ label)) label])
+
+(define-match-expander object
+  (syntax-rules ()
+    [(object node index) (cons index (symbol node))]))
+
+(define-match-expander object1
+  (syntax-rules ()
+    [(object1 node) (object node 'unit)]))
+
+(define-match-expander object$0
+  (syntax-rules ()
+    [(object$0 node) (object node 'first)]))
+
+(define-match-expander object$-
+  (syntax-rules ()
+    [(object$- node) (object node 'pred)]))
+
+(define-match-expander object$i
+  (syntax-rules ()
+    [(object$i node) (object node 'curr)]))
+
+(define-match-expander object$+
+  (syntax-rules ()
+    [(object$+ node) (object node 'succ)]))
+
+(define-match-expander object$$
+  (syntax-rules ()
+    [(object$$ node) (object node 'last)]))
+
+(define/match (object-node v)
+  [((object node _)) node])
+
+(define/match (object-index v)
+  [((object _ index)) index])
+
+; --------------------------------
+; Utilities for child declarations
+; --------------------------------
+
+(define-match-expander child
+  (syntax-rules ()
+    [(child mode name kind)  (cons (symbol name) (cons mode (symbol kind)))]))
+
+(define-match-expander child1
+  (syntax-rules ()
+    [(child1 name kind) (child 'unit name kind)]))
+
+(define-match-expander child*
+  (syntax-rules ()
+    [(child* name kind) (child 'star name kind)]))
+
+(define-match-expander child+
+  (syntax-rules ()
+    [(child+ name kind) (child 'plus name kind)]))
+
+(define/match (child-name v)
+  [((child _ name _)) name])
+
+(define/match (child-mode v)
+  [((child mode _ _)) mode])
+
+(define/match (child-kind v)
+  [((child _ _ kind)) kind])
+
+(define/match (child? v)
+  [((child _ _ _)) #t]
+  [(_) #f])
+
+(define (child1? v)
+  (eq? (child-mode v) 'unit))
+
+(define (child*? v)
+  (eq? (child-mode v) 'star))
+
+(define (child+? v)
+  (eq? (child-mode v) 'plus))
+
+; ---------------------------------
+; Utilities for method declarations
+; ---------------------------------
+
+(define-match-expander method
+  (syntax-rules ()
+    [(method name inflow outflow)
+     (cons (symbol name) (cons inflow outflow))]))
+
+(define/match (method-name v)
+  [((method name _ _)) name])
+
+(define/match (method-inflow v)
+  [((method _ inflow _)) inflow])
+
+(define/match (method-outflow v)
+  [((method _ _ outflow)) outflow])
+
+; ------------------------------------
+; Utilities for interface declarations
+; ------------------------------------
+
+(define (interface-attributes G iface-name)
+  (ag-interface-attributes (grammar-interface G iface-name)))
+
+(define (interface-labels G iface-name)
+  (map attribute-name (interface-attributes G iface-name)))
+
+; --------------------------------
+; Utilities for class declarations
+; --------------------------------
+
+(define-match-expander class
+  (syntax-rules ()
+    [(class name iface-name child-decls attr-decls method-decls rules)
+     (cons (symbol name)
+           (ag-class iface-name child-decls attr-decls method-decls rules))]))
+
+(define/match (class-name class-decl)
+  [((class name _ _ _ _ _))
+   name])
+
+(define (class-interface G class-name)
+  (ag-class-interface (grammar-class G class-name)))
+
+(define (class-children G class-name)
+  (ag-class-children (grammar-class G class-name)))
+
+(define (class-attributes G class-name)
+  (let* ([class-body (grammar-class G class-name)]
+         [iface-body (grammar-interface G (ag-class-interface class-body))])
+    (append (ag-class-attributes class-body)
+            (ag-interface-attributes iface-body))))
+
+(define (class-methods G class-name)
+  (ag-class-methods (grammar-class G class-name)))
+
+(define (class-rules G class-name)
+  (ag-class-rules (grammar-class G class-name)))
 
 ; Return an association list from interface names to class ASTs.
 (define (associate-classes grammar)
@@ -138,6 +270,24 @@
                  (ag-grammar-classes grammar)
                  eq?)))
 
+; ------------------------------------
+; Utilities for interface declarations
+; ------------------------------------
+
+(define-match-expander interface
+  (syntax-rules ()
+    [(interface name attr-decls)
+     (cons (symbol name)
+           (ag-interface attr-decls))]))
+
+(define/match (interface-name iface-decl)
+  [((interface name _))
+   name])
+
+; ---------------------
+; General functionality
+; ---------------------
+
 ; TODO: Implement some sanity checks 
 (define (check-grammar grammmar)
-  #f)
+  #t)
