@@ -30,16 +30,7 @@
 (define (listify x)
   (if (list? x) x (list x)))
 
-(define (map-or-app f x)
-  (if (list? x) (map f x) (f x)))
-
 (define (const* f) (thunk* (f)))
-
-(define (with-input-file f filename #:mode [mode 'text])
-  (let* ([port (open-input-file filename #:mode mode)]
-         [res (f port)])
-    (close-input-port port)
-    res))
 
 ; Compute the approximate size of a formula, where each unique occurrence of an
 ; AST node counts as 1. Returns two values: the number of unique AST nodes in the
@@ -79,12 +70,6 @@
 (define (associate-by key lst [same? equal?])
   (map (λ (grp) (cons (key (first grp)) grp))
        (group-by key lst same?)))
-
-(define (on-car f)
-  (match-lambda [(cons x y) (cons (f x) y)]))
-
-(define (on-cdr f)
-  (match-lambda [(cons x y) (cons x (f y))]))
 
 (define (vector-sum vec)
   (apply + (vector->list vec)))
@@ -132,3 +117,7 @@
          (set! name initial)))]
     [(shadow! (binder binders ...) body ...)
      (shadow! (binder) (shadow! (binders ...) body ...))]))
+
+(define-match-expander symbol
+  (syntax-rules ()
+    [(symbol id) (? symbol? id)]))
