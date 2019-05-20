@@ -165,6 +165,7 @@
   [((object$+ _)) #t]
   [(_) #f])
 
+; FIXME: Is this to blame for spurious iteration failures?
 (define/match (object-iterated<=? lower upper)
   [((object$i node1) (object$i node2)) (eq? node1 node2)]
   [((object$i node1) (object$+ node2)) (eq? node1 node2)]

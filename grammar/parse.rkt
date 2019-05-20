@@ -29,6 +29,7 @@
    LT LE EQ NE GE GT
    AND OR
    IF THEN ELSE
+   TRUE FALSE
    SELF FIRST PRED CURR SUCC LAST
    EOF))
 
@@ -118,6 +119,8 @@
    ["if" (token-IF)]
    ["then" (token-THEN)]
    ["else" (token-ELSE)]
+   ["true" (token-TRUE)]
+   ["false" (token-FALSE)]
    ["self" (token-SELF)]
    ["$0" (token-FIRST)]
    ["$-" (token-PRED)]
@@ -251,6 +254,8 @@
      ((expression) $1))
     
     (expression
+     ((TRUE) 'true)
+     ((FALSE) 'false)
      ((INT) $1)
      ((FLOAT) $1)
      ((reference) $1)
@@ -434,6 +439,8 @@
    (expression->string expr)])
 
 (define/match (expression->string expr)
+  [((or 'true 'false))
+   (symbol->string expr)]
   [((? integer?))
    (number->string expr)]
   [(`(! ,expr))

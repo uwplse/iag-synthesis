@@ -110,6 +110,8 @@
 (define (eval! self expr #:current [curr #f] #:virtual [virt #f]
               #:predecessor [pred #f] #:successor [succ #f])
   (define/match (recur expr)
+    [((or 'true 'false))
+     (void)]
     [((? integer?))
      (void)]
     [(`(! ,expr))
