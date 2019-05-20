@@ -1,11 +1,50 @@
 traversal post {
-  case Root { recur self.root; self.init(); }
-  case HBox { recur self.childs; self.bound(); }
-  case VBox { recur self.childs; self.bound(); }
-  case Leaf { self.init(); }
+  case Root {
+    recur root;
+    eval root.right;
+  }
+  case HBox {
+    recur childs;
+    iterate[left] childs {
+      eval childs.height_out;
+      eval childs.width_out;
+    }
+    eval self.width;
+    eval self.height;
+  }
+  case VBox {
+    recur childs;
+    iterate[left] childs {
+      eval childs.height_out;
+      eval childs.width_out;
+    }
+    eval self.height;
+    eval self.width;
+  }
+  case Leaf {
+    eval self.width;
+    eval self.height;
+  }
 } ;; traversal pre {
-  case Root { recur self.root; }
-  case HBox { self.place(); recur self.childs; }
-  case VBox { self.place(); recur self.childs; }
-  case Leaf { skip; }
+  case Root {
+    eval root.height_out;
+    eval root.bottom;
+    eval root.width_out;
+    recur root;
+  }
+  case HBox {
+    iterate[left] childs {
+      eval childs.bottom;
+      eval childs.right;
+    }
+    recur childs;
+  }
+  case VBox {
+    iterate[left] childs {
+      eval childs.right;
+      eval childs.bottom;
+    }
+    recur childs;
+  }
+  case Leaf { }
 }

@@ -1,146 +1,120 @@
 traversal pre {
   case Root {
-    visit self;
-    recur self.root;
+    ??;
+    recur root;
   }
   case HBox {
-    visit self;
-    recur self.childs;
+    ??;
+    recur childs;
   }
   case VBox {
-    visit self;
-    recur self.childs;
+    ??;
+    recur childs;
   }
   case Leaf {
-    visit self;
+    ??;
   }
 }
 
 traversal post {
   case Root {
-    recur self.root;
-    visit self;
+    recur root;
+    ??;
   }
   case HBox {
-    recur self.childs;
-    visit self;
+    recur childs;
+    ??;
   }
   case VBox {
-    recur self.childs;
-    visit self;
+    recur childs;
+    ??;
   }
   case Leaf {
-    visit self;
+    ??;
   }
 }
 
-interface Top { }
+interface Top {
+  attributes { }
+}
 
 interface HVBox {
-  input self.visible;
-  output self.width;
-  output self.height;
-  output self.width_out; // outer width
-  output self.height_out; // outer height
-  output self.right;
-  output self.bottom;
+  attributes {
+    input visible : bool;
+    output width : int;
+    output height : int;
+    output width_out : int; // outer width
+    output height_out : int; // outer height
+    output right : int;
+    output bottom : int;
+  }
 }
 
 class Root : Top {
-    child self.root : HVBox;
-
-    method self.init() {
-      //root.width_out := root.width;
-      //root.right := root.width;
-      //root.height_out := root.height;
-      //root.bottom := root.height;
-
-      read self.root.width;
-      read self.root.height;
-
-      write self.root.width_out;
-      write self.root.height_out;
-      write self.root.right;
-      write self.root.bottom;
+    children {
+      root : HVBox;
+    }
+    attributes { }
+    methods { }
+    rules {
+      root.width_out := root.width;
+      root.right := root.width;
+      root.height_out := root.height;
+      root.bottom := root.height;
     }
 }
 
 class HBox : HVBox {
-    children self.childs : HVBox;
-
-    method self.bound() {
-      //childs.width_out := fold 0 .. childs$-.width_out + childs$i.width;
-      //self.width := visible ? childs$$.width_out : 0;
-      //childs.height_out := fold 0 .. childs$-.height_out > childs$i.height ? childs$-.height_out : childs$i.height;
-      //self.height := self.visible ? childs$$.height_out : 0;
-
-      read self.visible;
-      read self.childs.width;
-      read self.childs.height;
-
-      write self.childs.height_out;
-      write self.width;
-      write self.childs.width_out;
-      write self.height;
+    children {
+      childs : HVBox+;
     }
+    attributes { }
+    methods { }
+    rules {
+      childs$0.width_out := 0;
+      childs$+.width_out := childs$-.width_out + childs$i.width;
+      childs$0.height_out := 0;
+      childs$+.height_out := if (childs$-.height_out > childs$i.height) then childs$-.height_out else childs$i.height;
 
-    method self.place() {
-      //childs.right := fold (self.right - self.width) .. childs$-.right + childs$i.width;
-      //childs.bottom := self.bottom;
+      childs$0.right := self.right - self.width;
+      childs$+.right := childs$-.right + childs$i.width;
+      childs$i.bottom := self.bottom;
 
-      read self.right;
-      read self.bottom;
-      read self.childs.width;
-
-      write self.childs.right;
-      write self.childs.bottom;
+      self.width := if visible then childs$$.width_out else 0;
+      self.height := if self.visible then childs$$.height_out else 0;
     }
 }
 
 class VBox : HVBox {
-    children self.childs : HVBox;
-
-    method self.bound() {
-      //childs.width_out := fold 0 .. childs$-.width_out > childs$i.width ? childs$-.width_out : childs$i.width;
-      //self.width := visible ? childs$$.width_out : 0;
-      //childs.height_out := fold 0 .. childs$-.height_out + childs$i.height;
-      //self.height := visible ? childs$$.height_out : 0;
-
-      read self.visible;
-      read self.childs.width;
-      read self.childs.height;
-
-      write self.childs.width_out;
-      write self.childs.height_out;
-      write self.width;
-      write self.height;
+    children {
+      childs : HVBox+;
     }
+    attributes { }
+    methods { }
+    rules {
+      childs$0.width_out := 0;
+      childs$+.width_out := if (childs$-.width_out > childs$i.width) then childs$-.width_out else childs$i.width;
+      childs$0.height_out := 0;
+      childs$+.height_out := childs$-.height_out + childs$i.height;
 
-    method self.place() {
-      //childs.right := self.right;
-      //childs.bottom := fold self.bottom .. childs$-.bottom + childs$i.height;
+      childs$i.right := self.right;
+      childs$0.bottom := self.bottom;
+      childs$+.bottom := childs$-.bottom + childs$i.height;
 
-      read self.right;
-      read self.bottom;
-      read self.childs.height;
-
-      write self.childs.right;
-      write self.childs.bottom;
+      self.width := if visible then childs$$.width_out else 0;
+      self.height := if visible then childs$$.height_out else 0;
     }
 }
 
 class Leaf : HVBox {
-    input self.width_in;
-    input self.height_in;
-
-    method self.init() {
-      //self.width := self.width_in;
-      //self.height := self.height_in;
-
-      read self.width_in;
-      read self.height_in;
-
-      write self.width;
-      write self.height;
+    children { }
+    attributes {
+      input width_in : int;
+      input height_in : int;
+    }
+    methods { }
+    rules {
+      self.width := self.width_in;
+      self.height := self.height_in;
     }
 }
