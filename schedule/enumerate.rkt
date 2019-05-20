@@ -1,81 +1,90 @@
 #lang rosette
 
-(require "../grammar/syntax.rkt"
-         "syntax.rkt")
+(require "../grammar/syntax.rkt")
 
 (provide instantiate-sketch
          enumerate-sketches
          synthesize-schedules)
 
-; Collect the possible method calls in a class's visitor.
-(define (hole-range G class-name)
-  (map car (ag-class-methods (get-class G class-name))))
+(define (enumerate-method-calls class-body)
+  (for/list ([method-decl (ag-class-methods class-body)])
+    `(call ,(method-name method-decl))))
+
+(define (enumerate-rule-evals class-body)
+  (remove-duplicates
+   (for/list ([rule-decl (ag-class-rules class-body)])
+     (match-let ([(rule (object node _) label _) rule-decl])
+       `(eval ,node ,label)))))
+
+(define (enumerate-commands class-body #:iterate [iter #f])
+  (for/list ([rule-decl (ag-class-rules class-body)]
+             #:when (object-iterated<=? (rule-iterates rule-decl) iter))
+    (match-let ([(rule (object node _) label _) rule-decl])
+      `(eval ,node ,label))))
 
 ; Instantiate a traversal sketch for an attribute grammar G, given an
 ; interpretation of (multi-)choice. Used to denote a traversal sketch as a
 ; symbolic traversal.
-(define (instantiate-traversal-sketch multichoose G order visitors)
-  (let ([traversal (get-traversal G order)])
-    (sched-traversal order
-                     (for/list ([(class-name visitor-body) (in-dict visitors)])
-                       (cons class-name
-                             (for/list ([slot visitor-body])
-                               (if (sched-slot-hole? slot)
-                                   (let* ([range (hole-range G class-name)]
-                                          [k (length range)])
-                                     (multichoose k range))
-                                   ; TODO: What about iteration?
-                                   slot)))))))
+(define (instantiate-traversal-sketch multichoose G order traversal)
+;  (define hole-range ; FIXME: Fuck, need to check loop context too!
+;    (for/hasheq ([(class-name class-body) (in-dict (ag-grammar-classes G))])
+;      (values class-name
+;              (enumerate-commands class-body )
+;              (append (enumerate-method-calls class-body)
+;                      (enumerate-rule-evals class-body)))))
+;  (define (hole-fill* class-name)
+;    (let ([range (hash-ref hole-range class-name)])
+;      (multichoose (length range) range)))
+  (define (instantiate-command-sketch class-name command)
+    (define class-body (grammar-class G class-name))
+    (define (aux command #:iterate [iter #f])
+      (match command
+        [`(iter-left ,child ,commands)
+         (let ([object `(succ ,child)])
+           `(iter-left ,child ,(map (curry aux #:iterate object) commands)))]
+        [`(iter-right ,child ,commands)
+         (let ([object `(succ ,child)])
+           `(iter-right ,child ,(map (curry aux #:iterate object) commands)))]
+        [`(hole)
+         (let ([range (enumerate-commands class-body #:iterate iter)])
+           (multichoose (length range) range))]
+        [_ command]))
+    (aux command))
+  (define visitors
+    (for/list ([(class-name commands) (in-dict traversal)])
+      (cons class-name
+            (map (curry instantiate-command-sketch class-name) commands))))
+  `(trav ,order ,visitors))
 
 ; Instantiate a schedule sketch for an attribute grammar G, given an
 ; interpretation of (multi-)choice. Used to denote a schedule sketch as a
 ; symbolc schedule.
 (define (instantiate-sketch multichoose G sketch)
   (match sketch
-    [(sched-sequential left right)
-     (sched-sequential (instantiate-sketch multichoose G left)
-                       (instantiate-sketch multichoose G right))]
-    [(sched-parallel left right)
-     (sched-parallel (instantiate-sketch multichoose G left)
-                     (instantiate-sketch multichoose G right))]
-    [(sched-traversal order visitors)
+    [`(seq ,left-sched ,right-sched)
+     `(seq ,(instantiate-sketch multichoose G left-sched)
+           ,(instantiate-sketch multichoose G right-sched))]
+    [`(par ,left-sched ,right-sched)
+     `(par ,(instantiate-sketch multichoose G left-sched)
+           ,(instantiate-sketch multichoose G right-sched))]
+    [`(trav ,order ,visitors)
      (instantiate-traversal-sketch multichoose G order visitors)]))
-
-(define/match (sketch-traversal statement)
-  [((ag-recur child))
-   (sched-recur child)]
-  [((ag-visit))
-   (sched-slot-hole)]
-  [((ag-iterate child body))
-   (sched-iterate child (sketch-traversal body))])
-
-; Enumerate traversal sketches for an attribute grammar G.
-(define (enumerate-traversal-sketches G)
-  (for/list ([(order visitor-list) (in-dict (ag-grammar-traversals G))])
-    (sched-traversal order
-                     null ; FIXME
-                     (for/list ([(class-name visitor-body) (in-dict visitor-list)])
-                       (cons class-name (map sketch-traversal visitor-body))))))
-
-; Enumerate schedule sketches for an attribute grammar G, bounded by the number
-; of traversal passes up to n, using the provided list of traversal sketches.
-(define (enumerate-schedule-sketches G n trav-sketch-list)
-  (if (= n 1)
-      trav-sketch-list
-      (append
-       (if (= n 2)
-           (for*/list ([left trav-sketch-list]
-                       [right trav-sketch-list])
-             (sched-parallel left right))
-           null)
-       (for*/list ([left trav-sketch-list]
-                   [right (enumerate-schedule-sketches G (- n 1) trav-sketch-list)])
-         (sched-sequential left right)))))
 
 ; Enumerate schedule sketches for an attribute grammar G, bounded by the number
 ; of traversal passes up to n.
 (define (enumerate-sketches G n)
-  (enumerate-schedule-sketches G n (enumerate-traversal-sketches G)))
+  (let ([trav-sketches (ag-grammar-traversals G)])
+  (if (= n 1)
+      trav-sketches
+      (append
+       (if (= n 2)
+           (for*/list ([left-sched trav-sketches]
+                       [right-sched trav-sketches])
+             `(par ,left-sched ,right-sched))
+           null)
+       (for*/list ([left-sched trav-sketches]
+                   [right-sched (enumerate-sketches G (- n 1) trav-sketches)])
+         `(seq ,left-sched ,right-sched))))))
 
 (define (synthesize-schedules G examples n synthesizer)
   (for ([sketch (shuffle (enumerate-sketches G n))])

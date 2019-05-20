@@ -76,7 +76,7 @@
      ((traversal) $1))
 
     (traversal
-     ((TRAVERSAL IDENT LBRACE visitor-list RBRACE) `(trav ,$2 ,$4))
+     ((TRAVERSAL name LBRACE visitor-list RBRACE) `(trav ,$2 ,$4))
      ((LPAREN composition RPAREN) $2))
 
     (visitor-list
@@ -84,7 +84,7 @@
      ((visitor) (list $1)))
 
     (visitor
-     ((CASE IDENT LBRACE command-list RBRACE) (cons $2 $4)))
+     ((CASE name LBRACE command-list RBRACE) (cons $2 $4)))
 
     (command-list
      ((command command-list) (cons $1 $2))
@@ -157,4 +157,6 @@
   [(`(eval ,node ,label))
    (format "    eval ~a.~a;" node label)]
   [(`(hole)) "    ??;"]
-  [(`(skip)) "    skip;"])
+  [(`(skip)) "    skip;"]
+  [((list commands ...))
+   (string-join (map command->string commands) "\n  ")])
