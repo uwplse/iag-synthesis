@@ -13,6 +13,7 @@
          xexpr->tree
          file->tree
          tree-index
+         tree-bind!
          tree-annotate
          tree-validate
          tree-gather
@@ -119,24 +120,31 @@
     [(object$+ child) (tree-fields succ)]
     [(object$$ child) (tree-fields (last (subtree child)))]))
 
+(define ((tree-bind! proc) self object label #:current [curr #f] #:virtual [virt #f]
+                           #:predecessor [pred #f] #:successor [succ #f])
+  (define store
+    (tree-index self object #:current curr #:virtual virt
+                #:predecessor pred #:successor succ))
+  (proc store label))
+
 ; Annotate the tree with attribute information.
-(define (tree-annotate G tree emp new upd)
+(define (tree-annotate G node emp new upd)
   (define store
     (for/fold ([store (emp)])
-              ([attr (class-attributes G (tree-class tree))])
+              ([attr (class-attributes G (tree-class node))])
       (let* ([label (attribute-name attr)]
              [store (new store label)])
         (when (input? attr)
           (upd store label))
         store)))
   (define children
-    (for/list ([(child subtree) (in-dict (tree-children tree))])
+    (for/list ([(child subtree) (in-dict (tree-children node))])
       (cons child
             (if (list? subtree)
                 (for/list ([node subtree])
                   (tree-annotate G node emp new upd))
                 (tree-annotate G subtree emp new upd)))))
-  (tree (tree-class tree) store children))
+  (tree (tree-class node) store children))
 
 ; Validate some property of every output attribute value.
 (define (tree-validate G tree validate)
@@ -170,7 +178,7 @@
                     ([(class-name class-body) (in-dict class-list)])
             (match (ag-class-children class-body)
               [(list (child* names _) ...)
-               (cons (tree class-name #f (map list names)))]
+               (cons (tree class-name #f (map list names)) leaf-nodes)]
               [_
                leaf-nodes])))))
 
