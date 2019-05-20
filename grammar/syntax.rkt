@@ -71,7 +71,7 @@
   (lookup (ag-grammar-traversals G) trav-name eq?))
 
 (define (grammar-interface G iface-name)
-  (lookup (ag-grammar-interfaces G)) iface-name eq?)
+  (lookup (ag-grammar-interfaces G) iface-name eq?))
 
 (define (grammar-class G class-name)
   (lookup (ag-grammar-classes G) class-name eq?))
@@ -82,8 +82,7 @@
 
 (define-match-expander attribute
   (syntax-rules ()
-    [(attribute mode name type)
-     (cons (symbol name) (cons mode (symbol type)))]))
+    [(attribute mode name type) `(,(symbol name) . (,mode ,(symbol type)))]))
 
 (define-match-expander input
   (syntax-rules ()
@@ -128,7 +127,7 @@
 
 (define-match-expander object
   (syntax-rules ()
-    [(object node index) (cons index (symbol node))]))
+    [(object node index) `(,index ,(symbol node))]))
 
 (define-match-expander object1
   (syntax-rules ()
@@ -160,13 +159,30 @@
 (define/match (object-index v)
   [((object _ index)) index])
 
+(define/match (object-iterated? v)
+  [((object$i _)) #t]
+  [((object$- _)) #t]
+  [((object$+ _)) #t]
+  [(_) #f])
+
+(define/match (object-iterated<=? lower upper)
+  [((object$i node1) (object$i node2)) (eq? node1 node2)]
+  [((object$i node1) (object$+ node2)) (eq? node1 node2)]
+  [((object$0 node1) (object$+ node2)) (eq? node1 node2)]
+  [((object$+ node1) (object$+ node2)) (eq? node1 node2)]
+  [((object$i node1) (object$- node2)) (eq? node1 node2)]
+  [((object$$ node1) (object$- node2)) (eq? node1 node2)]
+  [((object$- node1) (object$- node2)) (eq? node1 node2)]
+  [(#f #f) #t]
+  [(_ _) #f])
+
 ; --------------------------------
 ; Utilities for child declarations
 ; --------------------------------
 
 (define-match-expander child
   (syntax-rules ()
-    [(child mode name kind)  (cons (symbol name) (cons mode (symbol kind)))]))
+    [(child mode name kind) `(,(symbol name) . (,mode ,(symbol kind)))]))
 
 (define-match-expander child1
   (syntax-rules ()
@@ -220,6 +236,48 @@
 (define/match (method-outflow v)
   [((method _ _ outflow)) outflow])
 
+; -------------------------------
+; Utilities for rule declarations
+; -------------------------------
+
+(define-match-expander rule
+  (syntax-rules ()
+    [(rule object label define) `((,object . ,label) . ,define)]))
+
+(define/match (rule-object v)
+  [((rule object _ _)) object])
+
+(define/match (rule-label v)
+  [((rule _ label _)) label])
+
+(define/match (rule-define v)
+  [((rule _ _ define)) define])
+
+(define-match-expander fold
+  (syntax-rules ()
+    [(fold init step) (or `(foldl ,init ,step) `(foldr ,init ,step))]))
+
+(define/match (rule-iterates v)
+  [((rule (and object (object$i _)) _ _)) object]
+  [((rule (and object (object$0 _)) _ _)) object]
+  [((rule (and object (object$+ _)) _ _)) object]
+  [((rule (and object (object$$ _)) _ _)) object]
+  [((rule (and object (object$- _)) _ _)) object]
+  [((rule (object1 _) _ (fold _ expr)))
+   (define/match (search expr)
+     [((? number?)) #f]
+     [((reference (? object-iterated? object) _)) object]
+     [(`(call ,_ ,arg-exprs))
+      (ormap search arg-exprs)]
+     [(`(ite ,cond-expr ,then-expr ,else-expr))
+      (or (search cond-expr) (search then-expr) (search else-expr))]
+     [(`(! ,expr))
+      (search expr)]
+     [(`(,_ ,left-expr ,right-expr))
+      (or (search left-expr) (search right-expr))])
+   (search expr)]
+  [((rule _ _ _)) #f])
+
 ; ------------------------------------
 ; Utilities for interface declarations
 ; ------------------------------------
@@ -261,6 +319,50 @@
 
 (define (class-rules G class-name)
   (ag-class-rules (grammar-class G class-name)))
+
+; Get expression for initial virtual accumulator.
+(define (class-rule-init class-body node label)
+  (ormap (match-lambda
+           [(rule (object1 (== node)) (== label) (fold init _)) init]
+           [_ #f])
+         (ag-class-rules class-body)))
+
+; Get expression for basis node in iteration sequence.
+(define (class-rule-base class-body node label)
+  (ormap (match-lambda
+           [(rule (object1 (== node)) (== label) (fold _ step)) step]
+           [(rule (object$0 (== node)) (== label) expr) expr]
+           [(rule (object$$ (== node)) (== label) expr) expr]
+           [(rule (object$i (== node)) (== label) expr) expr]
+           [_ #f])
+         (ag-class-rules class-body)))
+
+; Get expression for inductive nodes in iteration sequence.
+(define (class-rule-step class-body node label)
+  (ormap (match-lambda
+           [(rule (object1 (== node)) (== label) (fold _ step)) step]
+           [(rule (object$+ (== node)) (== label) expr) expr]
+           [(rule (object$- (== node)) (== label) expr) expr]
+           [(rule (object$i (== node)) (== label) expr) expr]
+           [_ #f])
+         (ag-class-rules class-body)))
+
+; Get expression for base/inductive nodes in iteration sequence.
+(define (class-rule-iter class-body node label base?)
+  (if base?
+      (class-rule-base class-body node label)
+      (class-rule-step class-body node label)))
+
+; Get expression for a unit node outside all iteration.
+(define (class-rule-unit class-body node label)
+  (ormap (match-lambda
+           [(rule (object1 (== node)) (== label) expr) expr]
+           [_ #f])
+         (ag-class-rules class-body)))
+
+; Get method declaration given its name.
+(define (class-method class-body method-name)
+  (assoc method-name (ag-class-methods class-body)))
 
 ; Return an association list from interface names to class ASTs.
 (define (associate-classes grammar)

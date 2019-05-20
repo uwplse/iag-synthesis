@@ -19,7 +19,7 @@
 (define-empty-tokens e-tkns
   (RBRACE LBRACE LPAREN RPAREN LBRACKET RBRACKET
    COLON SEMICOLON COMMA DOT
-   TRAVERSAL CASE VISIT RECUR ITERATE
+   TRAVERSAL CASE ITERATE LEFT RIGHT RECUR CALL EVAL SKIP HOLE
    INTERFACE CLASS
    CHILDREN ATTRIBUTES METHODS RULES
    INPUT OUTPUT
@@ -83,8 +83,13 @@
    ["traversal" (token-TRAVERSAL)]
    ["case" (token-CASE)]
    ["iterate" (token-ITERATE)]
+   ["left" (token-LEFT)]
+   ["right" (token-RIGHT)]
    ["recur" (token-RECUR)]
-   ["visit" (token-VISIT)]
+   ["call" (token-CALL)]
+   ["eval" (token-EVAL)]
+   ["skip" (token-SKIP)]
+   ["??" (token-HOLE)]
    ["interface" (token-INTERFACE)]
    ["children" (token-CHILDREN)]
    ["attributes" (token-ATTRIBUTES)]
@@ -163,23 +168,27 @@
      (() null))
 
     (traversal
-     ((TRAVERSAL name LBRACE traversal-case-list RBRACE) (cons $2 $4)))
+     ((TRAVERSAL name LBRACE visitor-list RBRACE) (cons $2 $4)))
 
-    (traversal-case-list
-     ((traversal-case traversal-case-list) (cons $1 $2))
+    (visitor-list
+     ((visitor visitor-list) (cons $1 $2))
      (() null))
 
-    (traversal-case
-     ((CASE name LBRACE traversal-step-list RBRACE) (cons $2 $4)))
+    (visitor
+     ((CASE name LBRACE command-list RBRACE) (cons $2 $4)))
 
-    (traversal-step-list
-     ((traversal-step traversal-step-list) (cons $1 $2))
+    (command-list
+     ((command command-list) (cons $1 $2))
      (() null))
 
-    (traversal-step
-     ((VISIT node SEMICOLON) `(visit ,$2))
-     ((RECUR node SEMICOLON) `(recur ,$2))
-     ((ITERATE node LBRACE traversal-step-list RBRACE) `(iterate ,$2 ,$4)))
+    (command
+     ((ITERATE LBRACKET LEFT RBRACKET name LBRACE command-list RBRACE) `(iter-left ,$5 ,$7))
+     ((ITERATE LBRACKET RIGHT RBRACKET name LBRACE command-list RBRACE) `(iter-right ,$5 ,$7))
+     ((RECUR name SEMICOLON) `(recur ,$2))
+     ((EVAL node DOT name SEMICOLON) `(eval ,$2 ,$4))
+     ((CALL name SEMICOLON) `(call ,$2))
+     ((SKIP SEMICOLON) `(skip))
+     ((HOLE SEMICOLON) `(hole)))
 
     (interface
      ((INTERFACE name LBRACE attributes RBRACE)
@@ -240,6 +249,8 @@
      ((expression) $1))
     
     (expression
+     ((INT) $1)
+     ((FLOAT) $1)
      ((reference) $1)
      ((BANG expression) `(! ,$2))
      ((expression AND expression) `(&& ,$1 ,$3))
@@ -287,8 +298,12 @@
      ((TRAVERSAL) 'traversal)
      ((CASE) 'case)
      ((ITERATE) 'iterate)
+     ((LEFT) 'left)
+     ((RIGHT) 'right)
      ((RECUR) 'recur)
-     ((VISIT) 'visit)
+     ((CALL) 'call)
+     ((EVAL) 'eval)
+     ((SKIP) 'skip)
      ((INTERFACE) 'interface)
      ((CLASS) 'class)
      ((CHILDREN) 'children)
@@ -317,26 +332,34 @@
     "\n\n")])
 
 (define/match (traversal->string trav)
-  [((cons name case-list))
+  [((cons trav-name visitors))
    (format "traversal ~a {\n~a\n}"
-           name
-           (string-join (map traversal-case->string case-list) "\n"))])
+           trav-name
+           (string-join (map visitor->string visitors) "\n"))])
 
-(define/match (traversal-case->string case)
-  [((cons class-name step-list))
-    (format "  case ~a {\n~a\n  }"
-            class-name
-            (string-join (map traversal-step->string step-list) "\n"))])
+(define/match (visitor->string visitor)
+  [((cons class-name body))
+   (format "  case ~a {\n~a\n  }"
+           class-name
+           (string-join (map command->string body) "\n"))])
 
-(define/match (traversal-step->string step)
-  [(`(visit ,node))
-   (format "    visit ~a;" node)]
-  [(`(recur ,node))
-   (format "    recur ~a;" node)]
-  [(`(iterate ,node ,steps))
-   (format "    iterate ~a {\n~a\n    }"
-           node
-           (string-join (map traversal-step->string steps) "\n"))])
+(define/match (command->string command)
+  [(`(iter-left ,child ,commands))
+   (format "    iterate[left] ~a {\n  ~a\n    }"
+           child
+           (string-join (map command->string commands) "\n  "))]
+  [(`(iter-right ,child ,commands))
+   (format "    iterate[right] ~a {\n  ~a\n    }"
+           child
+           (string-join (map command->string commands) "\n  "))]
+  [(`(recur ,child))
+   (format "    recur ~a;" child)]
+  [(`(call ,method-name))
+   (format "    call ~a;" method-name)]
+  [(`(eval ,node ,label))
+   (format "    eval ~a.~a;" node label)]
+  [(`(hole)) "    ??;"]
+  [(`(skip)) "    skip;"])
 
 (define/match (interface->string iface)
   [((cons name (ag-interface attributes)))
@@ -404,6 +427,8 @@
    (expression->string expr)])
 
 (define/match (expression->string expr)
+  [((? integer?))
+   (number->string expr)]
   [(`(! ,expr))
    (format "!(~a)"
            (expression->string expr))]
