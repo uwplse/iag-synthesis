@@ -1,35 +1,3 @@
-traversal pre {
-  case Root {
-    ??;
-    recur root;
-  }
-  case Node {
-    ??;
-    iterate[left] kids { ??; }
-    iterate[right] kids { ??; }
-    recur kids;
-  }
-  case Leaf {
-    ??;
-  }
-}
-
-traversal post {
-  case Root {
-    recur root;
-    ??;
-  }
-  case Node {
-    recur kids;
-    iterate[left] kids { ??; }
-    iterate[right] kids { ??; }
-    ??;
-  }
-  case Leaf {
-    ??;
-  }
-}
-
 interface Block {
   attributes {
     /* X, Y and width/height */
@@ -96,7 +64,7 @@ interface Block {
 
 class Node : Block {
   children {
-    kids : Block+;
+    kids : Block*;
   }
   attributes { }
   methods { }
@@ -116,23 +84,21 @@ class Node : Block {
       is_auto(height(self.computed));
 
     kids$$.mtp_up := 0.0;
-    kids$-.mtp_up := 1.0;
     kids$-.mtp_up :=
       if kids$i.collapse_through
       then max(kids$i.mbp, if !kids$+.has_clearance then kids$+.mtp_up else 0.0)
       else kids$i.mtp;
 
     kids$$.mtn_up := 0.0;
-    kids$-.mtn_up := 1.0;
     kids$-.mtn_up :=
       if kids$i.collapse_through
       then min(kids$i.mbn, if !kids$+.has_clearance then kids$+.mtn_up else 0.0)
       else kids$i.mtn;
 
-    kids$$.mbp_prev := 0.0;
-    kids$-.mbp_prev := kids$+.mbp;
-    kids$$.mbn_prev := 0.0;
-    kids$-.mbn_prev := kids$+.mbn;
+    kids$0.mbp_prev := 0.0;
+    kids$+.mbp_prev := kids$-.mbp;
+    kids$0.mbn_prev := 0.0;
+    kids$+.mbn_prev := kids$-.mbn;
 
     self.mtp :=
       max(
