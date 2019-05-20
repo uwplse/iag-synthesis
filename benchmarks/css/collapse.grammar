@@ -1,3 +1,31 @@
+traversal pre {
+  case Root {
+    ??;
+    recur root;
+  }
+  case Node {
+    ??;
+    recur childs;
+  }
+  case Leaf {
+    ??;
+  }
+}
+
+traversal post {
+  case Root {
+    recur root;
+    ??;
+  }
+  case Node {
+    recur childs;
+    ??;
+  }
+  case Leaf {
+    ??;
+  }
+}
+
 interface Block {
   attributes {
     /* X, Y and width/height */
