@@ -1,0 +1,193 @@
+interface Block {
+  /* X, Y and width/height */
+  input x : real;
+  input y : real;
+  input w : real;
+  input h : real;
+
+  /* X and Y offset */
+  input xo : real;
+  input yo : real;
+
+  /* margins */
+  input mt : real;
+  input mr : real;
+  input mb : real;
+  input ml : real;
+
+  /* top/bottom positive/negative margins for collapsing */
+  output mtp : real;
+  output mtn : real;
+  output mtp_up : real;
+  output mtn_up : real;
+  output mbp : real;
+  output mbn : real;
+  output mbp_prev : real;
+  output mbn_prev : real;
+
+  output mb_clear : bool;
+
+  output collapse_top : bool; /* with children */
+  output collapse_bottom : bool; /* with children */
+  output collapse_through : bool; /* with parent */
+  output collapse_weird : bool; /* s831c */
+
+  /* padding */
+  input pt : real;
+  input pr : real;
+  input pb : real;
+  input pl : real;
+
+  /* border */
+  input bt : real;
+  input br : real;
+  input bb : real;
+  input bl : real;
+
+  input scroll_x : real;
+  input scroll_y : real;
+
+  input has_contents : bool;
+  input is_first_box : bool;
+  input is_last_box : bool;
+  input is_component : bool;
+  input is_replaced : bool;
+
+  input foreground : Color;
+  input background : Color;
+
+  input specified : Style;
+  input computed : Style;
+}
+
+class Node : Block {
+  children {
+    kids : Block*;
+  }
+
+  evaluation {
+    self.collapse_top := self.pt == 0.0 && self.bt == 0.0;
+    self.collapse_bottom :=
+      self.pb == 0.0 && self.bb == 0.0 &&
+      is_auto(height(self.computed)) && !self.is_replaced;
+
+    self.collapse_through :=
+      (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 &&
+      !self.is_replaced && kids$$.collapse_through;
+
+    self.collapse_weird :=
+      self.collapse_top && kids$$.is_first_box && kids$$.collapse_through &&
+      is_positive_pixel_or_percent(min_height(self.computed)) &&
+      is_auto(height(self.computed));
+
+    kids$$.mtp_up := 0.0;
+    kids$-.mtp_up :=
+      if kids$i.collapse_through
+      then max(kids$i.mbp, if !kids$+.has_clearance then kids$+.mtp_up else 0.0)
+      else kids$i.mtp;
+
+    kids$$.mtn_up := 0.0;
+    kids$-.mtn_up :=
+      if kids$i.collapse_through
+      then min(kids$i.mbn, if !kids$+.has_clearance then kids$+.mtn_up else 0.0)
+      else kids$i.mtn;
+
+    kids$0.mbp_prev := 0.0;
+    kids$+.mbp_prev := kids$-.mbp;
+    kids$0.mbn_prev := 0.0;
+    kids$+.mbn_prev := kids$-.mbn;
+
+    self.mtp :=
+      max(
+        max(
+          max(self.mt, 0.0),
+          if (self.collapse_top && !kids$0.has_clearance)
+          then kids$0.mtp_up
+          else 0.0
+        ),
+        if (self.collapse_through && !self.has_clearance)
+        then self.mbp_prev
+        else 0.0
+      );
+    self.mtn :=
+      min(
+        min(
+          min(self.mt, 0.0),
+          if (self.collapse_top && !kids$0.has_clearance)
+          then kids$0.mtn_up
+          else 0.0
+        ),
+        if (self.collapse_through && !self.has_clearance)
+        then self.mbn_prev
+        else 0.0
+      );
+
+    self.mbp :=
+      max(
+        max(
+          max(self.mb, 0.0),
+          if (self.collapse_bottom && !kids$$.mb_clear && !self.collapse_weird)
+          then kids$$.mbp
+          else 0.0
+        ),
+        if self.collapse_through then self.mtp else 0.0
+      );
+    self.mbn :=
+      min(
+        min(
+          min(self.mb, 0.0),
+          if (self.collapse_bottom && !kids$$.mb_clear && !self.collapse_weird)
+          then kids$$.mbn
+          else 0.0
+        ),
+        if self.collapse_through then self.mtn else 0.0
+      );
+
+    self.mb_clear := self.has_clearance || (self.collapse_through && self.mb_clear_prev);
+  }
+}
+
+class Root : Block {
+  children {
+    root : Block;
+  }
+  evaluation {
+    self.collapse_top := false;
+    self.collapse_bottom := false;
+    self.collapse_through := false;
+    self.collapse_weird := false;
+
+    self.mtp_up := 0;
+    self.mtn_up := 0;
+
+    self.mbp_prev := 0;
+    self.mbn_prev := 0;
+
+    self.mtp := 0;
+    self.mtn := 0;
+    self.mbp := 0;
+    self.mbn := 0;
+
+    self.mb_clear := false;
+
+    root.mtp_up := 0;
+    root.mtn_up := 0;
+
+    root.mbp_prev := 0;
+    root.mbn_prev := 0;
+  }
+}
+
+class Leaf : Block {
+  evaluation {
+    collapse_top := false;
+    collapse_bottom := false;
+    collapse_through := (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 && !self.is_replaced && true;
+    collapse_weird := false;
+    self.mtp := 0;
+    self.mtn := 0;
+    self.mbp := 0;
+    self.mbn := 0;
+    self.mb_clear := false;
+  }
+}

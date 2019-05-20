@@ -1,0 +1,208 @@
+
+function width(self) :=
+  self.bl + self.pl + self.w + self.pr + self.br + self.scroll_y;
+
+function height(self) :=
+  self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x;
+
+interface Root {
+  viewport_width : real;
+  viewport_height : real;
+}
+
+interface Block {
+  /* X, Y and width/height */
+  x : real;
+  y : real;
+  w : real;
+  h : real;
+
+  /* X and Y offset */
+  xo : real;
+  yo : real;
+
+  /* margins */
+  mt : real;
+  mr : real;
+  mb : real;
+  ml : real;
+
+  /* top/bottom positive/negative margins for collapsing */
+  mtp : real;
+  mtn : real;
+  mbp : real;
+  mbn : real;
+
+  mtp_up : real;
+  mtn_up : real;
+  mb_clear : bool;
+
+  collapse_top : bool;
+  // := self.pt == 0.0 && self.bt == 0.0
+  collapse_bottom : bool;
+  // := self.pb == 0.0 && self.bb == 0.0 && height_is_auto && !self.is_replaced
+  collapse_through : bool;
+  // := height(self) == 0.0 && !self.is_replaced && (...)
+
+  /* padding */
+  pt : real;
+  pr : real;
+  pb : real;
+  pl : real;
+
+  /* border */
+  bt : real;
+  br : real;
+  bb : real;
+  bl : real;
+
+  scroll_x : real;
+  scroll_y : real;
+
+  /* shrink to fit */
+  stf_width : real;
+  stf_max : real;
+  float_stf_max : real;
+  shrink_to_fit : bool; /* w_from_stf_width */
+
+  /* used for dependency creation only */
+  width_set : bool;
+
+  //text_indent : real;
+  //baseline : real;
+  //above_baseline : real;
+  //below_baseline : real;
+
+  ez_sufficient : bool;
+  ez_lookback : bool;
+
+  has_contents : bool;
+  is_first_box : bool;
+  is_last_box : bool;
+  is_component : bool;
+
+  foreground : Color;
+  background : Color;
+
+  specified : Style;
+  computed : Style;
+}
+
+interface Inline {
+  /* X, Y and width/height */
+  x : real;
+  y : real;
+  w : real;
+  h : real;
+
+  /* X and Y offset */
+  xo : real;
+  yo : real;
+
+  /* margins */
+  mt : real;
+  mr : real;
+  mb : real;
+  ml : real;
+
+  /* top/bottom positive/negative margins for collapsing */
+  //mtp : real;
+  //mtn : real;
+  //mbp : real;
+  //mbn : real;
+
+  //mtp_up : real;
+  //mtn_up : real;
+  //mb_clear : bool;
+
+  /* padding */
+  pt : real;
+  pr : real;
+  pb : real;
+  pl : real;
+
+  /* border */
+  bt : real;
+  br : real;
+  bb : real;
+  bl : real;
+
+  scroll_x : real;
+  scroll_y : real;
+
+  /* shrink to fit */
+  stf_width : real;
+  stf_max : real;
+  float_stf_max : real;
+  shrink_to_fit : bool; /* w_from_stf_width */
+
+  /* used for dependency creation only */
+  width_set : bool;
+
+  text_indent : real;
+
+  baseline : real;
+  above_baseline : real;
+  below_baseline : real;
+
+  ez_sufficient : bool;
+  ez_lookback : bool;
+
+  has_contents : bool;
+  is_first_box : bool;
+  is_last_box : bool;
+  is_component : bool;
+
+  foreground : Color;
+  background : Color;
+
+  specified : Style;
+  computed : Style;
+}
+
+class RootBox : Root {
+  child block : Block;
+}
+
+class BlockBox : Block {
+  children stack : Block;
+
+  rules {
+    self.mtp := f(self.mt, self.prev_mbp, children[0].mtp_up);
+    self.mtn := f(self.mt, self.prev_mbn, children[0].mtn_up);
+    self.mbp :=  f(self.mb, self.mtp, children[-1].mbp);
+    self.mbn := f(self.mb, self.mtn children[-1].mbn);
+    self.mtp_up := f(self.mtp, self.mbp, self.next_mtp_up)
+    self.mtn_up := f(self.mtn, self.mbn, self.next_mtn_up);
+  }
+}
+
+/*
+fun inorder(tree) {
+  for i in 0..len(children) {
+    children[i].prev_mbp := children[i-1].mbp;
+    children[i].prev_mbn := children[i-1].mbn;
+    inorder(child);
+  }
+  for i in len(children)..0 {
+    children[i].mtp_up := f(self.mtp, self.mbp, children[i+1].mtp_up)
+    children[i].mtn_up := f(self.mtn, self.mbn, children[i+1].mtn_up);
+  }
+  self.mtp := f(self.mt, self.prev_mbp, children[0].mtp_up);
+  self.mtn := f(self.mt, self.prev_mbn, children[0].mtn_up);
+  self.mbp :=  f(self.mb, self.mtp, children[-1].mbp);
+  self.mbn := f(self.mb, self.mtn children[-1].mbn);
+}
+*/
+
+class Line : Block {
+  children line : Inline;
+}
+
+class InlineBox : Inline {
+  child block : Block;
+}
+
+class Text : Inline {
+  /* blah, blah, blah... */
+}
