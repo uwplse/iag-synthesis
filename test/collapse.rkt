@@ -15,17 +15,17 @@
 (define collapse-grammar (file->grammar "benchmarks/css/collapse.grammar"))
 
 (displayln "Generating attribute trees...")
-(define collapse-examples (tree-examples collapse-grammar 'Top))
+(define collapse-examples (tree-examples collapse-grammar 'Block))
 
 ; The schedule sketch for which to synthesize a completion.
 (define collapse-sketch
   `(seq (trav post
               ((Root (recur root) (hole))
-               (Node (recur childs) (iter-left childs ((hole))) (hole))
+               (Node (recur kids) (iter-left kids ((hole))) (hole))
                (Leaf (hole))))
         (trav pre
               ((Root (hole) (recur root))
-               (Node (hole) (iter-left childs ((hole))) (recur childs))
+               (Node (hole) (iter-left kids ((hole))) (recur kids))
                (Leaf (hole))))))
 
 ; Synthesis with dataflow-tracing symbolic evaluation.

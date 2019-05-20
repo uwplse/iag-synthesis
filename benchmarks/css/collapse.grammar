@@ -5,7 +5,7 @@ traversal pre {
   }
   case Node {
     ??;
-    recur childs;
+    recur kids;
   }
   case Leaf {
     ??;
@@ -18,7 +18,7 @@ traversal post {
     ??;
   }
   case Node {
-    recur childs;
+    recur kids;
     ??;
   }
   case Leaf {
@@ -92,7 +92,7 @@ interface Block {
 
 class Node : Block {
   children {
-    kids : Block*;
+    kids : Block+;
   }
   attributes { }
   methods { }
