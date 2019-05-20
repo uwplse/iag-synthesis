@@ -68,8 +68,8 @@
          (:* (:or (char-range "a" "z") (char-range "A" "Z") "_" (char-range "0" "9")))))))
 
 (define lex
-  (lexer
-   [(comment) (lex input-port)]
+  (lexer-src-pos
+   [(comment) (return-without-pos (lex input-port))]
    ["}" (token-RBRACE)]
    ["{" (token-LBRACE)]
    ["(" (token-LPAREN)]
@@ -127,7 +127,7 @@
    [(integer) (token-INT (string->number lexeme))]
    [(float) (token-FLOAT (string->number lexeme))]
    [(identifier) (token-IDENT (string->symbol lexeme))]
-   [whitespace (lex input-port)]
+   [whitespace (return-without-pos (lex input-port))]
    [(eof) (token-EOF)]))
 
 ; ------
@@ -137,20 +137,22 @@
 (define parse
   (parser
    (start program)
+   (src-pos)
    (tokens tkns e-tkns)
    (end EOF)
    (error
-    (λ (_ token lexeme)
-      (printf "Unexpected token: ~a(~a)~n" token lexeme)))
+    (λ (_ token lexeme start stop)
+      (printf "Unexpected token: ~a(~a) from ~a to ~a~n"
+              token (or lexeme "") start stop)))
    (precs
     (nonassoc LPAREN RPAREN)
-    (nonassoc BANG)
-    (left STAR SLASH)
-    (left PLUS MINUS)
-    (nonassoc LT LE EQ NE GE GT)
+    (nonassoc IF THEN ELSE)
     (left OR)
     (left AND)
-    (nonassoc IF THEN ELSE))
+    (nonassoc LT LE EQ NE GE GT)
+    (left STAR SLASH)
+    (left PLUS MINUS)
+    (nonassoc BANG))
    (grammar
     (program
      ((traversal-list interface-list class-list) (ag-grammar $2 $3 $1)))
@@ -265,9 +267,14 @@
      ((expression NE expression) `(!= ,$1 ,$3))
      ((expression GE expression) `(>= ,$1 ,$3))
      ((expression GT expression) `(> ,$1 ,$3))
-     ((name LPAREN variable-list RPAREN) `(call ,$1 ,$3))
+     ((name LPAREN RPAREN) `(call ,$1 ()))
+     ((name LPAREN expression-list RPAREN) `(call ,$1 ,$3))
      ((IF expression THEN expression ELSE expression) `(ite ,$2 ,$4 ,$6))
      ((LPAREN expression RPAREN) $2))
+
+    (expression-list
+     ((expression COMMA expression-list) (cons $1 $3))
+     ((expression) (list $1)))
 
     (variable-list
      ((reference COMMA variable-list) (cons $1 $3))
