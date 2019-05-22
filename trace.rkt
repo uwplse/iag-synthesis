@@ -10,21 +10,14 @@
 (provide permute iter-permuted for/permuted join-threads join
          table? make-table table-ref! table-def! break (rename-out [solve-trace solve]))
 
-(define DEBUG #f)
-
-(define (debug:displayln action)
-  (when DEBUG
-    (displayln action)))
-
 ; Activate an ILP solver (IBM CPLEX if available, otherwise Z3 in ILP mode)
 (current-solver
   (if #f ;(cplex-available?) ; Rosette encodes for CPLEX very, very slowly...
       (cplex)
       (z3 #:logic 'QF_LIA)))
 
-(struct traced (dependency antidependency) #:transparent)
-
-(define store (make-hash)) ; TODO: Maybe split into dependency and antidependency maps
+(define dependency (make-hasheq))
+;(define antidependency (make-hasheq))
 
 ; Next available memory location for a table entry.
 (define next-location 0)
@@ -179,68 +172,58 @@
                      (assert (= (+ w z) (+ x y)))
                      z)))])))
 
-(define (trace-read! location assumption store)
-  (match-let ([(traced dependency antidependency) (hash-ref store location (traced 0 1))])
-    (when (eqv? assumption 1)
-      (assert (= dependency 1) "assumption |\\- dependency"))
-    (assert (<= 0 dependency 1) "|\\- 0 <= dependency <= 1")
-    (assert (<= assumption dependency) "|\\- assumption --> dependency")))
+(define (trace-read! location assumption [dependency dependency])
+  (define dependent (apply + (hash-ref! dependency location null)))
+  ;(assert (<= 0 dependency 1) "|\\- 0 <= dependency <= 1")
+  (cond
+    [(eqv? assumption 1)
+     (assert (= dependent 1) "assumption |\\- dependency")]
+    [(eqv? dependent 0)
+     (assert (= assumption 0) "!dependency |\\- !assumption")]
+    [(not (or (eqv? assumption 0) (eqv? dependent 1)))
+     (assert (<= assumption dependent) "|- assumption -\\-> dependency")]))
 
-(define (trace-write! location assumption store)
-  (hash-update! store
+(define (trace-write! location assumption [dependency dependency])
+  (hash-update! dependency
                 location
-                (match-lambda
-                  [(traced dependency antidependency)
-                   (traced (+ dependency assumption)
-                           (- antidependency assumption))])
-                (traced 0 1)))
+                (curry cons assumption)
+                null))
 
-(define (trace-exit! store)
-  (for ([tr (hash-values store)])
-    (match-let ([(traced dependency antidependency) tr])
-      (assert (<= 0 dependency 1) "|\\- 0 <= dependency <= 1")
-      (assert (<= 0 antidependency 1) "|\\- 0 <= antidependency <= 1"))))
+(define (trace-exit!)
+  (for ([dependent (hash-values dependency)])
+    (assert (<= 0 (apply + dependent) 1))))
 
 ; Rollback after reaching trivially impossible path
 (define (rollback exn)
   (let ([phi (conjoin* path-condition)])
-    (debug:displayln `(rollback ,phi))
-    (assert (= phi 0) "|- assumption -> _|_")))
+    (assert (= phi 0) "|- !assumption")))
 
 ; Evaluate residual program commands.
-(define (evaluate-residue! program [shared-stores null])
+(define (evaluate-residue! program [shared-dependency null])
   (for ([command program])
     (match command
       [(cmd:assume guard body)
-       (debug:displayln `(assume ,guard))
        (push! path-condition guard)
        (with-handlers ([exn:fail? rollback])
-         (debug:displayln `(assume ,guard))
-         (evaluate-residue! body shared-stores))
-       (pop! path-condition)
-       (debug:displayln `(revert ,guard))]
+         (evaluate-residue! body shared-dependency))
+       (pop! path-condition)]
       [(cmd:alloc table)
-       (debug:displayln `(alloc <table>))
        (set-table-contents! table (make-hash))]
       [(cmd:read (table contents) name)
        (let ([location (hash-ref! contents name (thunk (++ next-location)))]
              [assumption (conjoin* path-condition)])
-         (debug:displayln `(read <table> ,name))
-         (trace-read! location assumption store))]
+         (trace-read! location assumption dependency))]
       [(cmd:write (table contents) name)
        (let ([location (hash-ref! contents name (thunk (++ next-location)))]
              [assumption (conjoin* path-condition)])
-         (debug:displayln `(write <table> ,name))
-         (trace-write! location assumption store)
-         (for-each (curry trace-write! location assumption) shared-stores))]
+         (trace-write! location assumption dependency)
+         (for-each (curry trace-write! location assumption) shared-dependency))]
       [(cmd:join left right)
-       (let ([initial (hash-copy store)])
-         (debug:displayln `(join left))
-         (evaluate-residue! left shared-stores)
-         (let ([final store])
-           (shadow! ([store initial])
-             (debug:displayln `(join right))
-             (evaluate-residue! right (cons final shared-stores)))))])))
+       (let ([initial-dependency (hash-copy dependency)])
+         (evaluate-residue! left shared-dependency)
+         (let ([final-dependency dependency])
+           (shadow! ([dependency initial-dependency])
+             (evaluate-residue! right (cons final-dependency shared-dependency)))))])))
 
 ; Evaluate the accumulated residual program if in a quiescent state
 (define (flush-residue!)
@@ -254,8 +237,8 @@
   (set! residue null)
   (unless quiescent?
     (error 'break "Cannot break trace within nested operation"))
-  ;(trace-exit! store)
-  (set! store (make-hash))
+  (trace-exit!)
+  (set! dependency (make-hasheq))
   (set! next-location 0))
 
 ; After one or more traces, solve for an assignment of each multichoice to an
