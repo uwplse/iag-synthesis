@@ -2,12 +2,16 @@ traversal pre {
   case Root {
     ??;
     recur root;
+    ??;
   }
   case Node {
     ??;
-    iterate[left] kids { ??; }
     iterate[right] kids { ??; }
+    ??;
     recur kids;
+    ??;
+    iterate[right] kids { ??; }
+    ??;
   }
   case Leaf {
     ??;
@@ -16,18 +20,26 @@ traversal pre {
 
 traversal post {
   case Root {
+    ??;
     recur root;
     ??;
   }
   case Node {
+    ??;
+    iterate[right] kids { ??; }
+    ??;
     recur kids;
-    iterate[left] kids { ??; }
+    ??;
     iterate[right] kids { ??; }
     ??;
   }
   case Leaf {
     ??;
   }
+}
+
+interface Tree {
+  attributes { }
 }
 
 interface Block {
@@ -94,6 +106,20 @@ interface Block {
   }
 }
 
+class Root : Tree {
+  children {
+    root : Block;
+  }
+  attributes { }
+  methods { }
+  rules {
+    root.mtp_up := 0.0;
+    root.mtn_up := 0.0;
+    root.mbp_prev := 0.0;
+    root.mbn_prev := 0.0;
+  }
+}
+
 class Node : Block {
   children {
     kids : Block+;
@@ -116,14 +142,11 @@ class Node : Block {
       is_auto(height(self.computed));
 
     kids$$.mtp_up := 0.0;
-    kids$-.mtp_up := 1.0;
     kids$-.mtp_up :=
       if kids$i.collapse_through
       then max(kids$i.mbp, if !kids$+.has_clearance then kids$+.mtp_up else 0.0)
       else kids$i.mtp;
-
     kids$$.mtn_up := 0.0;
-    kids$-.mtn_up := 1.0;
     kids$-.mtn_up :=
       if kids$i.collapse_through
       then min(kids$i.mbn, if !kids$+.has_clearance then kids$+.mtn_up else 0.0)
@@ -131,6 +154,7 @@ class Node : Block {
 
     kids$$.mbp_prev := 0.0;
     kids$-.mbp_prev := kids$+.mbp;
+    
     kids$$.mbn_prev := 0.0;
     kids$-.mbn_prev := kids$+.mbn;
 
@@ -181,39 +205,6 @@ class Node : Block {
       );
 
     self.mb_clear := self.has_clearance || (self.collapse_through && self.mb_clear_prev);
-  }
-}
-
-class Root : Block {
-  children {
-    root : Block;
-  }
-  attributes { }
-  methods { }
-  rules {
-    self.collapse_top := false;
-    self.collapse_bottom := false;
-    self.collapse_through := false;
-    self.collapse_weird := false;
-
-    self.mtp_up := 0;
-    self.mtn_up := 0;
-
-    self.mbp_prev := 0;
-    self.mbn_prev := 0;
-
-    self.mtp := 0;
-    self.mtn := 0;
-    self.mbp := 0;
-    self.mbn := 0;
-
-    self.mb_clear := false;
-
-    root.mtp_up := 0;
-    root.mtn_up := 0;
-
-    root.mbp_prev := 0;
-    root.mbn_prev := 0;
   }
 }
 
