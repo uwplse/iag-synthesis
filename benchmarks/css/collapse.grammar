@@ -1,3 +1,18 @@
+traversal seq {
+  case Root {
+    ??;
+    recur root;
+  }
+  case Node {
+    ??;
+    iterate[right] kids { ??; recur kids; ??; }
+    ??;
+  }
+  case Leaf {
+    ??;
+  }
+}
+
 traversal pre {
   case Root {
     ??;
