@@ -135,28 +135,43 @@
            order
            (string-join (map visitor->string visitors) "\n"))])
 
+(define indentation (make-parameter 0))
+
+(define (indent)
+  (build-string (* (indentation) 2) (thunk* #\ )))
+
 (define/match (visitor->string visitor)
   [((cons class-name body))
-   (format "  case ~a {\n~a\n  }"
-           class-name
-           (string-join (map command->string body) "\n"))])
+   (parameterize ([indentation (+ (indentation) 1)])
+     (define content
+       (parameterize ([indentation (+ (indentation) 1)])
+         (string-join (map command->string body) "\n")))
+     (format "~acase ~a {\n~a\n~a}"
+             (indent)
+             class-name
+             content
+             (indent)))])
 
 (define/match (command->string command)
   [(`(iter-left ,child ,commands))
-   (format "    iterate[left] ~a {\n  ~a\n    }"
-           child
-           (string-join (map command->string commands) "\n  "))]
+   (define content
+     (parameterize ([indentation (+ (indentation) 1)])
+       (string-join (map command->string commands) "\n")))
+   (format "~aiterate[left] ~a {\n~a\n~a}"
+           (indent) child content (indent))]
   [(`(iter-right ,child ,commands))
-   (format "    iterate[right] ~a {\n  ~a\n    }"
-           child
-           (string-join (map command->string commands) "\n  "))]
+   (define content
+     (parameterize ([indentation (+ (indentation) 1)])
+       (string-join (map command->string commands) "\n")))
+   (format "~aiterate[right] ~a {\n~a\n~a}"
+           (indent) child content (indent))]
   [(`(recur ,child))
-   (format "    recur ~a;" child)]
+   (format "~arecur ~a;" (indent) child)]
   [(`(call ,method-name))
-   (format "    call ~a;" method-name)]
+   (format "~acall ~a;" (indent) method-name)]
   [(`(eval ,node ,label))
-   (format "    eval ~a.~a;" node label)]
-  [(`(hole)) "    ??;"]
-  [(`(skip)) "    skip;"]
+   (format "~aeval ~a.~a;" (indent) node label)]
+  [(`(hole)) (format "~a??;" (indent))]
+  [(`(skip)) (format "~askip;" (indent) (indent))]
   [((list commands ...))
-   (string-join (map command->string commands) "\n  ")])
+   (string-join (map command->string commands) "\n")])
