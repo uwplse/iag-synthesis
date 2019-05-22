@@ -10,17 +10,12 @@
   (for/list ([method-decl (ag-class-methods class-body)])
     `(call ,(method-name method-decl))))
 
-(define (enumerate-rule-evals class-body)
+(define (enumerate-commands class-body #:iterate [iter #f])
   (remove-duplicates
-   (for/list ([rule-decl (ag-class-rules class-body)])
+   (for/list ([rule-decl (ag-class-rules class-body)]
+              #:when (object-iterated<=? (rule-iterates rule-decl) iter))
      (match-let ([(rule (object node _) label _) rule-decl])
        `(eval ,node ,label)))))
-
-(define (enumerate-commands class-body #:iterate [iter #f])
-  (for/list ([rule-decl (ag-class-rules class-body)]
-             #:when (object-iterated<=? (rule-iterates rule-decl) iter))
-    (match-let ([(rule (object node _) label _) rule-decl])
-      `(eval ,node ,label))))
 
 ; Instantiate a traversal sketch for an attribute grammar G, given an
 ; interpretation of (multi-)choice. Used to denote a traversal sketch as a
@@ -39,16 +34,22 @@
     (define class-body (grammar-class G class-name))
     (define (aux command #:iterate [iter #f])
       (match command
-        [`(iter-left ,child ,commands)
-         (let ([object `(succ ,child)])
-           `(iter-left ,child ,(map (curry aux #:iterate object) commands)))]
-        [`(iter-right ,child ,commands)
-         (let ([object `(succ ,child)])
-           `(iter-right ,child ,(map (curry aux #:iterate object) commands)))]
+        [`(iter-left ,child ,slots)
+         (define steps
+           (for/list ([slot slots])
+             (aux slot #:iterate `(succ ,child))))
+        `(iter-left ,child ,steps)]
+        [`(iter-right ,child ,slots)
+         (define steps
+           (for/list ([slot slots])
+             (aux slot #:iterate `(pred ,child))))
+         `(iter-right ,child ,steps)]
         [`(hole)
          (let ([range (enumerate-commands class-body #:iterate iter)])
            (multichoose (length range) range))]
-        [_ command]))
+        [`(eval ,_ ,_) command]
+        [`(call ,_) command]
+        [`(recur ,_) command]))
     (aux command))
   (define visitors
     (for/list ([(class-name commands) (in-dict traversal)])
