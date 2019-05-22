@@ -2,16 +2,11 @@ traversal pre {
   case Root {
     ??;
     recur root;
-    ??;
   }
   case Node {
     ??;
     iterate[right] kids { ??; }
-    ??;
     recur kids;
-    ??;
-    iterate[right] kids { ??; }
-    ??;
   }
   case Leaf {
     ??;
@@ -20,16 +15,11 @@ traversal pre {
 
 traversal post {
   case Root {
-    ??;
     recur root;
     ??;
   }
   case Node {
-    ??;
-    iterate[right] kids { ??; }
-    ??;
     recur kids;
-    ??;
     iterate[right] kids { ??; }
     ??;
   }
@@ -71,6 +61,7 @@ interface Block {
     output mbn_prev : real;
 
     output mb_clear : bool;
+    output mb_clear_prev : bool;
 
     output collapse_top : bool; /* with children */
     output collapse_bottom : bool; /* with children */
@@ -93,6 +84,7 @@ interface Block {
     input scroll_y : real;
 
     input has_contents : bool;
+    input has_clearance : bool;
     input is_first_box : bool;
     input is_last_box : bool;
     input is_component : bool;
@@ -117,6 +109,7 @@ class Root : Tree {
     root.mtn_up := 0.0;
     root.mbp_prev := 0.0;
     root.mbn_prev := 0.0;
+    root.mb_clear_prev := false;
   }
 }
 
@@ -146,6 +139,7 @@ class Node : Block {
       if kids$i.collapse_through
       then max(kids$i.mbp, if !kids$+.has_clearance then kids$+.mtp_up else 0.0)
       else kids$i.mtp;
+
     kids$$.mtn_up := 0.0;
     kids$-.mtn_up :=
       if kids$i.collapse_through
@@ -157,6 +151,9 @@ class Node : Block {
     
     kids$$.mbn_prev := 0.0;
     kids$-.mbn_prev := kids$+.mbn;
+
+    self.mtp := 0.0;
+    self.mtn := 0.0;
 
     self.mtp :=
       max(
@@ -204,6 +201,11 @@ class Node : Block {
         if self.collapse_through then self.mtn else 0.0
       );
 
+    kids$$.mb_clear_prev := false;
+    kids$-.mb_clear_prev := kids$+.mb_clear;
+    //kids$0.mb_clear_prev := false;
+    //kids$+.mb_clear_prev := kids$-.mb_clear;
+
     self.mb_clear := self.has_clearance || (self.collapse_through && self.mb_clear_prev);
   }
 }
@@ -213,10 +215,10 @@ class Leaf : Block {
   attributes { }
   methods { }
   rules {
-    collapse_top := false;
-    collapse_bottom := false;
-    collapse_through := (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 && !self.is_replaced && true;
-    collapse_weird := false;
+    self.collapse_top := false;
+    self.collapse_bottom := false;
+    self.collapse_through := (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 && !self.is_replaced && true;
+    self.collapse_weird := false;
     self.mtp := 0;
     self.mtn := 0;
     self.mbp := 0;
