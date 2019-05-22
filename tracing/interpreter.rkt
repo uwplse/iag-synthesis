@@ -36,10 +36,10 @@
            (for ([node subtree])
              (traverse G visitors node))
            (traverse G visitors subtree))]
-      [`(iter-left ,child (,block))
-       (iter-left! self class-body child block)]
-      [`(iter-right ,child (,block))
-       (iter-right! self class-body child block)]
+      [`(iter-left ,child ,commands)
+       (iter-left! G visitors self class-body child commands)]
+      [`(iter-right ,child ,commands)
+       (iter-right! G visitors self class-body child commands)]
       [block
        (for/permuted ([command block])
          (match command
@@ -51,50 +51,80 @@
            [`(skip)
             (void)]))])))
 
-(define (iter-left! self class-body child block)
+(define (iter-left! G visitors self class-body child commands)
   (define virt$0 (make-table))
-  (init! self class-body block virt$0)
+  (init! self class-body commands virt$0)
   (for/fold ([virt$- virt$0]
              [pred #f])
             ([curr (lookup (tree-children self) child)])
     (define virt$+ (make-table))
-    (for/permuted ([command block])
+    (for ([command commands])
       (match command
+        [`(recur ,(== child))
+         (traverse G visitors curr)]
         [`(eval ,node ,label)
          (eval! self (class-rule-iter class-body node label (not pred))
-               #:current curr #:virtual virt$- #:predecessor pred)
+                #:current curr #:virtual virt$- #:predecessor pred)
          (tree-write! self `(curr ,node) label #:current curr #:virtual virt$+)]
         [`(skip)
-         (void)]))
+         (void)]
+        [block
+         (for/permuted ([command block])
+           (match command
+             [`(eval ,node ,label)
+              (eval! self (class-rule-iter class-body node label (not pred))
+                     #:current curr #:virtual virt$- #:predecessor pred)
+              (tree-write! self `(curr ,node) label #:current curr #:virtual virt$+)]
+             [`(skip)
+              (void)]))]))
     (values virt$+ curr)))
 
-(define (iter-right! self class-body child block)
+(define (iter-right! G visitors self class-body child commands)
   (define virt$$ (make-table))
-  (init! self class-body block virt$$)
+  (init! self class-body commands virt$$)
   (for/fold ([virt$+ virt$$]
              [succ #f])
             ([curr (reverse (lookup (tree-children self) child))])
     (define virt$- (make-table))
-    (for/permuted ([command block])
+    (for ([command commands])
       (match command
+        [`(recur ,(== child))
+         (traverse G visitors curr)]
         [`(eval ,node ,label)
          (eval! self (class-rule-iter class-body node label (not succ))
                #:current curr #:virtual virt$+ #:successor succ)
          (tree-write! self `(curr ,node) label #:current curr #:virtual virt$-)]
-        [`(skip)
-         (void)]))
+        [block
+         (for/permuted ([command block])
+           (match command
+             [`(eval ,node ,label)
+              (eval! self (class-rule-iter class-body node label (not succ))
+                    #:current curr #:virtual virt$+ #:successor succ)
+              (tree-write! self `(curr ,node) label #:current curr #:virtual virt$-)]
+             [`(skip)
+              (void)]))]))
     (values virt$- curr)))
 
-(define (init! self class-body block virtual)
-  (for/permuted ([command block])
+(define (init! self class-body commands virtual)
+  (for ([command commands])
     (match command
+      [`(recur ,child)
+       (void)]
       [`(eval ,node ,label)
        (let ([expr (class-rule-init class-body node label)])
          (when expr
            (eval! self expr)
            (table-def! virtual label)))]
-      [`(skip)
-       (void)])))
+      [block
+       (for/permuted ([command block])
+         (match command
+           [`(eval ,node ,label)
+            (let ([expr (class-rule-init class-body node label)])
+              (when expr
+                (eval! self expr)
+                (table-def! virtual label)))]
+           [`(skip)
+            (void)]))])))
 
 (define (call! self class-body method-name #:current [curr #f]
               #:predecessor [pred #f] #:successor [succ #f])
@@ -112,7 +142,7 @@
   (define/match (recur expr)
     [((or 'true 'false))
      (void)]
-    [((? integer?))
+    [((? number?))
      (void)]
     [(`(! ,expr))
      (recur expr)]
@@ -156,7 +186,7 @@
      (recur cond-expr)
      (recur then-expr)
      (recur else-expr)]
-    [(`(call ,(symbol fun) ,arg-exprs))
+    [(`(call ,(symbol fun) (,arg-exprs ...)))
      (for-each recur arg-exprs)]
     [((reference object label))
      (tree-read! self object label #:current curr #:virtual virt
