@@ -20,24 +20,21 @@
 ; The schedule sketch for which to synthesize a completion.
 (define collapse-sketch
   '(seq
-    (trav post
-          ((Root
-            (recur root)
-            (hole))
-           (Node
-            (recur kids)
-            (iter-right kids ((hole)))
-            (hole))
-           (Leaf
-            (hole))))
     (trav pre
           ((Root
             (hole)
             (recur root))
            (Node
             (hole)
-            (iter-right kids ((hole)))
-            (recur kids))
+            (iter-right kids ((recur kids) (hole))))
+           (Leaf
+            (hole))))
+    (trav post
+          ((Root
+            (recur root))
+           (Node
+            (iter-right kids ((recur kids) (hole)))
+            (hole))
            (Leaf
             (hole))))))
 
