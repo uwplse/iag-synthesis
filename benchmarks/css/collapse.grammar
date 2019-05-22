@@ -5,8 +5,7 @@ traversal pre {
   }
   case Node {
     ??;
-    iterate[right] kids { ??; }
-    recur kids;
+    iterate[right] kids { recur kids; ??; }
   }
   case Leaf {
     ??;
@@ -16,11 +15,9 @@ traversal pre {
 traversal post {
   case Root {
     recur root;
-    ??;
   }
   case Node {
-    recur kids;
-    iterate[right] kids { ??; }
+    iterate[right] kids { recur kids; ??; }
     ??;
   }
   case Leaf {
@@ -151,9 +148,6 @@ class Node : Block {
     
     kids$$.mbn_prev := 0.0;
     kids$-.mbn_prev := kids$+.mbn;
-
-    self.mtp := 0.0;
-    self.mtn := 0.0;
 
     self.mtp :=
       max(
