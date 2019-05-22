@@ -22,6 +22,16 @@
 ; TODO: Maybe represent fields with a prefix tree.
 (struct tree (class [fields #:mutable] children) #:transparent)
 
+(define (tree-copy-shallow node)
+  (define children
+    (for/list ([(name subtree) (in-dict (tree-children node))])
+      (cons name
+            (if (list? subtree)
+                (map tree-copy-shallow subtree)
+                (tree-copy-shallow subtree)))))
+
+  (tree (tree-class node) (tree-fields node) children))
+
 (define (tree-copy node #:rebox? [rebox? #f])
   (define rebox
     (if rebox? (compose box unbox) identity))
@@ -252,7 +262,9 @@
            [(child1 name kind)
             (map (curry cons name) (generate kind))]
            [(or (child* name kind) (child+ name kind))
-            (list (cons name (generate kind)))])))
+            (let ([subtrees (generate kind)])
+              (list (cons name
+                          (append (map tree-copy-shallow subtrees) subtrees))))])))
      (map (curry tree class-name #f) (apply cartesian-product children))])
 
   (append-map construct (lookup inheritance root)))
