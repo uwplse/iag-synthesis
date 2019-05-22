@@ -234,17 +234,25 @@
 ; Return a set of example tree skeletons that include every parent-child class
 ; pairing permitted by the grammar.
 (define (tree-examples G root)
+  (define inheritance (associate-classes G))
   (define variants (build-children G))
+  (define queue
+    (apply mutable-seteq (map car (ag-grammar-classes G))))
 
   (define/match (construct class)
     [((cons class-name class-body))
+     (define generate
+       (if (set-member? queue class-name)
+           (compose (curry append-map construct) (curry lookup inheritance))
+           (curry lookup variants)))
+     (set-remove! queue class-name)
      (define children
        (for/list ([child-decl (ag-class-children class-body)])
          (match child-decl
            [(child1 name kind)
-            (map (curry cons name) (lookup variants kind))]
+            (map (curry cons name) (generate kind))]
            [(or (child* name kind) (child+ name kind))
-            (list (cons name (lookup variants kind)))])))
+            (list (cons name (generate kind)))])))
      (map (curry tree class-name #f) (apply cartesian-product children))])
 
-  (append-map construct (lookup (associate-classes G) root)))
+  (append-map construct (lookup inheritance root)))
