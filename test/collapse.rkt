@@ -19,36 +19,27 @@
 
 ; The schedule sketch for which to synthesize a completion.
 (define collapse-sketch
-  `(seq (trav post
-              ((Root
-                (hole)
-                (recur root)
-                (hole))
-               (Node
-                (hole)
-                (iter-right kids ((hole)))
-                (hole)
-                (recur kids)
-                (hole)
-                (iter-right kids ((hole)))
-                (hole))
-               (Leaf
-                (hole))))
-        (trav pre
-              ((Root
-                (hole)
-                (recur root)
-                (hole))
-               (Node
-                (hole)
-                (iter-right kids ((hole)))
-                (hole)
-                (recur kids)
-                (hole)
-                (iter-right kids ((hole)))
-                (hole))
-               (Leaf
-                (hole))))))
+  '(seq
+    (trav post
+          ((Root
+            (recur root)
+            (hole))
+           (Node
+            (recur kids)
+            (iter-right kids ((hole)))
+            (hole))
+           (Leaf
+            (hole))))
+    (trav pre
+          ((Root
+            (hole)
+            (recur root))
+           (Node
+            (hole)
+            (iter-right kids ((hole)))
+            (recur kids))
+           (Leaf
+            (hole))))))
 
 ; Synthesis with dataflow-tracing symbolic evaluation.
 (define (test-collapse)
