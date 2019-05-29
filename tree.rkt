@@ -12,8 +12,7 @@
          xml->tree
          xexpr->tree
          file->tree
-         tree-index
-         tree-bind!
+         tree-select
          tree-annotate
          tree-validate
          tree-gather
@@ -67,7 +66,7 @@
       [(list-rest class-name
                   (and xattributes (list (list (? symbol?) (? string?)) ...))
                   xcontent)
-       
+
        (define children
          (let ([subtrees (map recur (filter list? xcontent))])
            (match (class-children G class-name)
@@ -89,7 +88,7 @@
                (set! fields (cons (cons label value) fields)))))
 
        (tree class-name fields children)]
-    
+
       [(list-rest class-name children)
        (recur (list class-name null children))]
 
@@ -116,7 +115,7 @@
 ;     (proc (tree-fields self) path)]))
 
 ; Select the field store indexed by the object reference.
-(define (tree-index self object #:current [curr #f] #:virtual [virt #f]
+(define (tree-select self object #:current [curr #f] #:virtual [virt #f]
                     #:predecessor [pred #f] #:successor [succ #f])
   (define subtree (curry lookup (tree-children self)))
   (match object
@@ -129,13 +128,6 @@
     [(object$i child) (tree-fields curr)]
     [(object$+ child) (tree-fields succ)]
     [(object$$ child) (tree-fields (last (subtree child)))]))
-
-(define ((tree-bind! proc) self object label #:current [curr #f] #:virtual [virt #f]
-                           #:predecessor [pred #f] #:successor [succ #f])
-  (define store
-    (tree-index self object #:current curr #:virtual virt
-                #:predecessor pred #:successor succ))
-  (proc store label))
 
 ; Annotate the tree with attribute information.
 (define (tree-annotate G node emp new upd)
@@ -218,11 +210,11 @@
         (values iface-name (apply mutable-seteq class-names)))))
   (define (dequeue! iface-name class-name)
     (set-remove! (hash-ref queue iface-name) class-name))
-  
+
   (define forest (make-hasheq))
   (define (plant! iface-name class-name node)
     (hash-update! forest (tree-class node) (curry cons node) null))
-  
+
   (for ([(class-name class-body) (in-dict (ag-grammar-classes G))]
         #:when (andmap child*? (ag-class-children class-body)))
     (let ([iface-name (ag-class-interface class-body)]
@@ -230,7 +222,7 @@
       (plant! (tree class-name #f (map list child-names)))
       (when (null? child-names)
         (dequeue! iface-name class-name))))
-  
+
   ; until queue empty do:
   ;   find class in queue s.t. children class-saturated in forest:
   ;   construct nodes of class for cartesian product of child classes

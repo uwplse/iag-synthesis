@@ -252,10 +252,10 @@
      ((FOLDL LBRACKET node RBRACKET expression DOTDOT expression) `(foldl ,$3 ,$5 ,$7))
      ((FOLDR LBRACKET node RBRACKET expression DOTDOT expression) `(foldr ,$3 ,$5 ,$7))
      ((expression) $1))
-    
+
     (expression
-     ((TRUE) 'true)
-     ((FALSE) 'false)
+     ((TRUE) #t)
+     ((FALSE) #f)
      ((INT) $1)
      ((FLOAT) $1)
      ((reference) $1)
@@ -272,8 +272,8 @@
      ((expression NE expression) `(!= ,$1 ,$3))
      ((expression GE expression) `(>= ,$1 ,$3))
      ((expression GT expression) `(> ,$1 ,$3))
-     ((name LPAREN RPAREN) `(call ,$1 ()))
-     ((name LPAREN expression-list RPAREN) `(call ,$1 ,$3))
+     ((name LPAREN RPAREN) `(,$1))
+     ((name LPAREN expression-list RPAREN) `(,$1 . ,$3))
      ((IF expression THEN expression ELSE expression) `(ite ,$2 ,$4 ,$6))
      ((LPAREN expression RPAREN) $2))
 
@@ -439,10 +439,11 @@
    (expression->string expr)])
 
 (define/match (expression->string expr)
-  [((or 'true 'false))
-   (symbol->string expr)]
-  [((? integer?))
-   (number->string expr)]
+  [(#t) "true"]
+  [(#f) "false"]
+  [((? number?)) (number->string expr)]
+  [((reference _ _))
+   (reference->string expr)]
   [(`(! ,expr))
    (format "!(~a)"
            (expression->string expr))]
@@ -451,17 +452,15 @@
            (expression->string left-expr)
            op
            (expression->string right-expr))]
-  [(`(call ,(symbol fun) ,arg-exprs))
-   (format "~a(~a)"
-           fun
-           (string-join (map expression->string arg-exprs) ", "))]
   [(`(ite ,cond-expr ,then-expr ,else-expr))
    (format "if ~a then ~a else ~a"
            (expression->string cond-expr)
            (expression->string then-expr)
            (expression->string else-expr))]
-  [(ref)
-   (reference->string ref)])
+  [((list (symbol fun) arg-exprs ...))
+   (format "~a(~a)"
+           fun
+           (string-join (map expression->string arg-exprs) ", "))])
 
 (define/match (reference->string variable)
   [(`((unit ,(symbol node)) . ,(symbol label)))
