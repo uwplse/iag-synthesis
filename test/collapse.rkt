@@ -25,7 +25,8 @@
            (recur root))
           (Node
            (hole)
-           (iter-right kids ((hole) (recur kids) (hole)))
+           (iter-left kids ((hole) (recur kids)))
+           (iter-right kids ((hole)))
            (hole))
           (Leaf
            (hole)))))
