@@ -60,7 +60,7 @@
   ; NOTE: Using just the attribute label for virtual nodes
   ; is an unreliable hack.
   (define class-body (grammar-class G (tree-class self)))
-  (for ([command (lookup visitors (tree-class self))])
+  (for*/permuted ([command (lookup visitors (tree-class self))])
     (match command
       [`(recur ,child)
        (define subtree (lookup (tree-children self) child))
@@ -72,17 +72,14 @@
        (iter-left! G visitors self class-body child commands)]
       [`(iter-right ,child ,commands)
        (iter-right! G visitors self class-body child commands)]
-      [block
-       (for/permuted ([command block])
-         (match command
-           [`(eval ,node ,label)
-            (define value
-              (eval! self (class-rule-unit class-body node label)))
-            (update! (tree-select self `(unit ,node)) label value)]
-           [`(call ,method)
-            (call! self class-body method)]
-           [`(skip)
-            (void)]))])))
+      [`(eval ,node ,label)
+       (define value
+         (eval! self (class-rule-unit class-body node label)))
+       (update! (tree-select self `(unit ,node)) label value)]
+      [`(call ,method)
+       (call! self class-body method)]
+      [`(skip)
+       (void)])))
 
 (define (iter-left! G visitors self class-body child commands)
   (define virt$0 (alloc!))
@@ -91,23 +88,19 @@
              [pred #f])
             ([curr (lookup (tree-children self) child)])
     (define virt$+ (alloc!))
-    (for ([command commands])
-      (define (eval node label)
-        (let* ([expr (class-rule-iter class-body node label (not pred))]
-               [value (eval! self expr #:current curr
-                             #:virtual virt$- #:predecessor pred)]
-               [store (tree-select self `(curr ,node) #:current curr
-                                   #:virtual virt$+)])
-          (update! store label value)))
+    (for*/permuted ([command commands])
       (match command
-        [`(recur ,(== child)) (traverse G visitors curr)]
-        [`(eval ,node ,label) (eval node label)]
-        [`(skip) (void)]
-        [block
-         (for/permuted ([command block])
-           (match command
-             [`(eval ,node ,label) (eval node label)]
-             [`(skip) (void)]))]))
+        [`(recur ,(== child))
+         (traverse G visitors curr)]
+        [`(eval ,node ,label)
+         (let* ([expr (class-rule-iter class-body node label (not pred))]
+                [value (eval! self expr #:current curr
+                              #:virtual virt$- #:predecessor pred)]
+                [store (tree-select self `(curr ,node) #:current curr
+                                    #:virtual virt$+)])
+           (update! store label value))]
+        [`(skip)
+         (void)]))
     (values virt$+ curr)))
 
 (define (iter-right! G visitors self class-body child commands)
@@ -117,28 +110,23 @@
              [succ #f])
             ([curr (reverse (lookup (tree-children self) child))])
     (define virt$- (alloc!))
-    (for ([command commands])
-      (define (eval node label)
-        (let* ([expr (class-rule-iter class-body node label (not succ))]
-               [value (eval! self expr #:current curr
-                             #:virtual virt$+ #:successor succ)]
-               [store (tree-select self `(curr ,node) #:current curr
-                                   #:virtual virt$-)])
-          (update! store label value)))
-
+    (for*/permuted ([command commands])
       (match command
-        [`(recur ,(== child)) (traverse G visitors curr)]
-        [`(eval ,node ,label) (eval node label)]
-        [`(skip) (void)]
-        [block
-         (for/permuted ([command block])
-           (match command
-             [`(eval ,node ,label) (eval node label)]
-             [`(skip) (void)]))]))
+        [`(recur ,(== child))
+         (traverse G visitors curr)]
+        [`(eval ,node ,label)
+         (let* ([expr (class-rule-iter class-body node label (not succ))]
+                [value (eval! self expr #:current curr
+                              #:virtual virt$+ #:successor succ)]
+                [store (tree-select self `(curr ,node) #:current curr
+                                    #:virtual virt$-)])
+           (update! store label value))]
+        [`(skip)
+         (void)]))
     (values virt$- curr)))
 
 (define (init! self class-body commands virtual)
-  (for ([command commands])
+  (for*/permuted ([command commands])
     (match command
       [`(recur ,child)
        (void)]
@@ -146,15 +134,8 @@
        (let ([expr (class-rule-init class-body node label)])
          (when expr
            (update! virtual label (eval! self expr))))]
-      [block
-       (for/permuted ([command block])
-         (match command
-           [`(eval ,node ,label)
-            (let ([expr (class-rule-init class-body node label)])
-              (when expr
-                (update! virtual label (eval! self expr))))]
-           [`(skip)
-            (void)]))])))
+      [`(skip)
+       (void)])))
 
 (define (call! self class-body method-name #:current [curr #f]
                #:predecessor [pred #f] #:successor [succ #f])
