@@ -7,7 +7,7 @@
          rosette/solver/mip/cplex
          rosette/solver/smt/z3)
 
-(provide permute iter-permuted for/permuted join-threads join
+(provide permute iter-permuted for/permuted for*/permuted join-threads join
          table? make-table table-ref! table-def! break (rename-out [solve-trace solve]))
 
 ; Activate an ILP solver (IBM CPLEX if available, otherwise Z3 in ILP mode)
@@ -107,18 +107,20 @@
     (flush-residue!)))
 
 ; Syntactic sugar for iter-permuted.
-(define-syntax for/permuted
-  (syntax-rules ()
-    [(for/permuted ([name expr]) body ...)
-     (let ([value expr])
-       (if (permuted? value)
-           (iter-permuted value (λ (name) body ...))
-           (let ([name value])
-             body ...)))]
-    [(for/permuted (binder bindings ...) body ...)
-     (for/permuted (binder)
-       (for/permuted (bindings ...)
-         body ...))]))
+(define-syntax-rule (for/permuted ([name expr]) body ...)
+  (let ([value expr])
+    (if (permuted? value)
+        (iter-permuted value (λ (name) body ...))
+        (let ([name value])
+          body ...))))
+
+; Handy wrapper around for/permuted
+(define-syntax-rule (for*/permuted ([name expr]) body ...)
+  (let ([value expr])
+    (for ([name value])
+      (if (permuted? name)
+          (iter-permuted name (λ (name) body ...))
+          (begin body ...)))))
 
 ; Record that two threads ran concurrently, to later check data independence.
 (define (join-threads do-left do-right)
