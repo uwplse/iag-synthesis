@@ -18,7 +18,7 @@
       (let* ([allocate (λ (table name) table)]
              [initialize (λ (table name) (table-def! table name))]
              [tree (tree-annotate G tree make-table allocate initialize)])
-        (interpret G schedule tree)
+        (interpret/symbolic G schedule tree)
         (tree-validate G tree table-ref!)
         (break)))
 

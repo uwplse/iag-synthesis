@@ -7,15 +7,14 @@
          "../tree.rkt"
          "../trace.rkt")
 
-(provide (struct-out model) semantics denotation
-         concrete-semantics symbolic-semantics
-         interpret
+(provide interpret/concrete interpret/symbolic
          traverse)
 
 (struct model (alloc lookup update denote))
 
 (define denotation
   (list (cons '+ +) (cons '- -) (cons '* *) (cons '/ /)
+        (cons '< <) (cons '<= <=) (cons '== =) (cons '>= >=) (cons '> >)
         (cons 'max max) (cons 'min min)
         (cons '! not)
         (cons '&& (λ (e1 e2) (and e1 e2)))
@@ -34,7 +33,7 @@
          (λ (store label _) (table-def! store label))
          (const void)))
 
-(define semantics (make-parameter symbolic-semantics))
+(define semantics (make-parameter #f))
 
 (define (alloc!)
   ((model-alloc (semantics))))
@@ -44,6 +43,14 @@
   ((model-update (semantics)) store label value))
 (define (denote operator)
   ((model-denote (semantics)) operator))
+
+(define (interpret/concrete G schedule tree)
+  (parameterize ([semantics concrete-semantics])
+    (interpret G schedule tree)))
+
+(define (interpret/symbolic G schedule tree)
+  (parameterize ([semantics symbolic-semantics])
+    (interpret G schedule tree)))
 
 (define (interpret G schedule tree)
   (match schedule
