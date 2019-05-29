@@ -163,13 +163,9 @@ class Node : Block {
 
     kids$0.mbp_prev := 0.0;
     kids$+.mbp_prev := kids$-.mbp;
-    //kids$$.mbp_prev := 0.0;
-    //kids$-.mbp_prev := kids$+.mbp;
 
     kids$0.mbn_prev := 0.0;
     kids$+.mbn_prev := kids$-.mbn;
-    //kids$$.mbn_prev := 0.0;
-    //kids$-.mbn_prev := kids$+.mbn;
 
     self.mtp :=
       max(
@@ -219,8 +215,6 @@ class Node : Block {
 
     kids$0.mb_clear_prev := false;
     kids$+.mb_clear_prev := kids$-.mb_clear;
-    //kids$$.mb_clear_prev := false;
-    //kids$-.mb_clear_prev := kids$+.mb_clear;
 
     self.mb_clear :=
       self.has_clearance || (self.collapse_through && self.mb_clear_prev);
