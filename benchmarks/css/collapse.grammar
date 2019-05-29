@@ -5,7 +5,8 @@ traversal seq {
   }
   case Node {
     ??;
-    iterate[right] kids { ??; recur kids; ??; }
+    iterate[left] kids { ??; recur kids; }
+    iterate[right] kids { ??; }
     ??;
   }
   case Leaf {
@@ -20,7 +21,8 @@ traversal pre {
   }
   case Node {
     ??;
-    iterate[right] kids { recur kids; ??; }
+    iterate[left] kids { ??; recur kids; }
+    iterate[right] kids { ??; }
   }
   case Leaf {
     ??;
@@ -32,7 +34,8 @@ traversal post {
     recur root;
   }
   case Node {
-    iterate[right] kids { recur kids; ??; }
+    iterate[left] kids { ??; recur kids; }
+    iterate[right] kids { ??; }
     ??;
   }
   case Leaf {
@@ -158,11 +161,15 @@ class Node : Block {
       then min(kids$i.mbn, if !kids$+.has_clearance then kids$+.mtn_up else 0.0)
       else kids$i.mtn;
 
-    kids$$.mbp_prev := 0.0;
-    kids$-.mbp_prev := kids$+.mbp;
-    
-    kids$$.mbn_prev := 0.0;
-    kids$-.mbn_prev := kids$+.mbn;
+    kids$0.mbp_prev := 0.0;
+    kids$+.mbp_prev := kids$-.mbp;
+    //kids$$.mbp_prev := 0.0;
+    //kids$-.mbp_prev := kids$+.mbp;
+
+    kids$0.mbn_prev := 0.0;
+    kids$+.mbn_prev := kids$-.mbn;
+    //kids$$.mbn_prev := 0.0;
+    //kids$-.mbn_prev := kids$+.mbn;
 
     self.mtp :=
       max(
@@ -210,12 +217,13 @@ class Node : Block {
         if self.collapse_through then self.mtn else 0.0
       );
 
-    kids$$.mb_clear_prev := false;
-    kids$-.mb_clear_prev := kids$+.mb_clear;
-    //kids$0.mb_clear_prev := false;
-    //kids$+.mb_clear_prev := kids$-.mb_clear;
+    kids$0.mb_clear_prev := false;
+    kids$+.mb_clear_prev := kids$-.mb_clear;
+    //kids$$.mb_clear_prev := false;
+    //kids$-.mb_clear_prev := kids$+.mb_clear;
 
-    self.mb_clear := self.has_clearance || (self.collapse_through && self.mb_clear_prev);
+    self.mb_clear :=
+      self.has_clearance || (self.collapse_through && self.mb_clear_prev);
   }
 }
 
@@ -224,14 +232,35 @@ class Leaf : Block {
   attributes { }
   methods { }
   rules {
-    self.collapse_top := false;
-    self.collapse_bottom := false;
-    self.collapse_through := (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 && !self.is_replaced && true;
+    self.collapse_top := self.pt == 0.0 && self.bt == 0.0;
+    self.collapse_bottom := self.pb == 0.0 && self.bb == 0.0;
+    self.collapse_through := (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 && !self.is_replaced;
     self.collapse_weird := false;
-    self.mtp := 0;
-    self.mtn := 0;
-    self.mbp := 0;
-    self.mbn := 0;
-    self.mb_clear := false;
+    self.mtp :=
+      max(
+        max(self.mt, 0.0),
+        if self.collapse_through && !self.has_clearance && !self.is_first_box
+        then self.mbp_prev
+        else 0.0
+      );
+    self.mtn :=
+      min(
+        min(self.mt, 0.0),
+        if self.collapse_through && !self.has_clearance && !self.is_first_box
+        then self.mbn_prev
+        else 0.0
+      );
+    self.mbp :=
+      max(
+        max(self.mb, 0.0),
+        if self.collapse_through then self.mtp else 0.0
+      );
+    self.mbn :=
+      min(
+        min(self.mb, 0.0),
+        if self.collapse_through then self.mtn else 0.0
+      );
+    self.mb_clear :=
+      self.has_clearance || (self.collapse_through && self.mb_clear_prev);
   }
 }
