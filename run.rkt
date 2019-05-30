@@ -11,7 +11,7 @@
          "tracing/synthesizer.rkt")
 
 ;(define verbose? (make-parameter #f))
-(define root-classname (make-parameter 'Root))
+(define root-name (make-parameter 'Root))
 
 ; FIXME: This is a horrid hack and only supports sequential schedule sketches.
 (define (parse-schedule-sketch G S0)
@@ -27,11 +27,11 @@
  #:once-each
  ;[("-v" "--verbose") "Display verbose intermediate information"
  ;                    (verbose? #t)]
- [("-R" "--root") classname "Name of the attribute grammar's root class"
-                   (root-classname (string->symbol classname))]
+ [("-R" "--root") classname "Name of the attribute grammar's root interface"
+                   (root-name (string->symbol classname))]
  #:args (schedule-sketch grammar-filename)
  (let* ([G (file->grammar grammar-filename)]
-        [E (tree-examples G (root-classname))]
+        [E (tree-examples G (root-name))]
         [S (parse-schedule-sketch G schedule-sketch)]
         [S* (complete-sketch G S E)])
    (when S*
