@@ -4,7 +4,7 @@
 
 (require "../utility.rkt"
          "../grammar/syntax.rkt"
-         "../tree.rkt"
+         "../grammar/tree.rkt"
          "../trace.rkt")
 
 (provide interpret/concrete interpret/symbolic

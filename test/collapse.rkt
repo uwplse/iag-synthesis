@@ -4,8 +4,8 @@
 
 (require racket/pretty
          "../grammar/parse.rkt"
+         "../grammar/tree.rkt"
          "../schedule/parse.rkt"
-         "../tree.rkt"
          "../tracing/synthesizer.rkt"
          ;"../backend/rust/builder.rkt"
          ;"../backend/rust/printer.rkt"

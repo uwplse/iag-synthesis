@@ -4,8 +4,8 @@
 
 (require racket/dict
          (prefix-in xml: xml)
-         "utility.rkt"
-         "grammar/syntax.rkt")
+         "../utility.rkt"
+         "syntax.rkt")
 
 (provide (struct-out tree)
          tree-copy
