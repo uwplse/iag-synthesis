@@ -1,0 +1,364 @@
+traversal seq {
+  case Document {
+    ??;
+    recur root;
+  }
+  case FlowBlock {
+    ??;
+    recur kid;
+    ??;
+  }
+  case BlockLeaf {
+    ??;
+  }
+  case FlowRootC {
+    ??;
+    iterate[left] kids { ??; recur kids; }
+    iterate[right] kids { ??; }
+    ??;
+  }
+}
+
+traversal pre {
+  case Document {
+    ??;
+    recur root;
+  }
+  case FlowBlock {
+    ??;
+    recur kid;
+  }
+  case BlockLeaf {
+    ??;
+  }
+  case FlowRootC {
+    ??;
+    iterate[left] kids { ??; recur kids; }
+    iterate[right] kids { ??; }
+  }
+}
+
+traversal post {
+  case Document {
+    recur root;
+  }
+  case FlowBlock {
+    recur kid;
+    ??;
+  }
+  case BlockLeaf {
+    ??;
+  }
+  case FlowRootC {
+    iterate[left] kids { ??; recur kids; }
+    iterate[right] kids { ??; }
+    ??;
+  }
+}
+
+
+interface Block {
+  attributes {
+    output floatLstIn : int;
+    output floatLstOut : int;
+    output usedFloatLst : int;
+
+    output canvas : int;
+    output render : int;
+
+    output absX : int;
+    output absY : int;
+    output computedX : int;
+    output computedY : int;
+
+    output posContX : int;
+    output posContY : int;
+    output posContWidth : int;
+
+    output availableWidth : int;
+    output computedWidth : int;
+    input width : int;
+    output computedHeight : int;
+
+    output intrinsPrefWidth : int;
+    output intrinsMinWidth : int;
+    output intrinsHeight : int;
+
+    output inhFontSize : int;
+    input intrinsFontSize : int;
+
+    //input position : string = "static";
+    input left : int;
+    input right : int;
+    input top : int;
+    input bottom : int;
+
+    output clearance : int;
+
+    input borderw : int;
+
+    input marginTop : int;
+    input marginBottom :int;
+    input marginLeft : int;
+    input marginRight : int;
+    output mt : int;
+    output mb : int;
+    output ml : int;
+    output mr : int;
+    input paddingTop : int;
+    input paddingBottom : int;
+    input paddingLeft : int;
+    input paddingRight : int;
+    output pt : int;
+    output pb : int;
+    output pl : int;
+    output pr : int;
+
+    output childNum : int;
+  }
+}
+
+interface FlowRoot{
+    attributes {
+  output floatLstIn : int;
+  output floatLstOut : int;
+
+  output canvas : int;
+  output render : int;
+
+  output relRightX : int;
+  output relX : int;
+  output relRightY : int;
+  output relY : int;
+  output oldLineH : int;
+  output maxLineH : int;
+
+  output firstChildWidth : int;
+  output rightPadding : int;
+
+  output minX : int;
+  output minY : int;
+  output maxWidth : int;
+
+  output posContX : int;
+  output posContY : int;
+  output posContWidth : int;
+
+  output intrinsPrefWidth : int;
+  output intrinsMinWidth : int;
+
+  output inhFontSize : int;
+  input intrinsFontSize : int;
+
+  //box model
+    input marginTop : int;
+    input marginBottom : int;
+    input marginLeft : int;
+    input marginRight : int;
+    output mt : int;
+    output mb : int;
+    output ml : int;
+    output mr : int;
+    input paddingTop : int;
+    input paddingBottom : int;
+    input paddingLeft : int;
+    input paddingRight : int;
+    output pt : int;
+    output pb : int;
+    output pl : int;
+    output pr : int;
+    }
+}
+
+interface Root {
+  attributes { }
+}
+
+class FlowRootC : FlowRoot{
+    children{ kids : Block+; }
+    attributes{
+        output offsetX : int;
+        output offsetY : int;
+    }
+    methods{}
+    rules{
+        self.render := self.canvas;
+        self.offsetX := 0;
+        self.offsetY := 0;
+        kid$i.canvas := self.render;
+        kid$i.inhOffsetX := 0;
+        kid$i.inhOffsetY := 0;
+    }
+}
+
+class Document : Root{
+    children{ root : Block; }
+      attributes { }
+  methods { }
+    rules {
+        root.absX := 0;
+        root.absY := 0;
+        root.availableWidth := getPageWidth() - 15;
+        root.canvas := paintStart(root.computedWidth + root.pr + root.pl +root.mr + root.ml, root.computedHeight + root.mt + root.mb + root.pt + root.pb);
+        root.childNum := 1;
+        root.inhFontSize := 20;
+        root.floatLstIn := emptyFloatLst();
+    }
+}
+
+class BlockLeaf : Block{
+    children {
+  }
+    attributes{
+       output usedFontSize : int;
+       input height : int;
+    }
+  methods { }
+    rules {
+        //replace complex computation with uninterpreted function.
+        self.render := getRender();
+        //simplified version
+        self.computedX := self.absX + getValue(self.left, self.usedFontSize, self.availableWidth);
+        self.computedY := self.absY + getValue(self.top, self.usedFontSize, self.availableWidth);
+        
+        self.usedFontSize := if validFontSize(self.intrinsFontSize) 
+                             then getFontSize(self.intrinsFontSize, self.inhFontSize) 
+                             else self.inhFontSize;
+      
+        self.intrinsHeight := if getTag(self.width) == CONST_AUTO() 
+                              then 0 
+                              else getValue(self.height, self.usedFontSize, 0);
+
+        self.intrinsMinWidth := if getTag(height) == CONST_AUTO() 
+                                then 0 
+                                else getValue(self.width, self.usedFontSize, 0);
+
+        self.intrinsPrefWidth := self.intrinsMinWidth;
+        self.computedWidth := self.intrinsPrefWidth;
+        self.computedHeight := self.intrinsHeight;
+
+        self.pt := 0; 
+        self.pb := 0;
+        self.pl := 0;
+        self.pr := 0;
+
+        self.mt := 0;
+        self.mb := 0;
+        self.mr := 0;
+        self.ml := 0;
+
+        self.floatLstOut := self.floatLstIn;
+
+        self.clearance := getLeftOverhang(self.floatLstIn);
+
+        self.usedFloatLst := translate(floatLstIn, 0, clearance); 
+    }
+}   
+
+class FlowBlock : Block{
+    children {
+      kid : FlowRoot;
+    }
+
+    attributes{
+        output sumMarginsPadding : int;
+        output selfIntrinsWidth : int;
+        output usedFontSize : int;
+    }
+    methods { }
+    rules {
+        //blockWidth trait
+        self.computedWidth := max(self.intrinsMinWidth,self.availableWidth) - self.ml - self.mr - self.pl - self.pr;
+
+        self.pt := getValue(self.paddingTop, self.usedFontSize, self.availableWidth); 
+        self.pb := getValue(self.paddingBottom, self.usedFontSize, self.availableWidth); 
+        self.pl := getValue(self.paddingLeft, self.usedFontSize, self.availableWidth); 
+        self.pr := getValue(self.paddingRight, self.usedFontSize, self.availableWidth); 
+
+        self.mt := 
+                if getTag(self.marginTop) != CONST_AUTO() 
+                then getValue(self.marginTop, self.usedFontSize, self.availableWidth) 
+                else 0;
+        self.mb := 
+                if getTag(self.marginBottom) != CONST_AUTO() 
+                then getValue(self.marginBottom, self.usedFontSize, self.availableWidth) 
+                else 0;
+
+        //simplified
+        self.ml := 
+                if getTag(self.marginLeft) != CONST_AUTO()
+                then getValue(self.marginLeft, self.usedFontSize, self.availableWidth) 
+                else self.availableWidth - self.pr - self.pl - getValue(self.width, self.usedFontSize, self.availableWidth);
+        //simplified
+        self.mr := 
+                if getTag(self.marginRight) != CONST_AUTO()
+                then getValue(self.marginRight, self.usedFontSize, self.availableWidth) 
+                else self.availableWidth - self.pr - self.pl - getValue(self.width, self.usedFontSize, self.availableWidth);
+
+
+        self.clearance := getLeftOverhang(self.floatLstIn);
+
+        self.usedFloatLst := translate(self.floatLstIn, 0, clearance);
+
+        //replace complex computation with uninterpreted function.
+        self.render := getRender();
+
+        //simplified version
+        self.computedX := self.absX + getValue(self.left, self.usedFontSize, self.availableWidth);
+        self.computedY := self.absY + getValue(self.top, self.usedFontSize, self.availableWidth);
+        //simplified widthIntrinsics
+        self.sumMarginsPadding := 
+                      if getTag(self.marginLeft) == CONST_AUTO() 
+                      then 0 
+                      else getValue(self.marginLeft, self.usedFontSize,0);
+
+
+        self.selfIntrinsWidth := getValue(self.width, self.usedFontSize, 0);
+
+        kid.canvas := self.render;
+
+        kid.relX := 0;
+        kid.relY := 0;
+        kid.oldLineH := 0;
+
+        kid.rightPadding := 0;
+        kid.minX := computedX + ml + pl;
+        kid.minY := computedY + mt + pt;
+        kid.maxWidth := computedWidth;
+        
+        kid.posContX := 
+                          if is_static(position)
+                          then self.posContX 
+                          else self.computedX;
+
+        kid.posContY := 
+                          if is_static(position)
+                          then self.posContY 
+                          else self.computedY;
+
+        kid.posContWidth := 
+                          if is_static(position) 
+                          then self.posContWidth 
+                          else self.computedWidth;
+
+        self.intrinsMinWidth := max(self.selfIntrinsWidth + self.sumMarginsPadding, kid.intrinsMinWidth + self.sumMarginsPadding);
+        self.intrinsPrefWidth := 
+                          if self.selfIntrinsWidth == 0 
+                          then kid.intrinsPrefWidth + self.sumMarginsPadding 
+                          else self.selfIntrinsWidth + self.sumMarginsPadding;
+
+        self.intrinsHeight := kid.relRightY + kid.maxLineH - kid.relY + kid.mt + kid.mb + kid.pt + kid.pb;
+
+        self.computedHeight := self.intrinsHeight;
+
+        self.usedFontSize := 
+                          if validFontSize(self.intrinsFontSize) 
+                          then getFontSize(self.intrinsFontSize, self.inhFontSize) 
+                          else self.inhFontSize;
+
+        kid.inhFontSize := self.usedFontSize;
+
+        kid.floatLstIn := translate(self.usedFloatLst, (kid.pl + kid.ml), (kid.mt + kid.pt));
+        self.floatLstOut := translate(kid.floatLstOut, kid.pl + kid.ml, kid.mt + kid.pt);
+    }
+}
