@@ -1,6 +1,6 @@
 #lang rosette
 
-; Script to test on Collapse.
+; Script to test on margin collapse.
 
 (require racket/pretty
          "../grammar/parse.rkt"
