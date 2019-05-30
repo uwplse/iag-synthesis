@@ -2,6 +2,7 @@ traversal seq {
   case Document {
     ??;
     recur root;
+    ??;
   }
   case FlowBlock {
     ??;
@@ -12,9 +13,6 @@ traversal seq {
     ??;
   }
   case FlowRootC {
-    ??;
-    iterate[left] kids { ??; recur kids; }
-    iterate[right] kids { ??; }
     ??;
   }
 }
@@ -175,10 +173,12 @@ interface Root {
 }
 
 class FlowRootC : FlowRoot{
-    children{ kids : Block+; }
+    children{ }
     attributes{
         output offsetX : int;
         output offsetY : int;
+        output sumMarginsPadding : int;
+        output usedFontSize : int;
     }
     methods{}
     rules{
@@ -188,6 +188,27 @@ class FlowRootC : FlowRoot{
         kid$i.canvas := self.render;
         kid$i.inhOffsetX := 0;
         kid$i.inhOffsetY := 0;
+
+
+        usedFontSize := 0;
+        pt := 0; 
+        pb := 0; 
+        pl := getValue(paddingLeft,usedFontSize,maxWidth); 
+        pr := getValue(paddingRight,usedFontSize,maxWidth); 
+        sumMarginsPadding := 0;
+        mt := 0;
+        mb := 0;
+        mr :=  0;
+        ml :=  0;
+
+        floatLstOut := 0;
+
+      intrinsPrefWidth := 5;
+      intrinsMinWidth := 0;
+      firstChildWidth := 0;
+      relRightX := 0;
+      relRightY := 0;
+      maxLineH := 0;
     }
 }
 
@@ -252,6 +273,10 @@ class BlockLeaf : Block{
         self.clearance := getLeftOverhang(self.floatLstIn);
 
         self.usedFloatLst := translate(floatLstIn, 0, clearance); 
+
+        self.posContWidth := 0;
+        self.posContX := 0;
+        self.posContY := 0;
     }
 }   
 
@@ -327,17 +352,17 @@ class FlowBlock : Block{
         kid.maxWidth := computedWidth;
         
         kid.posContX := 
-                          if is_static(position)
+                          if is_static()
                           then self.posContX 
                           else self.computedX;
 
         kid.posContY := 
-                          if is_static(position)
+                          if is_static()
                           then self.posContY 
                           else self.computedY;
 
         kid.posContWidth := 
-                          if is_static(position) 
+                          if is_static() 
                           then self.posContWidth 
                           else self.computedWidth;
 
@@ -360,5 +385,9 @@ class FlowBlock : Block{
 
         kid.floatLstIn := translate(self.usedFloatLst, (kid.pl + kid.ml), (kid.mt + kid.pt));
         self.floatLstOut := translate(kid.floatLstOut, kid.pl + kid.ml, kid.mt + kid.pt);
+
+        self.posContWidth := 0;
+        self.posContX := 0;
+        self.posContY := 0;
     }
 }
