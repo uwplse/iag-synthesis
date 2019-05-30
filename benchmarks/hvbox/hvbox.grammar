@@ -1,14 +1,16 @@
 traversal pre {
-  case Root {
+  case Top {
     ??;
     recur root;
   }
   case HBox {
     ??;
+    iterate[left] childs { ??; }
     recur childs;
   }
   case VBox {
     ??;
+    iterate[left] childs { ??; }
     recur childs;
   }
   case Leaf {
@@ -17,16 +19,18 @@ traversal pre {
 }
 
 traversal post {
-  case Root {
+  case Top {
     recur root;
     ??;
   }
   case HBox {
     recur childs;
+    iterate[left] childs { ??; }
     ??;
   }
   case VBox {
     recur childs;
+    iterate[left] childs { ??; }
     ??;
   }
   case Leaf {
@@ -34,7 +38,7 @@ traversal post {
   }
 }
 
-interface Top {
+interface Root {
   attributes { }
 }
 
@@ -50,7 +54,7 @@ interface HVBox {
   }
 }
 
-class Root : Top {
+class Top : Root {
     children {
       root : HVBox;
     }
