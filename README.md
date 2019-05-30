@@ -1,4 +1,4 @@
-# SchedSynth: Parallel Schedule Synthesis for Attribute Grammars
+# SchedSynth: Schedule Synthesis for Attribute Grammars
 
 ## Getting started
 
