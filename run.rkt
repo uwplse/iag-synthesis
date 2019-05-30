@@ -1,3 +1,4 @@
+#!/usr/bin/env racket
 #lang rosette
 
 ; Script to run the synthesizer on a given attribute grammar.
