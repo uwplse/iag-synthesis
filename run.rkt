@@ -16,9 +16,10 @@
 ; FIXME: This is a horrid hack and only supports sequential schedule sketches.
 (define (parse-schedule-sketch G S0)
   (define traversals
-    (map (compose (curry grammar-traversal G) string->symbol)
-         (filter non-empty-string?
-                 (map string-trim (string-split S0 ";")))))
+    (reverse
+     (map (compose (curry grammar-traversal G) string->symbol)
+          (filter non-empty-string?
+                  (map string-trim (string-split S0 ";"))))))
   (foldr (curry list 'seq) (first traversals) (rest traversals)))
 
 (command-line
