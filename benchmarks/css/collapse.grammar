@@ -56,8 +56,8 @@ interface Block {
     input h : real;
 
     /* X and Y offset */
-    input xo : real;
-    input yo : real;
+    //input xo : real;
+    //input yo : real;
 
     /* margins */
     input mt : real;
@@ -98,17 +98,13 @@ interface Block {
     input scroll_x : real;
     input scroll_y : real;
 
-    input has_contents : bool;
+    //input has_contents : bool;
     input has_clearance : bool;
     input is_first_box : bool;
     input is_last_box : bool;
-    input is_component : bool;
     input is_replaced : bool;
 
-    input foreground : Color;
-    input background : Color;
-
-    input specified : Style;
+    //input specified : Style;
     input computed : Style;
   }
 }
