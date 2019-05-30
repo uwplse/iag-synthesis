@@ -10,7 +10,9 @@
 (provide interpret/concrete interpret/symbolic
          traverse)
 
+; TODO: Would be nice to factor out symbolic forking as well...
 (struct model (alloc lookup update denote))
+(define semantics (make-parameter #f))
 
 (define denotation
   (list (cons '+ +) (cons '- -) (cons '* *) (cons '/ /)
@@ -32,8 +34,6 @@
          table-ref!
          (λ (store label _) (table-def! store label))
          (const void)))
-
-(define semantics (make-parameter #f))
 
 (define (alloc!)
   ((model-alloc (semantics))))
