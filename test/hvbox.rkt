@@ -4,8 +4,8 @@
 
 (require racket/pretty
          "../grammar/parse.rkt"
+         "../grammar/tree.rkt"
          "../schedule/parse.rkt"
-         "../tree.rkt"
          "../tracing/synthesizer.rkt"
          ;"../backend/rust/builder.rkt"
          ;"../backend/rust/printer.rkt"
@@ -15,17 +15,17 @@
 (define hvbox-grammar (file->grammar "benchmarks/hvbox/hvbox.grammar"))
 
 (displayln "Generating attribute trees...")
-(define hvbox-examples (tree-examples hvbox-grammar 'Top))
+(define hvbox-examples (tree-examples hvbox-grammar 'Root))
 
 ; The schedule sketch for which to synthesize a completion.
 (define hvbox-sketch
   `(seq (trav post
-              ((Root (recur root) (hole))
+              ((Top (recur root) (hole))
                (HBox (recur childs) (iter-left childs ((hole))) (hole))
                (VBox (recur childs) (iter-left childs ((hole))) (hole))
                (Leaf (hole))))
         (trav pre
-              ((Root (hole) (recur root))
+              ((Top (hole) (recur root))
                (HBox (hole) (iter-left childs ((hole))) (recur childs))
                (VBox (hole) (iter-left childs ((hole))) (recur childs))
                (Leaf (hole))))))
