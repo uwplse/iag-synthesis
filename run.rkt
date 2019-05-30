@@ -4,11 +4,11 @@
 
 (require racket/cmdline
          racket/pretty
-         "grammar/parse.rkt"
-         "grammar/syntax.rkt"
-         "grammar/tree.rkt"
-         "schedule/parse.rkt"
-         "tracing/synthesizer.rkt")
+         "src/grammar/parse.rkt"
+         "src/grammar/syntax.rkt"
+         "src/grammar/tree.rkt"
+         "src/schedule/parse.rkt"
+         "src/tracing/synthesizer.rkt")
 
 ;(define verbose? (make-parameter #f))
 (define root-name (make-parameter 'Root))
