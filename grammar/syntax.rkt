@@ -63,7 +63,7 @@
 ; ---------------------
 
 (define (grammar-traversal G trav-name)
-  (lookup (ag-grammar-traversals G) trav-name eq?))
+  `(trav ,trav-name ,(lookup (ag-grammar-traversals G) trav-name eq?)))
 
 (define (grammar-interface G iface-name)
   (lookup (ag-grammar-interfaces G) iface-name eq?))

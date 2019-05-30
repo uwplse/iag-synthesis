@@ -1,5 +1,5 @@
 traversal seq {
-  case Root {
+  case Document {
     ??;
     recur root;
   }
@@ -15,7 +15,7 @@ traversal seq {
 }
 
 traversal pre {
-  case Root {
+  case Document {
     ??;
     recur root;
   }
@@ -30,7 +30,7 @@ traversal pre {
 }
 
 traversal post {
-  case Root {
+  case Document {
     recur root;
   }
   case Node {
@@ -43,7 +43,7 @@ traversal post {
   }
 }
 
-interface Tree {
+interface Root {
   attributes { }
 }
 
@@ -109,7 +109,7 @@ interface Block {
   }
 }
 
-class Root : Tree {
+class Document : Root {
   children {
     root : Block;
   }
