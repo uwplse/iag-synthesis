@@ -6,8 +6,8 @@
    or later) if you do not already have it installed on your system.
    - Make sure that the Racket binaries are available on your `PATH`.
 2. Install the Rosette DSL with the command `raco pkg install rosette`.
-3. Run a test synthesis task with `racket test/{hvbox,treemap,sunburst}.rkt`.
-   You can see the source grammars in `benchmark/*/*.grammar`.
+3. Run the synthezier with `racket run.rkt`, e.g.,
+   `racket run.rkt 'post;pre' benchmarks/hvbox/hvbox.grammar`.
 
 ## Notes
 
