@@ -13,11 +13,6 @@
     traversals ; (--> trav-name trav-decl)
     ) #:transparent)
 
-; traversal declaration
-(struct ag-traversal
-  (cases ; (--> class-name (* (| `(visit ,node) `(recur ,node) `(iterate ,node ,body))))
-   ) #:transparent)
-
 ; interface declaration
 (struct ag-interface
   (attributes ; (--> label (| `(in ,type) `(out ,type)))
@@ -391,6 +386,6 @@
 ; General functionality
 ; ---------------------
 
-; TODO: Implement some sanity checks 
+; TODO: Implement some sanity checks
 (define (check-grammar grammmar)
   #t)
