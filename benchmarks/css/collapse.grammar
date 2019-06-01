@@ -43,12 +43,9 @@ traversal post {
   }
 }
 
-interface Root {
-  attributes { }
-}
+interface Root { }
 
 interface Block {
-  attributes {
     /* X, Y and width/height */
     input x : real;
     input y : real;
@@ -106,16 +103,13 @@ interface Block {
 
     //input specified : Style;
     input computed : Style;
-  }
 }
 
 class Document : Root {
   children {
     root : Block;
   }
-  attributes { }
-  methods { }
-  rules {
+  statements {
     root.mtp_up := 0.0;
     root.mtn_up := 0.0;
     root.mbp_prev := 0.0;
@@ -128,9 +122,7 @@ class Node : Block {
   children {
     kids : Block+;
   }
-  attributes { }
-  methods { }
-  rules {
+  statements {
     self.collapse_top := self.pt == 0.0 && self.bt == 0.0;
     self.collapse_bottom :=
       self.pb == 0.0 && self.bb == 0.0 &&
@@ -218,10 +210,7 @@ class Node : Block {
 }
 
 class Leaf : Block {
-  children { }
-  attributes { }
-  methods { }
-  rules {
+  statements {
     self.collapse_top := self.pt == 0.0 && self.bt == 0.0;
     self.collapse_bottom := self.pb == 0.0 && self.bb == 0.0;
     self.collapse_through := (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 && !self.is_replaced;

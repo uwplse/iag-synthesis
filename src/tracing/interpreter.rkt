@@ -148,12 +148,12 @@
                #:predecessor [pred #f] #:successor [succ #f])
   (define method-decl (class-method class-body method-name))
   (for ([ref (method-inflow method-decl)])
-    (match-let ([(reference object label) ref])
+    (match-let ([(ag:reference object label) ref])
       (lookup! (tree-select self object #:current curr
                             #:predecessor pred #:successor succ)
                label)))
   (for ([ref (method-outflow method-decl)])
-    (match-let ([(reference object label) ref])
+    (match-let ([(ag:reference object label) ref])
       (update! (tree-select self object #:current curr) label #t))))
 
 (define (eval! self expr #:current [curr #f] #:virtual [virt #f]
@@ -161,7 +161,7 @@
   (define/match (recur expr)
     [((or #t #f (? number?)))
      expr]
-    [((reference object label))
+    [((ag:reference object label))
      (lookup! (tree-select self object #:current curr #:virtual virt
                            #:predecessor pred #:successor succ)
               label)]

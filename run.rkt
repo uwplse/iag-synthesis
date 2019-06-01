@@ -31,7 +31,7 @@
  [("-R" "--root") classname "Name of the attribute grammar's root interface"
                    (root-name (string->symbol classname))]
  #:args (schedule-sketch grammar-filename)
- (let* ([G (file->grammar grammar-filename)]
+ (let* ([G (elaborate-grammar (file->grammar grammar-filename))]
         [E (tree-examples G (root-name))]
         [S (parse-schedule-sketch G schedule-sketch)]
         [S* (complete-sketch G S E)])

@@ -8,24 +8,26 @@
 
 ; attribute grammar
 (struct ag-grammar
-   (interfaces ; (--> iface-name iface-body)
-    classes ; (--> class-name class-body)
-    traversals ; (--> trav-name trav-decl)
-    ) #:transparent)
+  (interfaces ; (--> iface-name (--> label (| `(in ,type) `(out ,type)))
+   classes ; (--> class-name class-body)
+   traits
+   traversals ; (--> trav-name trav-decl)
+   ) #:transparent)
 
-; interface declaration
-(struct ag-interface
-  (attributes ; (--> label (| `(in ,type) `(out ,type)))
+; class/trait body
+(struct ag-body
+  (children ; (--> child-name (| `(unit ,iface-name) `(star ,iface-name) `(plus ,iface-name)))
+   attributes ; (--> label (| `(in ,type) `(out ,type)))
+   statements ; (--> var (| expr `(fold ,expr ,expr)))
+   methods ; (--> method-name `(,(* var) . ,(* var)))
    ) #:transparent)
 
 ; class declaration
 (struct ag-class
   (interface ; iface-name
-   children ; (--> child-name (| `(unit ,iface-name) `(star ,iface-name) `(plus ,iface-name)))
-   attributes ; (--> label (| `(in ,type) `(out ,type)))
-   methods ; (--> method-name `(,(* var) . ,(* var)))
-   rules ; (--> var (| expr `(fold ,expr ,expr)))
-   ) #:transparent)
+   traits ; (list trait-name)
+   body ; ag-body
+    ) #:transparent)
 
 ; ------------------------------
 ; Utilities for identifier paths
@@ -71,104 +73,84 @@
 (define (grammar-class G class-name)
   (lookup (ag-grammar-classes G) class-name eq?))
 
+(define (grammar-trait G trait-name)
+  (lookup (ag-grammar-traits G) trait-name eq?))
+
 ; ------------------------------------
 ; Utilities for attribute declarations
 ; ------------------------------------
 
-(define-match-expander attribute
+(define-match-expander ag:sort
   (syntax-rules ()
-    [(attribute mode name type) `(,(symbol name) . (,mode ,(symbol type)))]))
+    [(ag:sort mode type) `(,(and mode (or 'in 'out)) ,(symbol type))]))
 
-(define-match-expander input
+(define-match-expander ag:input
   (syntax-rules ()
-    [(input name type) (attribute 'in name type)]))
+    [(ag:input type) (ag:sort 'in type)]))
 
-(define-match-expander output
+(define-match-expander ag:output
   (syntax-rules ()
-    [(output name type) (attribute 'out name type)]))
+    [(ag:output type) (ag:sort 'out type)]))
 
-(define/match (attribute-name v)
-  [((attribute _ name _)) name])
-
-(define/match (attribute-mode v)
-  [((attribute mode _ _)) mode])
-
-(define/match (attribute-type v)
-  [((attribute _ _ type)) type])
-
-(define/match (attribute? v)
-  [((attribute _ _ _)) #t]
+(define/match (ag:input? v)
+  [((ag:sort 'in _)) #t]
   [(_) #f])
 
-(define (input? v)
-  (eq? (attribute-mode v) 'in))
-
-(define (output? v)
-  (eq? (attribute-mode v) 'out))
+(define/match (ag:output? v)
+  [((ag:sort 'out _)) #t]
+  [(_) #f])
 
 ; ----------------------------------
 ; Utilities for attribute references
 ; ----------------------------------
 
-(define-match-expander reference
+(define-match-expander ag:reference
   (syntax-rules ()
-    [(reference object label) (cons object (symbol label))]))
+    [(ag:reference object label) (cons object (symbol label))]))
 
-(define/match (reference-object v)
-  [((reference object _)) object])
-
-(define/match (reference-label v)
-  [((reference _ label)) label])
-
-(define-match-expander object
+(define-match-expander ag:object
   (syntax-rules ()
-    [(object node index) `(,index ,(symbol node))]))
+    [(ag:object node index) `(,index ,(symbol node))]))
 
-(define-match-expander object1
+(define-match-expander ag:object1
   (syntax-rules ()
-    [(object1 node) (object node 'unit)]))
+    [(ag:object1 node) (ag:object node 'unit)]))
 
-(define-match-expander object$0
+(define-match-expander ag:object$0
   (syntax-rules ()
-    [(object$0 node) (object node 'first)]))
+    [(ag:object$0 node) (ag:object node 'first)]))
 
-(define-match-expander object$-
+(define-match-expander ag:object$-
   (syntax-rules ()
-    [(object$- node) (object node 'pred)]))
+    [(ag:object$- node) (ag:object node 'pred)]))
 
-(define-match-expander object$i
+(define-match-expander ag:object$i
   (syntax-rules ()
-    [(object$i node) (object node 'curr)]))
+    [(ag:object$i node) (ag:object node 'curr)]))
 
-(define-match-expander object$+
+(define-match-expander ag:object$+
   (syntax-rules ()
-    [(object$+ node) (object node 'succ)]))
+    [(ag:object$+ node) (ag:object node 'succ)]))
 
-(define-match-expander object$$
+(define-match-expander ag:object$$
   (syntax-rules ()
-    [(object$$ node) (object node 'last)]))
+    [(ag:object$$ node) (ag:object node 'last)]))
 
-(define/match (object-node v)
-  [((object node _)) node])
-
-(define/match (object-index v)
-  [((object _ index)) index])
-
-(define/match (object-iterated? v)
-  [((object$i _)) #t]
-  [((object$- _)) #t]
-  [((object$+ _)) #t]
+(define/match (ag:object-iterated? v)
+  [((ag:object$i _)) #t]
+  [((ag:object$- _)) #t]
+  [((ag:object$+ _)) #t]
   [(_) #f])
 
 ; FIXME: Is this to blame for spurious iteration failures?
-(define/match (object-iterated<=? lower upper)
-  [((object$i node1) (object$i node2)) (eq? node1 node2)]
-  [((object$i node1) (object$+ node2)) (eq? node1 node2)]
-  [((object$0 node1) (object$+ node2)) (eq? node1 node2)]
-  [((object$+ node1) (object$+ node2)) (eq? node1 node2)]
-  [((object$i node1) (object$- node2)) (eq? node1 node2)]
-  [((object$$ node1) (object$- node2)) (eq? node1 node2)]
-  [((object$- node1) (object$- node2)) (eq? node1 node2)]
+(define/match (ag:object-iterated<=? lower upper)
+  [((ag:object$i node1) (ag:object$i node2)) (eq? node1 node2)]
+  [((ag:object$i node1) (ag:object$+ node2)) (eq? node1 node2)]
+  [((ag:object$0 node1) (ag:object$+ node2)) (eq? node1 node2)]
+  [((ag:object$+ node1) (ag:object$+ node2)) (eq? node1 node2)]
+  [((ag:object$i node1) (ag:object$- node2)) (eq? node1 node2)]
+  [((ag:object$$ node1) (ag:object$- node2)) (eq? node1 node2)]
+  [((ag:object$- node1) (ag:object$- node2)) (eq? node1 node2)]
   [(#f #f) #t]
   [(_ _) #f])
 
@@ -232,9 +214,9 @@
 (define/match (method-outflow v)
   [((method _ _ outflow)) outflow])
 
-; -------------------------------
-; Utilities for rule declarations
-; -------------------------------
+; -----------------------------
+; Utilities for statement rules
+; -----------------------------
 
 (define-match-expander rule
   (syntax-rules ()
@@ -254,15 +236,15 @@
     [(fold init step) (or `(foldl ,init ,step) `(foldr ,init ,step))]))
 
 (define/match (rule-iterates v)
-  [((rule (and object (object$i _)) _ _)) object]
-  [((rule (and object (object$0 _)) _ _)) object]
-  [((rule (and object (object$+ _)) _ _)) object]
-  [((rule (and object (object$$ _)) _ _)) object]
-  [((rule (and object (object$- _)) _ _)) object]
-  [((rule (object1 _) _ (fold _ expr)))
+  [((rule (and object (ag:object$i _)) _ _)) object]
+  [((rule (and object (ag:object$0 _)) _ _)) object]
+  [((rule (and object (ag:object$+ _)) _ _)) object]
+  [((rule (and object (ag:object$$ _)) _ _)) object]
+  [((rule (and object (ag:object$- _)) _ _)) object]
+  [((rule (ag:object1 _) _ (fold _ expr)))
    (define/match (search expr)
      [((? number?)) #f]
-     [((reference (? object-iterated? object) _)) object]
+     [((ag:reference (? ag:object-iterated? object) _)) object]
      [(`(call ,_ ,arg-exprs))
       (ormap search arg-exprs)]
      [(`(ite ,cond-expr ,then-expr ,else-expr))
@@ -274,74 +256,71 @@
    (search expr)]
   [((rule _ _ _)) #f])
 
-; ------------------------------------
-; Utilities for interface declarations
-; ------------------------------------
+; --------------------------------
+; Utilities for class/trait bodies
+; --------------------------------
 
-(define (interface-attributes G iface-name)
-  (ag-interface-attributes (grammar-interface G iface-name)))
+(define/match (ag-body-union body1 body2)
+  [((ag-body children1 attributes1 statements1 methods1)
+    (ag-body children2 attributes2 statements2 methods2))
+   (ag-body (append children1 children2)
+            (append attributes1 attributes2)
+            (append statements1 statements2)
+            (append methods1 methods2))])
 
-(define (interface-labels G iface-name)
-  (map attribute-name (interface-attributes G iface-name)))
+(define/match (ag-body-inherit body interface)
+  [((ag-body children attributes statements methods) _)
+   (ag-body children (append interface attributes) statements methods)])
+
+(define ag-class-children (compose ag-body-children ag-class-body))
+(define ag-class-attributes (compose ag-body-attributes ag-class-body))
+(define ag-class-statements (compose ag-body-statements ag-class-body))
+(define ag-class-methods (compose ag-body-methods ag-class-body))
 
 ; --------------------------------
 ; Utilities for class declarations
 ; --------------------------------
 
-(define-match-expander class
-  (syntax-rules ()
-    [(class name iface-name child-decls attr-decls method-decls rules)
-     (cons (symbol name)
-           (ag-class iface-name child-decls attr-decls method-decls rules))]))
+(define (labels-for-node G class-name)
+  #f)
 
-(define/match (class-name class-decl)
-  [((class name _ _ _ _ _))
-   name])
+(define (children-for-node G class-name)
+  #f)
 
-(define (class-interface G class-name)
-  (ag-class-interface (grammar-class G class-name)))
-
-(define (class-children G class-name)
-  (ag-class-children (grammar-class G class-name)))
+(define (statements-for-node G class-name)
+  #f)
 
 (define (class-attributes G class-name)
-  (let* ([class-body (grammar-class G class-name)]
-         [iface-body (grammar-interface G (ag-class-interface class-body))])
+  (let ([class-body (grammar-class G class-name)])
     (append (ag-class-attributes class-body)
-            (ag-interface-attributes iface-body))))
-
-(define (class-methods G class-name)
-  (ag-class-methods (grammar-class G class-name)))
-
-(define (class-rules G class-name)
-  (ag-class-rules (grammar-class G class-name)))
+            (grammar-interface G (ag-class-interface class-body)))))
 
 ; Get expression for initial virtual accumulator.
 (define (class-rule-init class-body node label)
   (ormap (match-lambda
-           [(rule (object1 (== node)) (== label) (fold init _)) init]
+           [(rule (ag:object1 (== node)) (== label) (fold init _)) init]
            [_ #f])
-         (ag-class-rules class-body)))
+         (ag-class-statements class-body)))
 
 ; Get expression for basis node in iteration sequence.
 (define (class-rule-base class-body node label)
   (ormap (match-lambda
-           [(rule (object1 (== node)) (== label) (fold _ step)) step]
-           [(rule (object$0 (== node)) (== label) expr) expr]
-           [(rule (object$$ (== node)) (== label) expr) expr]
-           [(rule (object$i (== node)) (== label) expr) expr]
+           [(rule (ag:object1 (== node)) (== label) (fold _ step)) step]
+           [(rule (ag:object$0 (== node)) (== label) expr) expr]
+           [(rule (ag:object$$ (== node)) (== label) expr) expr]
+           [(rule (ag:object$i (== node)) (== label) expr) expr]
            [_ #f])
-         (ag-class-rules class-body)))
+         (ag-class-statements class-body)))
 
 ; Get expression for inductive nodes in iteration sequence.
 (define (class-rule-step class-body node label)
   (ormap (match-lambda
-           [(rule (object1 (== node)) (== label) (fold _ step)) step]
-           [(rule (object$+ (== node)) (== label) expr) expr]
-           [(rule (object$- (== node)) (== label) expr) expr]
-           [(rule (object$i (== node)) (== label) expr) expr]
+           [(rule (ag:object1 (== node)) (== label) (fold _ step)) step]
+           [(rule (ag:object$+ (== node)) (== label) expr) expr]
+           [(rule (ag:object$- (== node)) (== label) expr) expr]
+           [(rule (ag:object$i (== node)) (== label) expr) expr]
            [_ #f])
-         (ag-class-rules class-body)))
+         (ag-class-statements class-body)))
 
 ; Get expression for base/inductive nodes in iteration sequence.
 (define (class-rule-iter class-body node label base?)
@@ -352,9 +331,9 @@
 ; Get expression for a unit node outside all iteration.
 (define (class-rule-unit class-body node label)
   (ormap (match-lambda
-           [(rule (object1 (== node)) (== label) expr) expr]
+           [(rule (ag:object1 (== node)) (== label) expr) expr]
            [_ #f])
-         (ag-class-rules class-body)))
+         (ag-class-statements class-body)))
 
 ; Get method declaration given its name.
 (define (class-method class-body method-name)
@@ -368,19 +347,65 @@
                  (ag-grammar-classes grammar)
                  eq?)))
 
-; ------------------------------------
-; Utilities for interface declarations
-; ------------------------------------
+; TODO: Document.
+(define (class-duplicate-traits class-body)
+  #f)
 
-(define-match-expander interface
-  (syntax-rules ()
-    [(interface name attr-decls)
-     (cons (symbol name)
-           (ag-interface attr-decls))]))
+; TODO: Document.
+(define (class-duplicate-children class-body)
+  #f)
 
-(define/match (interface-name iface-decl)
-  [((interface name _))
-   name])
+; TODO: Document.
+(define (class-duplicate-attributes class-body)
+  #f)
+
+; TODO: Document.
+(define (class-duplicate-statements class-body)
+  #f)
+
+; TODO: Document.
+(define (class-duplicate-methods class-body)
+  #f)
+
+(define/match (validate-class G class-decl)
+  [(_ (cons name (ag-class iface-name trait-names class-body)))
+   #t])
+
+(define/match (elaborate-class G class-decl)
+  [(_ (cons name (ag-class iface-name trait-names class-body)))
+   (define body
+     (foldl ag-body-union
+            (ag-body-inherit class-body (grammar-interface G iface-name))
+            (map (curry grammar-trait G) trait-names)))
+   (cons name (ag-class iface-name trait-names body))])
+
+; ------------------------------
+; Utilities for complete grammar
+; ------------------------------
+
+(define/match (ag-grammar-add-interface grammar interface)
+  [((ag-grammar interfaces classes traits traversals) _)
+   (ag-grammar (cons interface interfaces) classes traits traversals)])
+
+(define/match (ag-grammar-add-class grammar class)
+  [((ag-grammar interfaces classes traits traversals) _)
+   (ag-grammar interfaces (cons class classes) traits traversals)])
+
+(define/match (ag-grammar-add-trait grammar trait)
+  [((ag-grammar interfaces classes traits traversals) _)
+   (ag-grammar interfaces classes (cons trait traits) traversals)])
+
+(define/match (ag-grammar-add-traversal grammar traversal)
+  [((ag-grammar interfaces classes traits traversals) _)
+   (ag-grammar interfaces classes traits (cons traversal traversals))])
+
+; Inline all traits and inherited attributes.
+(define/match (elaborate-grammar G)
+  [((ag-grammar interfaces classes traits traversals))
+   (ag-grammar interfaces
+               (map (curry elaborate-class G) classes)
+               traits
+               traversals)])
 
 ; ---------------------
 ; General functionality

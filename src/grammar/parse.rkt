@@ -20,8 +20,8 @@
   (RBRACE LBRACE LPAREN RPAREN LBRACKET RBRACKET
    COLON SEMICOLON COMMA DOT
    TRAVERSAL CASE ITERATE LEFT RIGHT RECUR CALL EVAL SKIP HOLE
-   INTERFACE CLASS
-   CHILDREN ATTRIBUTES METHODS RULES
+   INTERFACE CLASS TRAIT
+   CHILDREN ATTRIBUTES STATEMENTS RULES METHODS
    INPUT OUTPUT
    DEFINE FOLDL FOLDR DOTDOT
    BANG
@@ -92,11 +92,13 @@
    ["skip" (token-SKIP)]
    ["??" (token-HOLE)]
    ["interface" (token-INTERFACE)]
+   ["class" (token-CLASS)]
+   ["trait" (token-TRAIT)]
    ["children" (token-CHILDREN)]
    ["attributes" (token-ATTRIBUTES)]
-   ["class" (token-CLASS)]
-   ["methods" (token-METHODS)]
+   ["statements" (token-STATEMENTS)]
    ["rules" (token-RULES)]
+   ["methods" (token-METHODS)]
    ["input" (token-INPUT)]
    ["output" (token-OUTPUT)]
    [":=" (token-DEFINE)]
@@ -145,8 +147,9 @@
    (end EOF)
    (error
     (λ (_ token lexeme start stop)
-      (printf "Unexpected token: ~a(~a) from ~a to ~a~n"
-              token (or lexeme "") start stop)))
+      (printf "Unexpected token ~a~a on line ~a at column ~a~n"
+              token (if lexeme (format "(~a)" lexeme) "")
+              (position-line start) (position-col start))))
    (precs
     (nonassoc LPAREN RPAREN)
     (nonassoc IF THEN ELSE)
@@ -158,19 +161,11 @@
     (nonassoc BANG))
    (grammar
     (program
-     ((traversal-list interface-list class-list) (ag-grammar $2 $3 $1)))
-
-    (traversal-list
-     ((traversal traversal-list) (cons $1 $2))
-     (() null))
-
-    (interface-list
-     ((interface interface-list) (cons $1 $2))
-     (() null))
-
-    (class-list
-     ((class class-list) (cons $1 $2))
-     (() null))
+     ((traversal program) (ag-grammar-add-traversal $2 $1))
+     ((interface program) (ag-grammar-add-interface $2 $1))
+     ((class program) (ag-grammar-add-class $2 $1))
+     ((trait program) (ag-grammar-add-trait $2 $1))
+     (() (ag-grammar null null null null)))
 
     (traversal
      ((TRAVERSAL name LBRACE visitor-list RBRACE) (cons $2 $4)))
@@ -196,15 +191,33 @@
      ((HOLE SEMICOLON) `(hole)))
 
     (interface
-     ((INTERFACE name LBRACE attributes RBRACE)
-      (cons $2 (ag-interface $4))))
+     ((INTERFACE name LBRACE attribute-list RBRACE)
+      (cons $2 $4)))
 
     (class
-     ((CLASS name COLON name LBRACE children attributes methods rules RBRACE)
-      (cons $2 (ag-class $4 $6 $7 $8 $9))))
+      ((CLASS name COLON name LBRACE body RBRACE)
+       (cons $2 (ag-class $4 null $6)))
+      ((CLASS name LPAREN trait-list RPAREN COLON name LBRACE body RBRACE)
+       (cons $2 (ag-class $7 $4 $9))))
 
-    (children
-     ((CHILDREN LBRACE child-list RBRACE) $3))
+    (trait-list
+     ((trait COMMA trait-list) (cons $1 $3))
+     ((trait) (list $1)))
+
+    (trait
+     ((TRAIT name LBRACE body RBRACE)
+      (cons $2 $4)))
+
+    (body
+     ((block body) (ag-body-union $1 $2))
+     (() (ag-body null null null null)))
+
+    (block
+     ((CHILDREN LBRACE child-list RBRACE) (ag-body $3 null null null))
+     ((ATTRIBUTES LBRACE attribute-list RBRACE) (ag-body null $3 null null))
+     ((STATEMENTS LBRACE statement-list RBRACE) (ag-body null null $3 null))
+     ((RULES LBRACE statement-list RBRACE) (ag-body null null $3 null))
+     ((METHODS LBRACE method-list RBRACE) (ag-body null null null $3)))
 
     (child-list
      ((child SEMICOLON child-list) (cons $1 $3))
@@ -215,9 +228,6 @@
      ((name COLON name STAR) `(,$1 . (star ,$3)))
      ((name COLON name PLUS) `(,$1 . (plus ,$3))))
 
-    (attributes
-     ((ATTRIBUTES LBRACE attribute-list RBRACE) $3))
-
     (attribute-list
      ((attribute SEMICOLON attribute-list) (cons $1 $3))
      (() null))
@@ -227,25 +237,11 @@
      ;((GHOST IDENT COLON IDENT) `(,$2 . (tmp ,$4)))
      ((OUTPUT name COLON name) `(,$2 . (out ,$4))))
 
-    (methods
-     ((METHODS LBRACE method-list RBRACE) $3))
-
-    (method-list
-     ((method SEMICOLON method-list) (cons $1 $3))
+    (statement-list
+     ((statement SEMICOLON statement-list) (cons $1 $3))
      (() null))
 
-    (method
-     ((LBRACE variable-list RBRACE name LPAREN RPAREN LBRACE variable-list RBRACE)
-      `(,$4 . (,$2 . ,$8))))
-
-    (rules
-     ((RULES LBRACE rule-list RBRACE) $3))
-
-    (rule-list
-     ((rule SEMICOLON rule-list) (cons $1 $3))
-     (() null))
-
-    (rule
+    (statement
      ((reference DEFINE definition) (cons $1 $3)))
 
     (definition
@@ -281,10 +277,6 @@
      ((expression COMMA expression-list) (cons $1 $3))
      ((expression) (list $1)))
 
-    (variable-list
-     ((reference COMMA variable-list) (cons $1 $3))
-     ((reference) (list $1)))
-
     (reference
      ((name) `((unit self) . ,$1))
      ((node DOT name) `((unit ,$1) . ,$3))
@@ -293,6 +285,18 @@
      ((node CURR DOT name) `((curr ,$1) . ,$4))
      ((node SUCC DOT name) `((succ ,$1) . ,$4))
      ((node LAST DOT name) `((last ,$1) . ,$4)))
+
+    (method-list
+     ((method SEMICOLON method-list) (cons $1 $3))
+     (() null))
+
+    (method
+     ((LBRACE variable-list RBRACE name LPAREN RPAREN LBRACE variable-list RBRACE)
+      `(,$4 . (,$2 . ,$8))))
+
+    (variable-list
+     ((reference COMMA variable-list) (cons $1 $3))
+     ((reference) (list $1)))
 
 ;    (field
 ;     ((SELF selector) (cons 'self $2)))
@@ -318,10 +322,12 @@
      ((SKIP) 'skip)
      ((INTERFACE) 'interface)
      ((CLASS) 'class)
+     ((TRAIT) 'trait)
      ((CHILDREN) 'children)
      ((ATTRIBUTES) 'attributes)
-     ((METHODS) 'methods)
+     ((STATEMENTS) 'statements)
      ((RULES) 'rules)
+     ((METHODS) 'methods)
      ((INPUT) 'input)
      ((OUTPUT) 'output)))))
 
@@ -336,91 +342,108 @@
 ; ----------
 
 (define/match (grammar->string grammar)
-  [((ag-grammar iface-list class-list trav-list))
-   (string-join
-    (list (string-join (map traversal->string trav-list) "\n\n")
-          (string-join (map interface->string iface-list) "\n\n")
-          (string-join (map class->string class-list) "\n\n"))
-    "\n\n")])
+  [((ag-grammar iface-list class-list trait-list trav-list))
+   (string-append "/* Automatically formatted attribute grammar */"
+                  (list->string traversal->string trav-list)
+                  (list->string interface->string iface-list)
+                  (list->string class->string class-list)
+                  (list->string trait->string trait-list)
+                  "\n")])
 
 (define/match (traversal->string trav)
   [((cons trav-name visitors))
-   (format "traversal ~a {\n~a\n}"
+   (format "\n\ntraversal ~a {~a\n}"
            trav-name
-           (string-join (map visitor->string visitors) "\n"))])
+           (list->string visitor->string visitors))])
 
 (define/match (visitor->string visitor)
   [((cons class-name body))
-   (format "  case ~a {\n~a\n  }"
+   (format "\n  case ~a {~a\n  }"
            class-name
-           (string-join (map command->string body) "\n"))])
+           (list->string command->string body))])
 
 (define/match (command->string command)
   [(`(iter-left ,child ,commands))
-   (format "    iterate[left] ~a {\n  ~a\n    }"
+   (format "\n    iterate[left] ~a {~a\n    }"
            child
-           (string-join (map command->string commands) "\n  "))]
+           (list->string iterated-command->string commands))]
   [(`(iter-right ,child ,commands))
-   (format "    iterate[right] ~a {\n  ~a\n    }"
+   (format "\n    iterate[right] ~a {~a\n    }"
            child
-           (string-join (map command->string commands) "\n  "))]
+           (list->string iterated-command->string commands))]
   [(`(recur ,child))
-   (format "    recur ~a;" child)]
+   (format "\n    recur ~a;" child)]
   [(`(call ,method-name))
-   (format "    call ~a;" method-name)]
+   (format "\n    call ~a;" method-name)]
   [(`(eval ,node ,label))
-   (format "    eval ~a.~a;" node label)]
-  [(`(hole)) "    ??;"]
-  [(`(skip)) "    skip;"])
+   (format "\n    eval ~a.~a;" node label)]
+  [(`(hole)) "\n    ??;"]
+  [(`(skip)) "\n    skip;"])
+
+(define/match (iterated-command->string command)
+  [(`(recur ,child))
+   (format "\n      recur ~a;" child)]
+  [(`(call ,method-name))
+   (format "\n      call ~a;" method-name)]
+  [(`(eval ,node ,label))
+   (format "\n      eval ~a.~a;" node label)]
+  [(`(hole)) "\n      ??;"]
+  [(`(skip)) "\n      skip;"])
 
 (define/match (interface->string iface)
-  [((cons name (ag-interface attributes)))
-   (format "interface ~a {\n  attributes {~a\n  }\n}"
+  [((cons name attributes))
+   (format "\n\ninterface ~a {~a\n}"
            name
-           (string-join (map attribute->string attributes) "\n" #:before-first "\n"))])
+           (if (null? attributes)
+               " "
+               (list->string attribute->string attributes)))])
 
-(define/match (class->string class-ast)
-  [((cons name (ag-class iface-name children attributes methods rules)))
-   (define (inner-block header item->string items)
-     (define body
-       (if (null? items)
-           " "
-           (string-join (map item->string items) "\n" #:before-first "\n")))
-     (format "  ~a {~a\n  }" header body))
-   (format "class ~a : ~a {~a\n}"
+(define/match (class->string class)
+  [((cons name (ag-class interface traits body)))
+   (format "\n\nclass ~a~a : ~a ~a"
            name
-           iface-name
-           (string-join
-            (list (inner-block "children" child->string children)
-                  (inner-block "attributes" attribute->string attributes)
-                  (inner-block "methods" method->string methods)
-                  (inner-block "rules" rule->string rules))
-            "\n" #:before-first "\n"))])
+           (if (null? traits)
+               ""
+               (list->string symbol->string traits ", " "(" ")"))
+           interface
+           (body->string body))])
+
+(define/match (trait->string trait)
+  [((cons name body))
+   (format "\n\ntrait ~a ~a"
+           name
+           (body->string body))])
+
+(define/match (body->string body)
+  [((ag-body children attributes statements methods))
+   (format "{~a~a~a~a\n}"
+           (block->string "children" child->string children)
+           (block->string "attributes" attribute->string attributes)
+           (block->string "statements" statement->string statements)
+           (block->string "methods" method->string methods))])
+
+(define (block->string header entry->string entries)
+  (format "\n  ~a {~a\n  }"
+          header
+          (list->string entry->string entries)))
 
 (define/match (attribute->string attribute)
-  [((input name type))
-   (format "    input ~a : ~a;" name type)]
-  [((output name type))
-   (format "    output ~a : ~a;" name type)])
+  [((cons label (ag:input type)))
+   (format "\n    input ~a : ~a;" label type)]
+  [((cons label (ag:output type)))
+   (format "\n    output ~a : ~a;" label type)])
 
 (define/match (child->string child)
   [((child1 name iface-name))
-   (format "    ~a : ~a;" name iface-name)]
+   (format "\n    ~a : ~a;" name iface-name)]
   [((child* name iface-name))
-   (format "    ~a : ~a*;" name iface-name)]
+   (format "\n    ~a : ~a*;" name iface-name)]
   [((child+ name iface-name))
-   (format "    ~a : ~a+;" name iface-name)])
+   (format "\n    ~a : ~a+;" name iface-name)])
 
-(define/match (method->string method-ast)
-  [(`(,name . (,pre-refs . ,post-refs)))
-   (format "    { ~a } ~a() { ~a };"
-           (string-join (map reference->string pre-refs) ", ")
-           name
-           (string-join (map reference->string post-refs) ", "))])
-
-(define/match (rule->string rule)
+(define/match (statement->string statement)
   [(`(,ref . ,def))
-   (format "    ~a := ~a;"
+   (format "\n    ~a := ~a;"
            (reference->string ref)
            (definition->string def))])
 
@@ -442,25 +465,32 @@
   [(#t) "true"]
   [(#f) "false"]
   [((? number?)) (number->string expr)]
-  [((reference _ _))
+  [((ag:reference _ _))
    (reference->string expr)]
   [(`(! ,expr))
-   (format "!(~a)"
+   (format "!~a"
            (expression->string expr))]
   [(`(,(and op (or '+ '- '* '/ '< '<= '== '!= '>= '> '&& '\|\|)) ,left-expr ,right-expr))
-   (format "(~a) ~a (~a)"
+   (format "(~a ~a ~a)"
            (expression->string left-expr)
            op
            (expression->string right-expr))]
   [(`(ite ,cond-expr ,then-expr ,else-expr))
-   (format "if ~a then ~a else ~a"
+   (format "(if ~a then ~a else ~a)"
            (expression->string cond-expr)
            (expression->string then-expr)
            (expression->string else-expr))]
   [((list (symbol fun) arg-exprs ...))
    (format "~a(~a)"
            fun
-           (string-join (map expression->string arg-exprs) ", "))])
+           (list->string expression->string arg-exprs ", "))])
+
+(define/match (method->string method)
+  [(`(,name . (,precondition . ,postcondition)))
+   (format "\n    { ~a } ~a() { ~a };"
+           (list->string reference->string precondition ", ")
+           name
+           (list->string reference->string postcondition ", "))])
 
 (define/match (reference->string variable)
   [(`((unit ,(symbol node)) . ,(symbol label)))
@@ -475,3 +505,10 @@
    (format "~a$+.~a" node label)]
   [(`((last ,(symbol node)) . ,(symbol label)))
    (format "~a$$.~a" node label)])
+
+(define (list->string element->string elements [separator ""]
+                      [left-delimiter ""] [right-delimiter ""])
+  (string-join (map element->string elements)
+               separator
+               #:before-first left-delimiter
+               #:after-last right-delimiter))

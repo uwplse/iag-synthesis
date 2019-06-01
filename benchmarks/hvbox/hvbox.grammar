@@ -38,12 +38,9 @@ traversal post {
   }
 }
 
-interface Root {
-  attributes { }
-}
+interface Root { }
 
 interface HVBox {
-  attributes {
     input visible : bool;
     output width : int;
     output height : int;
@@ -51,16 +48,13 @@ interface HVBox {
     output height_out : int; // outer height
     output right : int;
     output bottom : int;
-  }
 }
 
 class Top : Root {
     children {
       root : HVBox;
     }
-    attributes { }
-    methods { }
-    rules {
+    statements {
       root.width_out := root.width;
       root.right := root.width;
       root.height_out := root.height;
@@ -72,9 +66,7 @@ class HBox : HVBox {
     children {
       childs : HVBox+;
     }
-    attributes { }
-    methods { }
-    rules {
+    statements {
       childs$0.width_out := 0;
       childs$+.width_out := childs$-.width_out + childs$i.width;
       childs$0.height_out := 0;
@@ -93,9 +85,7 @@ class VBox : HVBox {
     children {
       childs : HVBox+;
     }
-    attributes { }
-    methods { }
-    rules {
+    statements {
       childs$0.width_out := 0;
       childs$+.width_out := if (childs$-.width_out > childs$i.width) then childs$-.width_out else childs$i.width;
       childs$0.height_out := 0;
@@ -111,13 +101,11 @@ class VBox : HVBox {
 }
 
 class Leaf : HVBox {
-    children { }
     attributes {
       input width_in : int;
       input height_in : int;
     }
-    methods { }
-    rules {
+    statements {
       self.width := self.width_in;
       self.height := self.height_in;
     }

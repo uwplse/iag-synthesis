@@ -12,24 +12,15 @@
 
 (define (enumerate-commands class-body #:iterate [iter #f])
   (remove-duplicates
-   (for/list ([rule-decl (ag-class-rules class-body)]
-              #:when (object-iterated<=? (rule-iterates rule-decl) iter))
-     (match-let ([(rule (object node _) label _) rule-decl])
+   (for/list ([rule-decl (ag-class-statements class-body)]
+              #:when (ag:object-iterated<=? (rule-iterates rule-decl) iter))
+     (match-let ([(rule (ag:object node _) label _) rule-decl])
        `(eval ,node ,label)))))
 
 ; Instantiate a traversal sketch for an attribute grammar G, given an
 ; interpretation of (multi-)choice. Used to denote a traversal sketch as a
 ; symbolic traversal.
 (define (instantiate-traversal-sketch multichoose G order traversal)
-;  (define hole-range ; FIXME: Fuck, need to check loop context too!
-;    (for/hasheq ([(class-name class-body) (in-dict (ag-grammar-classes G))])
-;      (values class-name
-;              (enumerate-commands class-body )
-;              (append (enumerate-method-calls class-body)
-;                      (enumerate-rule-evals class-body)))))
-;  (define (hole-fill* class-name)
-;    (let ([range (hash-ref hole-range class-name)])
-;      (multichoose (length range) range)))
   (define (instantiate-command-sketch class-name command)
     (define class-body (grammar-class G class-name))
     (define (aux command #:iterate [iter #f])
@@ -93,4 +84,3 @@
     (displayln sketch)
     (synthesizer G sketch examples)
     (clear-asserts!)))
-
