@@ -492,19 +492,17 @@
            name
            (list->string reference->string postcondition ", "))])
 
-(define/match (reference->string variable)
-  [(`((unit ,(symbol node)) . ,(symbol label)))
-   (format "~a.~a" node label)]
-  [(`((first ,(symbol node)) . ,(symbol label)))
-   (format "~a$0.~a" node label)]
-  [(`((pred ,(symbol node)) . ,(symbol label)))
-   (format "~a$-.~a" node label)]
-  [(`((curr ,(symbol node)) . ,(symbol label)))
-   (format "~a$i.~a" node label)]
-  [(`((succ ,(symbol node)) . ,(symbol label)))
-   (format "~a$+.~a" node label)]
-  [(`((last ,(symbol node)) . ,(symbol label)))
-   (format "~a$$.~a" node label)])
+(define/match (reference->string reference)
+  [((ag:reference object label))
+   (format "~a.~a" (object->string object) label)])
+
+  (define/match (object->string object)
+    [((ag:object1 node)) (format "~a" node)]
+    [((ag:object$0 node)) (format "~a$0" node)]
+    [((ag:object$- node)) (format "~a$-" node)]
+    [((ag:object$i node)) (format "~a$i" node)]
+    [((ag:object$+ node)) (format "~a$+" node)]
+    [((ag:object$$ node)) (format "~a$$" node)])
 
 (define (list->string element->string elements [separator ""]
                       [left-delimiter ""] [right-delimiter ""])

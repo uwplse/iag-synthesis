@@ -281,12 +281,15 @@
 ; Utilities for class declarations
 ; --------------------------------
 
+; TODO
 (define (labels-for-node G class-name)
   #f)
 
+; TODO
 (define (children-for-node G class-name)
   #f)
 
+; TODO
 (define (statements-for-node G class-name)
   #f)
 
