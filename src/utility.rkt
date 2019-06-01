@@ -6,6 +6,8 @@
 
 (provide (all-defined-out))
 
+(port-count-lines-enabled #t)
+
 (current-bitwidth #f)
 
 (define (oracle type)
