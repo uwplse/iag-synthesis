@@ -7,7 +7,7 @@
          rosette/solver/mip/cplex
          rosette/solver/smt/z3)
 
-(provide permute iter-permuted for/permuted for*/permuted join-threads join
+(provide permute iter-permuted for/permuted for*/permuted join-threads join debug
          table? make-table table-ref! table-def! break (rename-out [solve-trace solve]))
 
 ; Activate an ILP solver (IBM CPLEX if available, otherwise Z3 in ILP mode)
@@ -80,6 +80,9 @@
 
 ; Assume a guard condition inside a body residual program.
 (struct cmd:assume (guard body) #:transparent)
+
+; Log a debugging event, to display in case of failure.
+(struct cmd:debug (event) #:transparent)
 
 ; Reverse block of residualizing program.
 (define residue null)
@@ -154,6 +157,11 @@
   (push! residue (cmd:write table name))
   (flush-residue!))
 
+; Log a debugging event, to display in case of failure.
+(define (debug event)
+  (push! residue (cmd:debug event))
+  (flush-residue!))
+
 ; Create the conjunction of a list of binary variables.
 (define conjoin*
   ; Since Rosette symbolic variables are only distinguishable by `eqv?`, we use
@@ -209,6 +217,8 @@
        (with-handlers ([exn:fail? rollback])
          (evaluate-residue! body shared-dependency))
        (pop! path-condition)]
+      [(cmd:debug event)
+       (displayln event)]
       [(cmd:alloc table)
        (set-table-contents! table (make-hash))]
       [(cmd:read (table contents) name)

@@ -153,14 +153,15 @@
   (tree (tree-class node) store children))
 
 ; Validate some property of every output attribute value.
-(define (tree-validate G tree validate)
+(define (tree-validate G tree check)
   (for ([(label sort) (in-dict (node-attributes G tree))])
-    (validate (tree-fields tree) label))
+    (displayln `(check ,(tree-class tree) ,label))
+    (check (tree-fields tree) label))
   (for ([(name subtree) (in-dict (tree-children tree))])
     (if (list? subtree)
         (for ([node subtree])
-          (tree-validate G node validate))
-        (tree-validate G subtree validate))))
+          (tree-validate G node check))
+        (tree-validate G subtree check))))
 
 ; Collect all the nodes in the tree into a post-order list.
 (define (tree-gather tree [nodes null])
