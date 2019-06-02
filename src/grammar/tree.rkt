@@ -116,6 +116,9 @@
 ;    [#f
 ;     (proc (tree-fields self) path)]))
 
+(define (node-attributes G node)
+  (ag-class-attributes (grammar-class G (tree-class node))))
+
 ; Select the field store indexed by the object reference.
 (define (tree-select self object #:current [curr #f] #:virtual [virt #f]
                     #:predecessor [pred #f] #:successor [succ #f])
@@ -135,7 +138,7 @@
 (define (tree-annotate G node emp new upd)
   (define store
     (for/fold ([store (emp)])
-              ([(label sort) (in-dict (ag-class-attributes (grammar-class G (tree-class node))))])
+              ([(label sort) (in-dict (node-attributes G node))])
       (let ([store (new store label)])
         (when (ag:input? sort)
           (upd store label))
@@ -151,8 +154,7 @@
 
 ; Validate some property of every output attribute value.
 (define (tree-validate G tree validate)
-  (define class (grammar-class G (tree-class tree)))
-  (for ([(label sort) (in-dict (ag-class-attributes class))])
+  (for ([(label sort) (in-dict (node-attributes G tree))])
     (validate (tree-fields tree) label))
   (for ([(name subtree) (in-dict (tree-children tree))])
     (if (list? subtree)
