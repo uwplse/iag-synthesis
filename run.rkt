@@ -14,6 +14,11 @@
 ;(define verbose? (make-parameter #f))
 (define root-name (make-parameter 'Root))
 
+(define (parse-grammar filename)
+  (let ([G (elaborate-grammar (file->grammar filename))])
+    (validate-grammar G)
+    G))
+
 ; FIXME: This is a horrid hack and only supports sequential schedule sketches.
 (define (parse-schedule-sketch G S0)
   (define traversals
@@ -31,7 +36,7 @@
  [("-R" "--root") classname "Name of the attribute grammar's root interface"
                    (root-name (string->symbol classname))]
  #:args (schedule-sketch grammar-filename)
- (let* ([G (elaborate-grammar (file->grammar grammar-filename))]
+ (let* ([G (parse-grammar grammar-filename)]
         [E (tree-examples G (root-name))]
         [S (parse-schedule-sketch G schedule-sketch)]
         [S* (complete-sketch G S E)])

@@ -72,10 +72,10 @@
        (define children
          (let ([subtrees (map recur (filter list? xcontent))])
            (match (ag-class-children class)
-             [(list (child1 child-names _) ...)
-              (map cons child-names subtrees)]
-             [(list (or (child* child-name _) (child+ child-name _)))
-              (cons child-name subtrees)])))
+             [(list (cons names (ag:child1 _)) ...)
+              (map cons names subtrees)]
+             [(list (cons name (or (ag:child* _) (ag:child+ _))))
+              (cons name subtrees)])))
 
        (define fields
          (if boxed?
@@ -181,7 +181,7 @@
           (for/fold ([leaf-nodes null])
                     ([(class-name class) (in-dict classes)])
             (match (ag-class-children class)
-              [(list (child* names _) ...)
+              [(list (cons names (ag:child* _)) ...)
                (cons (tree class-name #f (map list names)) leaf-nodes)]
               [_
                leaf-nodes])))))
@@ -194,9 +194,9 @@
         (define child-variants
           (for/list ([child-decl (ag-class-children class)])
             (match child-decl
-              [(child1 name kind)
+              [(cons name (ag:child1 kind))
                (map (curry cons name) (lookup leaf-variants kind))]
-              [(or (child* name kind) (child+ name kind))
+              [(cons name (or (ag:child* kind) (ag:child+ kind)))
                (list (cons name (lookup leaf-variants kind)))])))
         (map (curry tree class-name #f)
              (apply cartesian-product child-variants))))
@@ -218,7 +218,7 @@
     (hash-update! forest (tree-class node) (curry cons node) null))
 
   (for ([(class-name class) (in-dict (ag-grammar-classes G))]
-        #:when (andmap child*? (ag-class-children class)))
+        #:when (andmap (compose ag:child*? cdr) (ag-class-children class)))
     (let ([iface-name (ag-class-interface class)]
           [child-names (map car (ag-class-children class))])
       (plant! (tree class-name #f (map list child-names)))
@@ -253,9 +253,9 @@
      (define children
        (for/list ([child-decl (ag-class-children class)])
          (match child-decl
-           [(child1 name kind)
+           [(cons name (ag:child1 kind))
             (map (curry cons name) (generate kind))]
-           [(or (child* name kind) (child+ name kind))
+           [(cons name (or (ag:child* kind) (ag:child+ kind)))
             (let ([subtrees (generate kind)])
               (list (cons name
                           (append (map tree-copy-shallow subtrees) subtrees))))])))

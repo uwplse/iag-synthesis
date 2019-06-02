@@ -161,10 +161,10 @@
     (nonassoc BANG))
    (grammar
     (program
-     ((traversal program) (ag-grammar-add-traversal $2 $1))
-     ((interface program) (ag-grammar-add-interface $2 $1))
-     ((class program) (ag-grammar-add-class $2 $1))
-     ((trait program) (ag-grammar-add-trait $2 $1))
+     ((traversal program) (grammar-add-traversal $2 $1))
+     ((interface program) (grammar-add-interface $2 $1))
+     ((class program) (grammar-add-class $2 $1))
+     ((trait program) (grammar-add-trait $2 $1))
      (() (ag-grammar null null null null)))
 
     (traversal
@@ -434,12 +434,12 @@
    (format "\n    output ~a : ~a;" label type)])
 
 (define/match (child->string child)
-  [((child1 name iface-name))
-   (format "\n    ~a : ~a;" name iface-name)]
-  [((child* name iface-name))
-   (format "\n    ~a : ~a*;" name iface-name)]
-  [((child+ name iface-name))
-   (format "\n    ~a : ~a+;" name iface-name)])
+  [((cons name (ag:child1 interface)))
+   (format "\n    ~a : ~a;" name interface)]
+  [((cons name (ag:child* interface)))
+   (format "\n    ~a : ~a*;" name interface)]
+  [((cons name (ag:child+ interface)))
+   (format "\n    ~a : ~a+;" name interface)])
 
 (define/match (statement->string statement)
   [(`(,ref . ,def))
@@ -491,18 +491,6 @@
            (list->string reference->string precondition ", ")
            name
            (list->string reference->string postcondition ", "))])
-
-(define/match (reference->string reference)
-  [((ag:reference object label))
-   (format "~a.~a" (object->string object) label)])
-
-  (define/match (object->string object)
-    [((ag:object1 node)) (format "~a" node)]
-    [((ag:object$0 node)) (format "~a$0" node)]
-    [((ag:object$- node)) (format "~a$-" node)]
-    [((ag:object$i node)) (format "~a$i" node)]
-    [((ag:object$+ node)) (format "~a$+" node)]
-    [((ag:object$$ node)) (format "~a$$" node)])
 
 (define (list->string element->string elements [separator ""]
                       [left-delimiter ""] [right-delimiter ""])

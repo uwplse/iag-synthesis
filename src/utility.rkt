@@ -65,7 +65,7 @@
     (set! x (+ x 1))
     x))
 
-(define (lookup lst x [same? equal?])
+(define (lookup lst x [same? eq?])
   (let ([y (assoc x lst same?)])
     (and y (cdr y))))
 
