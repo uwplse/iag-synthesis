@@ -244,18 +244,6 @@
 (define/match (rule-define v)
   [((rule _ _ define)) define])
 
-(define-match-expander ag:foldl
-  (syntax-rules ()
-    [(foldl seed step) `(foldl ,seed ,step)]))
-
-(define-match-expander ag:foldr
-  (syntax-rules ()
-    [(foldr seed step) `(foldr ,seed ,step)]))
-
-(define-match-expander fold ; ag:fold
-  (syntax-rules ()
-    [(fold seed step) `(,(or 'foldl 'foldr) ,seed ,step)]))
-
 (define/match (rule-iterates v)
   [((rule (and object (ag:object$i _)) _ _)) object]
   [((rule (and object (ag:object$0 _)) _ _)) object]
@@ -315,14 +303,16 @@
 ; Get expression for initial virtual accumulator.
 (define (class-rule-init class-body node label)
   (ormap (match-lambda
-           [(rule (ag:object1 (== node)) (== label) (fold init _)) init]
+           [(rule (ag:object1 (== node)) (== label) `(foldl ,init ,_)) init]
+           [(rule (ag:object1 (== node)) (== label) `(foldr ,init ,_)) init]
            [_ #f])
          (ag-class-statements class-body)))
 
 ; Get expression for basis node in iteration sequence.
 (define (class-rule-base class-body node label)
   (ormap (match-lambda
-           [(rule (ag:object1 (== node)) (== label) (fold _ step)) step]
+           [(rule (ag:object1 (== node)) (== label) `(foldl ,_ ,step)) step]
+           [(rule (ag:object1 (== node)) (== label) `(foldr ,_ ,step)) step]
            [(rule (ag:object$0 (== node)) (== label) expr) expr]
            [(rule (ag:object$$ (== node)) (== label) expr) expr]
            [(rule (ag:object$i (== node)) (== label) expr) expr]
@@ -332,7 +322,8 @@
 ; Get expression for inductive nodes in iteration sequence.
 (define (class-rule-step class-body node label)
   (ormap (match-lambda
-           [(rule (ag:object1 (== node)) (== label) (fold _ step)) step]
+           [(rule (ag:object1 (== node)) (== label) `(foldl ,_ ,step)) step]
+           [(rule (ag:object1 (== node)) (== label) `(foldr ,_ ,step)) step]
            [(rule (ag:object$+ (== node)) (== label) expr) expr]
            [(rule (ag:object$- (== node)) (== label) expr) expr]
            [(rule (ag:object$i (== node)) (== label) expr) expr]
@@ -486,7 +477,7 @@
 
 ; TODO: Document.
 (define/match (validate-statement G class-decl statement)
-  [(_ _ (cons output (fold seed-expr step-expr)))
+  [(_ _ (cons output (list (or 'foldl 'foldr) seed-expr step-expr)))
    (validate-reference G class-decl output #:fold? #t)
    (for ([input (expression-context seed-expr)])
      (validate-reference G class-decl input))
