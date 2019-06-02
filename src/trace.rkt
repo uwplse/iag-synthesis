@@ -12,7 +12,7 @@
 
 ; Activate an ILP solver (IBM CPLEX if available, otherwise Z3 in ILP mode)
 (current-solver
-  (if #f ;(cplex-available?) ; Rosette encodes for CPLEX very, very slowly...
+  (if (cplex-available?) ; FIXME: Rosette encodes for CPLEX very slowly...
       (cplex)
       (z3 #:logic 'QF_LIA)))
 
