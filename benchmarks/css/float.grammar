@@ -14,6 +14,8 @@ traversal seq {
   }
   case FlowRootC {
     ??;
+    iterate[left] kids { ??; recur kids; ??; }
+    ??;
   }
 }
 
@@ -31,8 +33,7 @@ traversal pre {
   }
   case FlowRootC {
     ??;
-    iterate[left] kids { ??; recur kids; }
-    iterate[right] kids { ??; }
+    iterate[left] kids { ??; recur kids; ??; }
   }
 }
 
@@ -48,8 +49,7 @@ traversal post {
     ??;
   }
   case FlowRootC {
-    iterate[left] kids { ??; recur kids; }
-    iterate[right] kids { ??; }
+    iterate[left] kids { ??; recur kids; ??; }
     ??;
   }
 }
@@ -114,7 +114,7 @@ interface Block {
   output childNum : int;
 }
 
-interface FlowRoot{
+interface FlowRoot {
   output floatLstIn : int;
   output floatLstOut : int;
 
@@ -181,6 +181,17 @@ class FlowRootC : FlowRoot {
     self.offsetX := 0;
     self.offsetY := 0;
     kids$i.canvas := self.render;
+
+    // NOTE(nyazdani): Modified the following lines to debug grammar.
+    kids$0.floatLstIn := self.floatLstIn;
+    kids$+.floatLstIn := kids$-.floatLstOut;
+    kids$i.absX := self.relX;
+    kids$i.absY := self.relY;
+    kids$i.availableWidth := self.maxWidth;
+    kids$0.childNum := 1;
+    kids$+.childNum := kids$-.childNum + 1;
+    kids$i.inhFontSize := self.inhFontSize;
+
     //kids$i.inhOffsetX := 0;
     //kids$i.inhOffsetY := 0;
 
@@ -207,7 +218,7 @@ class FlowRootC : FlowRoot {
   }
 }
 
-class Document : Root{
+class Document : Root {
   children {
     root : Block;
   }
