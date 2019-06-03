@@ -28,6 +28,7 @@
    PLUS MINUS STAR SLASH
    LT LE EQ NE GE GT
    AND OR
+   QUESTION
    IF THEN ELSE
    TRUE FALSE
    SELF FIRST PRED CURR SUCC LAST
@@ -118,6 +119,7 @@
    [">" (token-GT)]
    ["&&" (token-AND)]
    ["||" (token-OR)]
+   ["?" (token-QUESTION)]
    ["if" (token-IF)]
    ["then" (token-THEN)]
    ["else" (token-ELSE)]
@@ -153,6 +155,7 @@
    (precs
     (nonassoc LPAREN RPAREN)
     (nonassoc IF THEN ELSE)
+    (nonassoc QUESTION COLON)
     (left OR)
     (left AND)
     (nonassoc LT LE EQ NE GE GT)
@@ -271,6 +274,7 @@
      ((name LPAREN RPAREN) `(,$1))
      ((name LPAREN expression-list RPAREN) `(,$1 . ,$3))
      ((IF expression THEN expression ELSE expression) `(ite ,$2 ,$4 ,$6))
+     ((expression QUESTION expression COLON expression) `(ite ,$1 ,$3 ,$5))
      ((LPAREN expression RPAREN) $2))
 
     (expression-list
