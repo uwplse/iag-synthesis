@@ -166,14 +166,25 @@ interface FlowRoot {
 
 interface Root { }
 
-class FlowRootC : FlowRoot {
+trait inlineWidthIntrinsics {
+  attributes{
+    output sumMarginsPadding : int;
+  }
+  statements {
+    sumMarginsPadding := if getTag(marginLeft) == CONST_AUTO() 
+                         then 0 
+                         else getValue(marginLeft,usedFontSize,0);
+  }
+
+}
+
+class FlowRootC (inlineWidthIntrinsics) : FlowRoot {
   children {
     kids : Block+;
   }
   attributes {
     output offsetX : int;
     output offsetY : int;
-    output sumMarginsPadding : int;
     output usedFontSize : int;
   }
   statements {
@@ -201,7 +212,6 @@ class FlowRootC : FlowRoot {
     pb := 0;
     pl := getValue(paddingLeft,usedFontSize,maxWidth);
     pr := getValue(paddingRight,usedFontSize,maxWidth);
-    sumMarginsPadding := 0;
     mt := 0;
     mb := 0;
     mr :=  0;
