@@ -201,8 +201,8 @@
        (cons $2 (ag-class $7 $4 $9))))
 
     (trait-list
-     ((trait COMMA trait-list) (cons $1 $3))
-     ((trait) (list $1)))
+     ((name COMMA trait-list) (cons $1 $3))
+     ((name) (list $1)))
 
     (trait
      ((TRAIT name LBRACE body RBRACE)
