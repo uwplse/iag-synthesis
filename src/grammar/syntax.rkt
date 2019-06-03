@@ -409,7 +409,7 @@
 
 ; Report an error to the user if the given symbol table, an association list
 ; with symbol keys, is ambiguous (i.e., has duplicate entries for a symbol).
-(define (validate-symbol-table symbol-table kind #:scope [scope "grammar"])
+(define (validate-symbol-table symbol-table kind scope)
   (define duplicate (check-duplicates symbol-table eq? #:key car))
   (when duplicate
     (raise-user-error 'validation
@@ -501,11 +501,20 @@
   [(_ (cons name (ag-class _ traits
                            (ag-body children attributes statements methods))))
    (define scope (format "class ~a" name))
-   (validate-symbol-table traits "trait mixin" #:scope scope)
-   (validate-symbol-table children "child" #:scope scope)
+
+   (match (check-duplicates traits eq?)
+     [(symbol duplicate-trait)
+      (raise-user-error 'validation "Redundant inclusion of trait ~a in ~a"
+                        duplicate-trait scope)]
+     [#f (void)])
+
+   (validate-symbol-table children "child" scope)
    (for-each (curry validate-child G name) children)
-   (validate-symbol-table attributes "attribute" #:scope scope)
-   (validate-symbol-table methods "method" #:scope scope)
+
+   (validate-symbol-table attributes "attribute" scope)
+
+   (validate-symbol-table methods "method" scope)
+
    (match (check-duplicates statements ag:reference-overlap? #:key car)
      [(rule (ag:object$_ node) label _)
       (raise-user-error 'validation
@@ -517,10 +526,11 @@
 ; Validate uniqueness of global names in the attribute grammar.
 (define/match (validate-grammar G)
   [((ag-grammar interfaces classes traits traversals))
-   (validate-symbol-table interfaces "interface")
-   (validate-symbol-table classes "class")
-   (validate-symbol-table traits "trait")
-   (validate-symbol-table traversals "traversal")
+   (define scope "grammar")
+   (validate-symbol-table interfaces "interface" scope)
+   (validate-symbol-table classes "class" scope)
+   (validate-symbol-table traits "trait" scope)
+   (validate-symbol-table traversals "traversal" scope)
    (for-each (curry validate-class G) classes)])
 
 ; ------------------------------------
