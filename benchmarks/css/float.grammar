@@ -171,9 +171,10 @@ trait inlineWidthIntrinsics {
     output sumMarginsPadding : int;
   }
   statements {
-    sumMarginsPadding := if getTag(marginLeft) == CONST_AUTO() 
-                         then 0 
-                         else getValue(marginLeft,usedFontSize,0);
+    sumMarginsPadding := (getTag(marginLeft) == CONST_AUTO() ? 0 : getValue(marginLeft,usedFontSize,0)) + 
+                      (getTag(marginRight) == CONST_AUTO() ? 0 : getValue(marginRight,usedFontSize,0)) + 
+                      (getTag(paddingLeft) == CONST_AUTO() ? 0 : getValue(paddingLeft,usedFontSize,0)) + 
+                      (getTag(paddingRight) == CONST_AUTO() ? 0 : getValue(paddingRight,usedFontSize,0)); 
   }
 
 }
