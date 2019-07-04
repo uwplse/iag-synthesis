@@ -2,8 +2,7 @@
 
 ; Tree Data Structure
 
-(require racket/dict
-         (prefix-in xml: xml)
+(require (prefix-in xml: xml)
          "../utility.rkt"
          "syntax.rkt")
 
@@ -155,7 +154,7 @@
 ; Validate some property of every output attribute value.
 (define (tree-validate G tree check)
   (for ([(label sort) (in-dict (node-attributes G tree))])
-    (displayln `(check ,(tree-class tree) ,label))
+    ;(displayln `(check ,(tree-class tree) ,label))
     (check (tree-fields tree) label))
   (for ([(name subtree) (in-dict (tree-children tree))])
     (if (list? subtree)

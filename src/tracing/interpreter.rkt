@@ -35,7 +35,8 @@
          table-ref!
          (λ (store label _) (table-def! store label))
          (const void)
-         debug))
+         ;debug
+         void))
 
 (define (alloc!)
   ((model-alloc (semantics))))

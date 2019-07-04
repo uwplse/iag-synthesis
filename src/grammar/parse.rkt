@@ -67,7 +67,9 @@
   (syntax-rules ()
     ((_)
      (:: (:or (char-range "a" "z") (char-range "A" "Z") "_")
-         (:* (:or (char-range "a" "z") (char-range "A" "Z") "_" (char-range "0" "9")))))))
+         (:* (:or (char-range "a" "z") (char-range "A" "Z") "_"
+                  (char-range "0" "9")
+                  "<" ">" ":"))))))
 
 (define lex
   (lexer-src-pos
@@ -236,9 +238,9 @@
      (() null))
 
     (attribute
-     ((INPUT name COLON name) `(,$2 . (in ,$4)))
+     ((INPUT field COLON name) `(,$2 . (in ,$4)))
      ;((GHOST IDENT COLON IDENT) `(,$2 . (tmp ,$4)))
-     ((OUTPUT name COLON name) `(,$2 . (out ,$4))))
+     ((OUTPUT field COLON name) `(,$2 . (out ,$4))))
 
     (statement-list
      ((statement SEMICOLON statement-list) (cons $1 $3))
@@ -282,13 +284,13 @@
      ((expression) (list $1)))
 
     (reference
-     ((name) `((unit self) . ,$1))
-     ((node DOT name) `((unit ,$1) . ,$3))
-     ((node FIRST DOT name) `((first ,$1) . ,$4))
-     ((node PRED DOT name) `((pred ,$1) . ,$4))
-     ((node CURR DOT name) `((curr ,$1) . ,$4))
-     ((node SUCC DOT name) `((succ ,$1) . ,$4))
-     ((node LAST DOT name) `((last ,$1) . ,$4)))
+     ;((name) `((unit self) . ,$1))
+     ((node DOT field) `((unit ,$1) . ,$3))
+     ((node FIRST DOT field) `((first ,$1) . ,$4))
+     ((node PRED DOT field) `((pred ,$1) . ,$4))
+     ((node CURR DOT field) `((curr ,$1) . ,$4))
+     ((node SUCC DOT field) `((succ ,$1) . ,$4))
+     ((node LAST DOT field) `((last ,$1) . ,$4)))
 
     (method-list
      ((method SEMICOLON method-list) (cons $1 $3))
@@ -312,6 +314,13 @@
     (node
      ((SELF) 'self)
      ((name) $1))
+
+    (field
+     ((path) (string->symbol (string-join (map symbol->string $1) "."))))
+
+    (path
+     ((name DOT path) (cons $1 $3))
+     ((name) (list $1)))
 
     (name
      ((IDENT) $1)

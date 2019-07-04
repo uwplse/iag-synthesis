@@ -1,3 +1,4 @@
 # ignore back-up files
 *~
+**/.DS_Store
 compiled/

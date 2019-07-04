@@ -9,7 +9,10 @@
          "src/grammar/syntax.rkt"
          "src/grammar/tree.rkt"
          "src/schedule/parse.rkt"
-         "src/tracing/synthesizer.rkt")
+         "src/tracing/synthesizer.rkt"
+         "src/backend/elaborate.rkt"
+         "src/backend/generate.rkt"
+         "src/backend/printer.rkt")
 
 ;(define verbose? (make-parameter #f))
 (define root-name (make-parameter 'Root))
@@ -41,4 +44,7 @@
         [S (parse-schedule-sketch G schedule-sketch)]
         [S* (complete-sketch G S E)])
    (when S*
-     (displayln (schedule->string S*)))))
+     (displayln (schedule->string S*))
+     (let ([P (generate-program (elaborate-program G S*))])
+       ;(pretty-print P)
+       (print-program P)))))

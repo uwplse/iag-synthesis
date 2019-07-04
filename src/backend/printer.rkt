@@ -2,7 +2,7 @@
 
 ; Print a Rust syntax tree to the current output port.
 
-(provide (rename-out [print-program rust:print]))
+(provide print-program)
 
 (define indent-level 0)
 
@@ -103,16 +103,18 @@
    (display operator)
    (print-expression expr)
    (display ")")]
-  [(`(,(and operator (or '+ '- '* '/ '< '<= '== '!= '>= '> '&& '||)) ,left-expr ,right-expr))
+  [(`(,(and operator (or '+ '- '* '/ '< '<= '== '!= '>= '> '&& '\|\|)) ,left-expr ,right-expr))
    (display "(")
    (print-expression left-expr)
    (printf " ~a " operator)
    (print-expression right-expr)
    (display ")")]
   [(`(range ,start-expr ,stop-expr))
+   (display "(")
    (print-expression start-expr)
    (display "..")
-   (print-expression stop-expr)]
+   (print-expression stop-expr)
+   (display ")")]
   [(`(call ,fun-expr ,arg-expr-list))
    (print-expression fun-expr)
    (print-each print-expression arg-expr-list "(" ")")]
@@ -127,6 +129,10 @@
    (print-expression expr)]
   [((? integer? int))
    (display int)]
+  [(#t)
+   (display "true")]
+  [(#f)
+   (display "false")]
   [(loc)
    (print-location loc)])
 
@@ -174,6 +180,8 @@
 ;; body ::= `(do ,stmt ...)
 ;;        | expr
 (define/match (print-body body)
+  [(`(skip))
+   (display " { }")]
   [(`(do ,statement-list ...))
    (print-each print-statement statement-list " {" "}" #:separator "" #:indent? #t)]
   [(expression)
@@ -190,6 +198,8 @@
 ;;        | `(skip)
 ;;        | expr
 (define/match (print-statement statement)
+  [(`(do ,statement-list ...))
+   (print-each print-statement statement-list " {" "}" #:separator "" #:indent? #t)]
   [(`(if ,cond-expr ,then-body ,else-body))
    (display "if ")
    (print-expression cond-expr)
@@ -264,8 +274,11 @@
    (display name)
    (print-each print-type type-list "(" ")")]
   [(`(constructor ,name (record ,field-list ...)))
+   (define (print-field field)
+     (display "pub ")
+     (print-binder field))
    (display name)
-   (print-each print-binder field-list " {" "}" #:indent? #t)]
+   (print-each print-field field-list " {" "}" #:indent? #t)]
   [(`(constructor ,name (unit)))
    (display name)])
 
@@ -360,4 +373,3 @@
 
 (define test-function-declaration
   `(fn post ((: self (ref-mut Self)) (: depth u8) (: parallel bool)) (unit) (do ,test-match-statement)))
-  
