@@ -27,7 +27,7 @@ class Viewport : Tree {
         root.container.x := 0.0;
         root.container.y := 0.0;
         root.container.width := self.width;
-        root.container.height := 0.0;
+        root.container.height := 0.0; // self.height
     }
 }
 
@@ -37,12 +37,6 @@ interface LayoutBox {
     output container.y : Pixels;
     output container.width : Pixels;
     output container.height : Pixels;
-
-    // intrinsic box
-    output intrinsic.x : Pixels;
-    output intrinsic.y : Pixels;
-    output intrinsic.width : Pixels;
-    output intrinsic.height : Pixels;
 
     // content box (computed)
     output content_box.x : Pixels;
@@ -137,14 +131,12 @@ class Block : LayoutBox {
         children : LayoutBox+;
     }
     statements {
-        self.intrinsic.width :=
-            value(self.style.margin.left) +
-            value(self.style.margin.right) +
-            self.style.border.left + self.style.border.right +
-            self.style.padding.left + self.style.padding.right +
-            value(self.style.width);
-
-        self.underflow := self.container.width - self.intrinsic.width;
+        self.underflow :=
+            self.container.width -
+            (value(self.style.margin.left) + value(self.style.margin.right) +
+             self.style.border.left + self.style.border.right +
+             self.style.padding.left + self.style.padding.right +
+             value(self.style.width));
 
         self.padding.left := self.style.padding.left;
         self.padding.right := self.style.padding.right;
@@ -193,30 +185,31 @@ class Block : LayoutBox {
         self.padding.top := self.style.padding.top;
         self.padding.bottom := self.style.padding.bottom;
 
-        self.intrinsic.x :=
+        self.content_box.x :=
             self.container.x +
             self.margin.left + self.border.left + self.padding.left;
-        self.content_box.x := self.intrinsic.x;
 
-        self.intrinsic.y :=
+        self.content_box.y :=
             self.container.y + self.container.height +
             self.margin.top + self.border.top + self.padding.top;
-        self.content_box.y := self.intrinsic.y;
 
-        children$i.container.x := self.intrinsic.x;
-        children$i.container.y := self.intrinsic.y;
+        children$i.container.x := self.content_box.x;
+        children$i.container.y := self.content_box.y;
 
         children$i.container.width := self.content_box.width;
 
-        children$0.container.height := 0.0;
-        children$+.container.height := //children$-.container.height;
-            children$-.container.height + children$-.margin_box.height;
+        /* TODO: Switch to better iteration model, with rules like the following:
+        children.container.height := scanl 0.0 .. children.container.height@ .. children.container.height@ + children.margin_box.height;
+        self.content_box.height := if is_auto(self.style.height) then children.container.height$ else value(self.style.height);
+        */
 
-        self.intrinsic.height := children$$.container.height;
+        children$0.container.height := 0.0;
+        children$+.container.height :=
+            children$-.container.height + children$-.margin_box.height;
 
         self.content_box.height :=
             if is_auto(self.style.height) then
-                self.intrinsic.height
+                children$$.container.height + children$$.margin_box.height
             else
                 value(self.style.height);
 
@@ -243,14 +236,12 @@ class Inline : LayoutBox {
 //        self.style.display == Display::Inline
 //    }
     statements {
-        self.intrinsic.width :=
-            value(self.style.margin.left) +
-            value(self.style.margin.right) +
-            self.style.border.left + self.style.border.right +
-            self.style.padding.left + self.style.padding.right +
-            value(self.style.width);
-
-        self.underflow := self.container.width - self.intrinsic.width;
+        self.underflow :=
+            self.container.width -
+            (value(self.style.margin.left) + value(self.style.margin.right) +
+             self.style.border.left + self.style.border.right +
+             self.style.padding.left + self.style.padding.right +
+             value(self.style.width));
 
         self.padding.left := self.style.padding.left;
         self.padding.right := self.style.padding.right;
@@ -299,23 +290,15 @@ class Inline : LayoutBox {
         self.padding.top := self.style.padding.top;
         self.padding.bottom := self.style.padding.bottom;
 
-        self.intrinsic.x :=
+        self.content_box.x :=
             self.container.x +
             self.margin.left + self.border.left + self.padding.left;
-        self.content_box.x := self.intrinsic.x;
 
-        self.intrinsic.y :=
+        self.content_box.y :=
             self.container.y + self.container.height +
             self.margin.top + self.border.top + self.padding.top;
-        self.content_box.y := self.intrinsic.y;
 
-        self.intrinsic.height := 0.0;
-
-        self.content_box.height :=
-            if is_auto(self.style.height) then
-                self.intrinsic.height
-            else
-                value(self.style.height);
+        self.content_box.height := value(self.style.height);
 
         self.padding_box.x := self.content_box.x - self.padding.left;
         self.padding_box.y := self.content_box.y - self.padding.top;
