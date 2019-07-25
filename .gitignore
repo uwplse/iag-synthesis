@@ -4,7 +4,7 @@
 **/compiled/
 
 # ignore build files
-engine/Cargo.toml
-engine/bin
-engine/target
-engine/output.*
+browser/Cargo.lock
+browser/bin
+browser/target
+browser/output.*

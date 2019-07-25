@@ -1,0 +1,13 @@
+[package]
+name = "browser"
+version = "0.0.1"
+authors = ["Nate Yazdani <nyazdani@cs.washington.edu>", "Matt Brubeck <mbrubeck@limpet.net>"]
+
+[[bin]]
+name = "browser"
+path = "src/main.rs"
+
+[dependencies]
+getopts = "0.2.19"
+itertools = "0.8"
+image = "0.14"
