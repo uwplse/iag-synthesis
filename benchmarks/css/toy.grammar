@@ -1,16 +1,16 @@
 traversal layout {
-  case Viewport {
-    ??;
-    recur root;
-  }
-  case Block {
-    ??;
-    iterate[left] children { ??; recur children; ??; }
-    ??;
-  }
-  case Inline {
-    ??;
-  }
+    case Viewport {
+        ??;
+        recur root;
+    }
+    case Block {
+        ??;
+        iterate children { ??; recur children; ??; }
+        ??;
+    }
+    case Inline {
+        ??;
+    }
 }
 
 interface Tree {
@@ -37,6 +37,8 @@ interface LayoutBox {
     output container.y : Pixels;
     output container.width : Pixels;
     output container.height : Pixels;
+
+    output intrinsic_height : Pixels;
 
     // content box (computed)
     output content_box.x : Pixels;
@@ -128,7 +130,7 @@ class Block : LayoutBox {
 //        self.style.display == Display::Block
 //    }
     children {
-        children : LayoutBox+;
+        children : [LayoutBox];
     }
     statements {
         self.underflow :=
@@ -193,16 +195,25 @@ class Block : LayoutBox {
             self.container.y + self.container.height +
             self.margin.top + self.border.top + self.padding.top;
 
-        children$i.container.x := self.content_box.x;
-        children$i.container.y := self.content_box.y;
+        children.container.x := self.content_box.x;
+        children.container.y := self.content_box.y;
 
-        children$i.container.width := self.content_box.width;
+        children.container.width := self.content_box.width;
 
-        /* TODO: Switch to better iteration model, with rules like the following:
-        children.container.height := scanl 0.0 .. children.container.height@ .. children.container.height@ + children.margin_box.height;
-        self.content_box.height := if is_auto(self.style.height) then children.container.height$ else value(self.style.height);
-        */
+        self.intrinsic_height := foldl 0.0 .. @{self.intrinsic_height} + children.margin_box.height;
+        children.container.height := @{self.intrinsic_height};
+        //children.container.height :=
+        //    scanl 0.0
+        //        .. children.container.height@
+        //        .. children.container.height@ + children.margin_box.height;
 
+        self.content_box.height :=
+            if is_auto(self.style.height) then
+                self.intrinsic_height // children.container.height$
+            else
+                value(self.style.height);
+
+        /*
         children$0.container.height := 0.0;
         children$+.container.height :=
             children$-.container.height + children$-.margin_box.height;
@@ -212,6 +223,7 @@ class Block : LayoutBox {
                 children$$.container.height + children$$.margin_box.height
             else
                 value(self.style.height);
+        */
 
         self.padding_box.x := self.content_box.x - self.padding.left;
         self.padding_box.y := self.content_box.y - self.padding.top;
@@ -298,6 +310,7 @@ class Inline : LayoutBox {
             self.container.y + self.container.height +
             self.margin.top + self.border.top + self.padding.top;
 
+        self.intrinsic_height := 0.0;
         self.content_box.height := value(self.style.height);
 
         self.padding_box.x := self.content_box.x - self.padding.left;

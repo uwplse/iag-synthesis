@@ -7,43 +7,72 @@
          "syntax.rkt")
 
 (provide (struct-out tree)
+         (rename-out [*ref?* *box?*]
+                     [*ref* *box*]
+                     [*deref* *unbox*]
+                     [*set-ref!* *set-box!*]
+                     [ref? box?]
+                     [ref box]
+                     [deref unbox]
+                     [set-ref! set-box!])
+         tree-ref/field
+         tree-ref/child
+         tree-select
          tree-copy
          xml->tree
          xexpr->tree
          file->tree
-         tree-select
+         tree-size
          tree-annotate
          tree-validate
-         tree-gather
          tree-examples)
 
+(define *ref?* (make-parameter box?))
+(define *ref* (make-parameter box))
+(define *deref* (make-parameter unbox))
+(define *set-ref!* (make-parameter set-box!))
+
+(define (ref? b) ((*ref?*) b))
+(define (ref v) ((*ref*) v))
+(define (deref b) ((*deref*) b))
+(define (set-ref! b v) ((*set-ref!*) b v))
+
 ; TODO: Maybe represent fields with a prefix tree.
-(struct tree (class [fields #:mutable] children) #:transparent)
+(struct tree (class fields children) #:transparent)
 
-(define (tree-copy-shallow node)
-  (define children
-    (for/list ([(name subtree) (in-dict (tree-children node))])
-      (cons name
-            (if (list? subtree)
-                (map tree-copy-shallow subtree)
-                (tree-copy-shallow subtree)))))
+(define (make-node class children)
+  (define fields
+    (for/list ([label (ag:class-labels* class)])
+      (cons (ag:label-name label) (ref (ag:label/in? label)))))
 
-  (tree (tree-class node) (tree-fields node) children))
+  (tree class fields children))
 
-(define (tree-copy node #:rebox? [rebox? #f])
-  (define rebox
-    (if rebox? (compose box unbox) identity))
+(define (tree-ref/field tree label)
+  (dict-ref (tree-fields tree) label))
 
+(define (tree-ref/child tree name)
+  (dict-ref (tree-children tree) name))
+
+(define (tree-select self attr #:iterator [iter #f] #:cursor [cur #f])
+  (match attr
+    [(cons 'self field)
+     (tree-ref/field self field)]
+    [(cons (== iter) field)
+     (tree-ref/field cur field)]
+    [(cons child field)
+     (tree-ref/field (tree-ref/child self child) field)]))
+
+(define (tree-copy node)
   (define fields
     (for/list ([(label value) (in-dict (tree-fields node))])
-      (cons label (rebox value))))
+      (cons label (ref (deref value)))))
 
   (define children
     (for/list ([(name subtree) (in-dict (tree-children node))])
       (cons name
             (if (list? subtree)
-                (map (λ (t) (tree-copy t #:rebox? rebox?)) subtree)
-                (tree-copy subtree #:rebox? rebox?)))))
+                (map tree-copy subtree)
+                (tree-copy subtree)))))
 
   (tree (tree-class node) fields children))
 
@@ -59,36 +88,32 @@
 ; remaining child X-expressions. Therefore, this procedure only supports
 ; attribute grammars whose classes have at most one sequence child as their last-
 ; declared child.
-(define (xexpr->tree G xexpr #:boxed? [boxed? #f])
-  (let ([recur (curry xexpr->tree G #:boxed? boxed?)])
+(define (xexpr->tree G xexpr)
+  (let ([recur (curry xexpr->tree G)])
     (match xexpr
       [(list-rest class-name
                   (and xattributes (list (list (? symbol?) (? string?)) ...))
                   xcontent)
 
-       (define class (grammar-class G class-name))
+       (define class (ag:grammar-ref/class G class-name))
 
        (define children
          (let ([subtrees (map recur (filter list? xcontent))])
-           (match (ag-class-children class)
-             [(list (cons names (ag:child1 _)) ...)
+           (match (ag:class-children* class)
+             [(list (ag:child/one names _) ...)
               (map cons names subtrees)]
-             [(list (cons name (or (ag:child* _) (ag:child+ _))))
+             [(list (ag:child/seq name _))
               (cons name subtrees)])))
 
        (define fields
-         (if boxed?
-             (for/list ([(label _) (in-dict (ag-class-attributes class))])
-               (cons label (box (void))))
-             null))
+         (for/list ([label (ag:class-labels* class)])
+           (cons (ag:label-name label) (ref #f))))
 
        (for ([(label value) (in-dict xattributes)])
          (let ([value (read (open-input-string (first value)))])
-           (if boxed?
-               (set-box! (lookup fields label) value)
-               (set! fields (cons (cons label value) fields)))))
+           (set-ref! (dict-ref fields label) value)))
 
-       (tree class-name fields children)]
+       (tree class fields children)]
 
       [(list-rest class-name children)
        (recur (list class-name null children))]
@@ -101,73 +126,24 @@
 (define (file->tree G filename)
   (xml->tree G (file->string filename #:mode 'text)))
 
-;(define/match (search lst p)
-;  [((cons (cons q v) lst) p)
-;   (let ([r (shift p q)])
-;     (if r (cons r v) (search lst p)))]
-;  [(null _)
-;   #f])
+(define (node-attributes node)
+  (map ag:label-name (ag:class-labels* (tree-class node))))
 
-;(define (tree-bind self proc path)
-;  (match (search (tree-children self) path)
-;    [(cons rest subtree)
-;     (proc (tree-fields subtree) `(self . ,rest))]
-;    [#f
-;     (proc (tree-fields self) path)]))
-
-(define (node-attributes G node)
-  (ag-class-attributes (grammar-class G (tree-class node))))
-
-; Select the field store indexed by the object reference.
-(define (tree-select self object #:current [curr #f] #:virtual [virt #f]
-                    #:predecessor [pred #f] #:successor [succ #f])
-  (define subtree (curry lookup (tree-children self)))
-  (match object
-    [(ag:object1 'self) (tree-fields self)]
-    [(ag:object1 child) (tree-fields (subtree child))]
-    [(or (ag:object$- 'self) (ag:object$+ 'self)) virt]
-    [(or (ag:object$- child) (ag:object$+ child)) #:when (tree? (subtree child)) virt]
-    [(ag:object$0 child) (tree-fields (first (subtree child)))]
-    [(ag:object$- child) (tree-fields pred)]
-    [(ag:object$i child) (tree-fields curr)]
-    [(ag:object$+ child) (tree-fields succ)]
-    [(ag:object$$ child) (tree-fields (last (subtree child)))]))
-
-; Annotate the tree with attribute information.
-(define (tree-annotate G node emp new upd)
-  (define store
-    (for/fold ([store (emp)])
-              ([(label sort) (in-dict (node-attributes G node))])
-      (let ([store (new store label)])
-        (when (ag:input? sort)
-          (upd store label))
-        store)))
-  (define children
-    (for/list ([(child subtree) (in-dict (tree-children node))])
-      (cons child
-            (if (list? subtree)
-                (for/list ([node subtree])
-                  (tree-annotate G node emp new upd))
-                (tree-annotate G subtree emp new upd)))))
-  (tree (tree-class node) store children))
+; Annotate the tree with abstract attribute information.
+(define (tree-annotate node)
+  (make-node (tree-class node)
+             (dict-map-value (tree-children node)
+                             (distribute tree-annotate))))
 
 ; Validate some property of every output attribute value.
-(define (tree-validate G tree check)
-  (for ([(label sort) (in-dict (node-attributes G tree))])
-    ;(displayln `(check ,(tree-class tree) ,label))
+(define (tree-validate tree check)
+  (for ([label (node-attributes tree)])
     (check (tree-fields tree) label))
   (for ([(name subtree) (in-dict (tree-children tree))])
     (if (list? subtree)
         (for ([node subtree])
-          (tree-validate G node check))
-        (tree-validate G subtree check))))
-
-; Collect all the nodes in the tree into a post-order list.
-(define (tree-gather tree [nodes null])
-  (for*/fold ([nodes (cons tree nodes)])
-             ([child (tree-children tree)]
-              [node (listify (cdr child))])
-    (tree-gather node nodes)))
+          (tree-validate node check))
+        (tree-validate subtree check))))
 
 ; Count the nodes in the tree.
 (define (tree-size tree)
@@ -176,56 +152,53 @@
        (tree-size node))
      1))
 
-(define (build-leaves inheritance)
-  (for/list ([(iface-name classes) (in-dict inheritance)])
-    (cons iface-name
+(define (build-leaves G)
+  (for/list ([interface (ag:grammar-interfaces G)])
+    (cons (ag:interface-name interface)
           ; TODO: What if every class of an interface is interior-only?
           (for/fold ([leaf-nodes null])
-                    ([(class-name class) (in-dict classes)])
-            (match (ag-class-children class)
-              [(list (cons names (ag:child* _)) ...)
-               (cons (tree class-name #f (map list names)) leaf-nodes)]
+                    ([class (ag:interface-classes interface)])
+            (match (ag:class-children* class)
+              [(list (ag:child/seq names _) ...)
+               (cons (tree class null (map list names)) leaf-nodes)]
               [_
                leaf-nodes])))))
 
-(define (build-children inheritance)
-  (define leaf-variants (build-leaves inheritance))
-  (for/list ([(iface-name classes) (in-dict inheritance)])
+(define (build-children G)
+  (define leaf-variants (build-leaves G))
+  (for/list ([interface (ag:grammar-interfaces G)])
     (define class-variants
-      (for/list ([(class-name class) (in-dict classes)])
+      (for/list ([class (ag:interface-classes interface)])
         (define child-variants
-          (for/list ([child-decl (ag-class-children class)])
-            (match child-decl
-              [(cons name (ag:child1 kind))
+          (for/list ([child (ag:class-children* class)])
+            (match child
+              [(ag:child/one name (ag:interface kind _ _))
                (map (curry cons name) (lookup leaf-variants kind))]
-              [(cons name (or (ag:child* kind) (ag:child+ kind)))
+              [(ag:child/seq name (ag:interface kind _ _))
                (list (cons name (lookup leaf-variants kind)))])))
-        (map (curry tree class-name #f)
+        (map (curry tree class null)
              (apply cartesian-product child-variants))))
-    (cons iface-name (append* class-variants))))
+    (cons (ag:interface-name interface) (append* class-variants))))
 
 ; TODO: Complete this cleaner version of tree-examples
 (define (tree-examples* G root)
-  (define variants (associate-classes G))
-
   (define queue
-    (for/hasheq ([(iface-name classes) (in-dict variants)])
-      (let ([class-names (map car classes)])
-        (values iface-name (apply mutable-seteq class-names)))))
-  (define (dequeue! iface-name class-name)
-    (set-remove! (hash-ref queue iface-name) class-name))
+    (for/hasheq ([interface (ag:grammar-interfaces G)])
+      (values interface
+              (list->mutable-seteq (ag:interface-classes interface)))))
+  (define (dequeue! class)
+    (set-remove! (hash-ref queue (ag:class-interface class)) class))
 
   (define forest (make-hasheq))
-  (define (plant! iface-name class-name node)
+  (define (plant! node)
     (hash-update! forest (tree-class node) (curry cons node) null))
 
-  (for ([(class-name class) (in-dict (ag-grammar-classes G))]
-        #:when (andmap (compose ag:child*? cdr) (ag-class-children class)))
-    (let ([iface-name (ag-class-interface class)]
-          [child-names (map car (ag-class-children class))])
-      (plant! (tree class-name #f (map list child-names)))
-      (when (null? child-names)
-        (dequeue! iface-name class-name))))
+  (for ([class (ag:grammar-classes G)]
+        #:when (andmap ag:child/seq? (ag:class-children* class)))
+    (let ([children (ag:class-children* class)])
+      (plant! (tree class null (map (compose list ag:child-name) children)))
+      (when (null? children)
+        (dequeue! class))))
 
   ; until queue empty do:
   ;   find class in queue s.t. children class-saturated in forest:
@@ -240,27 +213,24 @@
 ; Return a set of example tree skeletons that include every parent-child class
 ; pairing permitted by the grammar.
 (define (tree-examples G root)
-  (define inheritance (associate-classes G))
-  (define variants (build-children inheritance))
-  (define queue
-    (apply mutable-seteq (map car (ag-grammar-classes G))))
+  (define variants (build-children G))
+  (define queue (list->mutable-seteq (ag:grammar-classes G)))
 
-  (define/match (construct class-decl)
-    [((cons class-name class))
-     (define generate
-       (if (set-member? queue class-name)
-           (compose (curry append-map construct) (curry lookup inheritance))
-           (curry lookup variants)))
-     (set-remove! queue class-name)
-     (define children
-       (for/list ([child-decl (ag-class-children class)])
-         (match child-decl
-           [(cons name (ag:child1 kind))
-            (map (curry cons name) (generate kind))]
-           [(cons name (or (ag:child* kind) (ag:child+ kind)))
-            (let ([subtrees (generate kind)])
-              (list (cons name
-                          (append (map tree-copy-shallow subtrees) subtrees))))])))
-     (map (curry tree class-name #f) (apply cartesian-product children))])
+  (define (construct class)
+    (define generate
+      (if (set-member? queue class)
+          (compose (curry append-map construct) ag:interface-classes)
+          (compose (curry lookup variants) ag:interface-name)))
+    (set-remove! queue class)
+    (define children
+      (for/list ([child (ag:class-children* class)])
+        (match child
+          [(ag:child/one name interface)
+           (map (curry cons name) (generate interface))]
+          [(ag:child/seq name interface)
+           (let ([subtrees (generate interface)])
+             (list (cons name
+                         (append (map tree-copy subtrees) subtrees))))])))
+    (map (curry tree class null) (apply cartesian-product children)))
 
-  (append-map construct (lookup inheritance root)))
+  (append-map construct (ag:interface-classes (ag:grammar-ref/interface G root))))

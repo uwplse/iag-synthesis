@@ -128,7 +128,7 @@ class Node : Block {
       self.pb == 0.0 && self.bb == 0.0 &&
       is_auto(height(self.computed)) && !self.is_replaced;
 
-    self.collapse_through :=
+    self.collapse_through := // last[kids.collapse_through : false]
       (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 &&
       !self.is_replaced && kids$$.collapse_through;
 
@@ -137,23 +137,24 @@ class Node : Block {
       is_positive_pixel_or_percent(min_height(self.computed)) &&
       is_auto(height(self.computed));
 
+    kids.mtp_up := scanr 0.0
+        .. (if kids.collapse_through then kids.mtp_up@ else kids.mtp)
+        .. max(kids.mbp, if !kids$+.has_clearance then kids$+.mtp_up else 0.0);
+
     kids$$.mtp_up := 0.0;
     kids$-.mtp_up :=
-      if kids$i.collapse_through
-      then max(kids$i.mbp, if !kids$+.has_clearance then kids$+.mtp_up else 0.0)
-      else kids$i.mtp;
+        if kids$i.collapse_through
+        then max(kids$i.mbp, if !kids$+.has_clearance then kids$+.mtp_up else 0.0)
+        else kids$i.mtp;
 
     kids$$.mtn_up := 0.0;
     kids$-.mtn_up :=
-      if kids$i.collapse_through
-      then min(kids$i.mbn, if !kids$+.has_clearance then kids$+.mtn_up else 0.0)
-      else kids$i.mtn;
+        if kids$i.collapse_through
+        then min(kids$i.mbn, if !kids$+.has_clearance then kids$+.mtn_up else 0.0)
+        else kids$i.mtn;
 
-    kids$0.mbp_prev := 0.0;
-    kids$+.mbp_prev := kids$-.mbp;
-
-    kids$0.mbn_prev := 0.0;
-    kids$+.mbn_prev := kids$-.mbn;
+    kids.mbp_prev := scanl 0.0 .. kids.mbp_prev@ .. kids.mbp;
+    kids.mbn_prev := scanl 0.0 .. kids.mbn_prev@ .. kids.mbn;
 
     self.mtp :=
       max(
@@ -201,8 +202,7 @@ class Node : Block {
         if self.collapse_through then self.mtn else 0.0
       );
 
-    kids$0.mb_clear_prev := false;
-    kids$+.mb_clear_prev := kids$-.mb_clear;
+    kids.mb_clear_prev := scanl false .. kids.mb_clear_prev@ .. kids.mb_clear;
 
     self.mb_clear :=
       self.has_clearance || (self.collapse_through && self.mb_clear_prev);

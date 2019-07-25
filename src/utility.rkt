@@ -19,8 +19,52 @@
      (define-symbolic* bool boolean?)
      bool]))
 
+(define ((distribute proc) v)
+  (if (list? v)
+      (map proc v)
+      (proc v)))
+
+(define (dict-map-key dict0 proc)
+  (for/fold ([dict (dict-clear dict0)])
+            ([(key value) (in-dict dict0)])
+    (dict-set dict (proc key) value)))
+
+(define (dict-map-value dict0 proc)
+  (for/fold ([dict (dict-clear dict0)])
+            ([(key value) (in-dict dict0)])
+    (dict-set dict key (proc value))))
+
+(define-syntax-rule (if/let ([id expr]) consequent alternate)
+  (let ([id expr])
+    (if id
+        consequent
+        alternate)))
+
+(define-syntax-rule (when/let ([id expr]) body ...)
+  (if/let ([id expr])
+          (begin body ...)
+          (void)))
+
+(define-syntax when/let*
+  (syntax-rules ()
+    [(_ ([id expr] [id* expr*] ...) body ...)
+     (let ([id expr])
+       (when id
+         (when/let* ([id* expr*] ...)
+           body ...)))]
+    [(_ () body ...)
+     (begin body ...)]))
+
+(define-syntax-rule (matches? patterns ...)
+  (match-lambda
+    [(or patterns ...) #t]
+    [_ #f]))
+
 (define (symbol-append . xs)
   (string->symbol (string-append* (map symbol->string xs))))
+
+(define (symbol-join lst [sep ""])
+  (string->symbol (string-join (map symbol->string lst) sep)))
 
 (define symbol-upcase
   (compose string->symbol string-upcase symbol->string))
@@ -69,9 +113,17 @@
   (let ([y (assoc x lst same?)])
     (and y (cdr y))))
 
-(define (associate-by key lst [same? equal?])
-  (map (λ (grp) (cons (key (first grp)) grp))
-       (group-by key lst same?)))
+(define (find-by proj lst key #:same? [same? equal?])
+  (findf (λ (elem) (same? (proj elem) key)) lst))
+
+(define (filter-by proj lst key #:same? [same? equal?])
+  (filter (λ (elem) (same? (proj elem) key)) lst))
+
+(define (union #:same? [same? equal?] #:key [key identity] . lsts)
+  (remove-duplicates (apply append lsts) same? #:key key))
+
+(define (union* #:same? [same? equal?] #:key [key identity] . lsts)
+  (remove-duplicates (apply append* lsts) same? #:key key))
 
 (define (vector-sum vec)
   (apply + (vector->list vec)))

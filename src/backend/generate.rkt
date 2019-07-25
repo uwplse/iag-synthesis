@@ -3,226 +3,164 @@
 (require "../utility.rkt"
          "../grammar/syntax.rkt")
 
-; Build a Rust syntax tree from a completed schedule.
-
 (provide generate-program)
 
-(define (symbol-suffix base suff)
-  (string->symbol (string-append (symbol->string base)
-                                 (symbol->string suff))))
+; -----------------------
+; Standard program header
+; -----------------------
 
-(define (class-union-type sort)
-  (symbol-suffix sort 'Class))
+(define header
+  null)
 
-; Generic program header
-
-(define header null)
-
+; ---------------------------------
 ; Generation of tree data structure
+; ---------------------------------
 
-(define/match (generate-child-field child-decl)
-  [(`(: ,name (unit ,interface))) `(: ,name (gen Box (,interface)))]
-  [(`(: ,name (star ,interface))) `(: ,name (gen Vec (,interface)))]
-  [(`(: ,name (plus ,interface))) `(: ,name (gen Vec (,interface)))])
+(define/match (generate-child-field child)
+  [((ag:child/one name (ag:interface sort _ _)))
+   `(: ,name (gen Box (,sort)))]
+  [((ag:child/seq name (ag:interface sort _ _)))
+   `(: ,name (gen Vec (,sort)))])
 
-;; (define/match (generate-interface-structure iface-decl)
-;;   [(`(,name . ,attributes))
-;;    (define fields
-;;      (cons `(: class ,(symbol-append name 'Class))
-;;            (map generate-label-field attributes)))
-;;    `(struct (constructor ,name (record . ,fields)))])
+(define/match (generate-label-field label)
+  [((ag:label name type))
+   `(: ,name ,type)])
 
-;; (define (generate-interface-enumeration G interface)
-;;   (define variants
-;;     (for/list ([(name class) (in-dict (ag-grammar-classes G))]
-;;                #:when (eq? (ag-class-interface class) interface))
+(define (generate-class-field interface)
+  (define sort (symbol-append (ag:interface-name interface) 'Class))
+  `(: class ,sort))
 
-;;       `(constructor ,name (tuple ,name))))
-;;   `(enum ,(symbol-append interface 'Class)
-;;          .
-;;          ,variants))
+(define (generate-class-variant class)
+  (define name (ag:class-name class))
+  (define fields (map generate-child-field (ag:class-children* class)))
+  `(constructor ,name (record . ,fields)))
 
-;; (define/match (generate-class-structure class-decl)
-;;   [(`(,name . ,(ag-class _ _ (ag-body children attributes _ _))))
-;;    (define fields
-;;      (append (map generate-child-field children)
-;;              (map generate-label-field attributes)))
-;;    `(struct (constructor ,name (record . ,fields)))])
+(define (generate-interface-enumeration interface)
+  (define sort (symbol-append (ag:interface-name interface) 'Class))
+  (define classes (ag:interface-classes interface))
 
-;; (define (generate-data-structure G)
-;;   (append
-;;    (map generate-interface-structure (ag-grammar-interfaces G))
-;;    (map (compose (curry generate-interface-enumeration G) car)
-;;         (ag-grammar-interfaces G))
-;;    (map generate-class-structure (ag-grammar-classes G))))
+  `(enum ,sort . ,(map generate-class-variant classes)))
 
+(define (generate-interface-structure interface)
+  (define sort (ag:interface-name interface))
+  (define fields
+    (cons (generate-class-field interface)
+          (map generate-label-field (ag:interface-labels interface))))
+
+  `(struct (constructor ,sort (record . ,fields))))
+
+(define (generate-structure G)
+  (define interfaces (ag:grammar-interfaces G))
+  (define classes (ag:grammar-classes G))
+
+  (append (map generate-interface-structure interfaces)
+          (map generate-interface-enumeration interfaces)))
+
+; ---------------------------------
 ; Generation of tree traversal code
+; ---------------------------------
 
-;; (define/match (generate-reference reference)
-;;   [((ag:reference (ag:object1 'self) label))
-;;    `(select self ,label)]
-;;   [((ag:reference (ag:object1 child) label))
-;;    `(select (select local ,child) ,label)]
-;;   [((ag:reference (ag:object$0 child) label))
-;;    `(select (index (select local ,child) 0) ,label)]
-;;   [((ag:reference (ag:object$$ child) label))
-;;    (let ([n `(- (call (select (select local ,child) len) ()) 1)])
-;;      `(select (index (select local ,child) ,n) ,label))]
-;;   [((ag:reference (ag:object$i child) label))
-;;    `(select (index (select local ,child) i) ,label)]
-;;   [((ag:reference (ag:object$- child) label))
-;;    `(select (index (select local ,child) (- i 1)) ,label)]
-;;   [((ag:reference (ag:object$+ child) label))
-;;    `(select (index (select local ,child) (+ i 1)) ,label)]
-;;   )
+(define (generate-term class term)
+  (define/match (recur term)
+    [((ag:const v)) v]
+    [((ag:field (cons 'self field)))
+     `(select self ,field)]
+    [((ag:field (cons child field)))
+     (displayln (ag:class-ref*/child class child))
+     (define node
+       (if (ag:child/seq? (ag:class-ref*/child class child))
+           (symbol-append child '_i)
+           child))
+     `(select ,node ,field)]
+    [((ag:accum (cons object field)))
+     (symbol-join (list object field) "_")]
+    [((ag:index/first (cons child field) default))
+     (define first-child `(call (select ,child first) ()))
+     `(call (select ,first-child map_or_else)
+            ((lambda () ,(recur default))
+             (lambda (node) (select node ,field))))]
+    [((ag:index/last (cons child field) default))
+     (define last-child `(call (select ,child last) ()))
+     `(call (select ,last-child map_or_else)
+            ((lambda () ,(recur default))
+             (lambda (node) (select node ,field))))]
+    [((ag:ite condition consequent alternate))
+     `(if ,(recur condition)
+          ,(recur consequent)
+          ,(recur alternate))]
+    [((ag:expr operator operands))
+     `(,operator . ,(map recur operands))]
+    [((ag:call function (cons head-argument tail-arguments)))
+     `(call (select ,(recur head-argument) ,function)
+            ,(map recur tail-arguments))])
+  (recur term))
 
-(define/match (generate-reference reference)
-  [((ag:reference (ag:object1 'self) label))
-   `(select self ,label)]
-  [((ag:reference (ag:object1 child) label))
-   `(select (select self ,child) ,label)]
-  [((ag:reference (ag:object$0 child) label))
-   `(select (index (select self ,child) 0) ,label)]
-  [((ag:reference (ag:object$$ child) label))
-   (let ([n `(call (select (select self ,child) len) ())])
-     `(if (> ,n 0) (select (index (select self ,child) (- ,n 1)) ,label) 0.0))]
-  [((ag:reference (ag:object$i child) label))
-   `(select (index (select self ,child) i) ,label)]
-  [((ag:reference (ag:object$- child) label))
-   `(select (index (select self ,child) (- i 1)) ,label)]
-  [((ag:reference (ag:object$+ child) label))
-   `(select (index (select self ,child) (+ i 1)) ,label)])
+(define (generate-bindings class commands)
+  (for/list ([rule (filter-map (curry ag:eval->rule class) commands)]
+             #:when (ag:rule-folds? rule))
+    (match-define (cons object field) (ag:rule-attribute rule))
+    (define variable (symbol-join (list object field) "_"))
+    (define term (ag:rule-fold-init rule))
+    `(let-mut ,variable ,(generate-term class term))))
 
-(define/match (generate-expression expression)
-  [((ag:reference _ _))
-   (generate-reference expression)]
-  [(`(ite ,condition ,consequent ,alternate))
-   `(if ,(generate-expression condition)
-        ,(generate-expression consequent)
-        ,(generate-expression alternate))]
-  [((list (and operator (or '+ '- '* '/ '< '<= '== '!= '>= '> '&& '\|\| '!)) operands ...))
-   (cons operator (map generate-expression operands))]
-  [((list function head-argument tail-arguments ...))
-   `(call (select ,(generate-expression head-argument) ,function)
-          ,(map generate-expression tail-arguments))]
-   ;`(call ,function ,(map generate-expression arguments))]
-  [((? number?))
-   expression]
-  [((? boolean?))
-   expression])
+(define (generate-command function class command #:iterated? [iterated? #f])
+  (define recur (curry generate-command function class))
+  (match command
+    [(ag:iter/left child commands)
+     (define iterator (symbol-append child '_i))
+     (define body (append-map (recur #:iterated? #t) commands))
+     (append (generate-bindings class commands)
+             (list `(for ,iterator (ref (mut ,child))
+                         (do . ,body))))]
+    [(ag:iter/right child commands)
+     (define iterator (symbol-append child '_i))
+     (define body (append-map (recur #:iterated? #t) commands))
+     (append (generate-bindings class commands)
+             (list `(for ,iterator (call (select (ref (mut ,child)) rev) ())
+                         (do . ,body))))]
+    [(ag:eval attr)
+     (define rule (ag:class-ref*/rule class attr))
+     (define term
+       (match (ag:rule-formula rule)
+         [(ag:fold init next) (if iterated? next init)]
+         [term term]))
+     (define target (generate-term class (ag:field attr)))
+     (list `(:= ,target ,(generate-term class term)))]
+    [(ag:recur child)
+     (define receiver (if iterated? (symbol-append child '_i) child))
+     (list `(call (select ,receiver ,function) ()))]
+    [(ag:skip)
+     (list `(skip))]))
 
-;; (define/match (generate-command command)
-;;   [(`(for+ ,child ,commands))
-;;    `(for i (range 1 (call (select (select local ,child) len) ()))
-;;          (do . ,(map generate-command commands)))]
-;;   [(`(for- ,child ,commands))
-;;    `(for i (call (select (range 0 (- (call (select (select local ,child) len) ()))) rev) ())
-;;          (do . ,(map generate-command commands)))]
-;;   [(`(:= ,ref ,expr))
-;;    `(:= ,(generate-reference ref) ,(generate-expression expr))]
-;;   [(`(call ,traversal ((unit ,child))))
-;;    `(call ,traversal ((select local ,child)))]
-;;   [(`(call ,traversal ((curr ,child))))
-;;    `(call ,traversal ((index (select local ,child) i)))]
-;;   [(`(skip))
-;;    `(skip)])
+(define (generate-visitor name visitor)
+  (define class (ag:visitor-class visitor))
+  (define sort (ag:interface-name (ag:class-interface class)))
+  (define kind (ag:class-name class))
+  (define children (ag:class-children* class))
 
-(define/match (generate-command command)
-  [(`(when ,child ,commands))
-   `(if (> (call (select (select self ,child) len) ()) 0)
-        (do . ,(map generate-command commands))
-        (skip))]
-  [(`(for+ ,child ,commands))
-   `(for i (range 1 (call (select (select self ,child) len) ()))
-         (do . ,(map generate-command commands)))]
-  [(`(for- ,child ,commands))
-   (let ([n `(call (select (select self ,child) len) ())])
-     `(for i (call (select (range 0 (- ,n 1)) rev) ())
-           (do . ,(map generate-command commands))))]
-  [(`(:= ,ref ,expr))
-   `(:= ,(generate-reference ref) ,(generate-expression expr))]
-  [(`(call ,traversal ((unit ,child))))
-   `(call (select (select self ,child) ,traversal) ())]
-  [(`(call ,traversal ((curr ,child))))
-   `(call (select (index (select self ,child) i) ,traversal) ())]
-  [(`(call ,traversal ((first ,child))))
-   `(call (select (index (select self ,child) 0) ,traversal) ())]
-  [(`(call ,traversal ((last ,child))))
-   (let ([n `(call (select (select self ,child) len) ())])
-     `(call (select (index (select self ,child) (- ,n 1)) ,traversal) ()))]
-  [(`(skip))
-   `(skip)])
+  (define commands (ag:visitor-commands visitor))
+  (define body (append-map (curry generate-command name class) commands))
 
-(define (generate-interface-structure name fields)
-  `(struct (constructor ,name
-                        (record (: box_type BoxType) ; (: class ,(class-union-type name))
-                                (: children (gen Vec (,name)))
-                                .
-                                ,fields))))
+  `(=> (constructor (:: ,sort ,kind) (record . ,(map ag:child-name children)))
+       (do . ,body)))
 
-(define (generate-interface-enumeration name variants)
-  `(enum BoxType ; ,(class-union-type name)
-         .
-         ,(map (match-lambda
-                 [`(of ,kind ,_ ,_) `(constructor ,kind (unit))])
-                ;[`(of ,kind ,_ ,_) `(constructor ,kind (tuple ,kind))])
-               variants)))
+(define (generate-traversal G traversal)
+  (define name (ag:traversal-name traversal))
 
-(define (generate-class-structures variants)
-  (map (match-lambda
-         [`(of ,kind ,children ,fields)
-          (let ([child-fields (map generate-child-field children)])
-            `(struct (constructor ,kind
-                                  (record . ,(append child-fields fields)))))])
-       variants))
+  (for/list ([interface (ag:grammar-interfaces G)])
+    (define sort (ag:interface-name interface))
+    (define cases
+      (map (curry generate-visitor name)
+           (ag:traversal-ref/interface traversal interface)))
 
-(define (generate-function name forms)
-  (map (match-lambda
-         [`(~ ,sort . ,cases)
-          `(impl ,sort
-                 (fn ,name ((: self (ref (mut Self)))) (unit)
-                     (do (match (select self box_type) ; (select self class)
-                           .
-                           ,(map (match-lambda
-                                   [`(=> ,kind ,commands)
-                                    `(=> (constructor (:: BoxType ; ,(class-union-type sort)
-                                                          ,kind)
-                                                      (unit)
-                                                      ;(tuple (ref (mut local)))
-                                                      )
-                                         (do . ,(map generate-command commands)))])
-                                 cases)))))])
-       forms))
+    `(impl ,sort
+           (fn ,name ((: self (ref (mut Self)))) (unit)
+               (do (match (select self class)
+                     .
+                     ,cases))))))
 
-(define (generate-main nest)
-  null
-  )
-
-(define (generate-program P)
-  (append* header
-           (map (match-lambda
-                  [`(datatype ,name ,fields . ,variants)
-                   (list* `(blank)
-                          `(blank)
-                          (generate-interface-structure name fields)
-                          (generate-interface-enumeration name variants)
-                          ;`(blank)
-                          null ;(generate-class-structures variants)
-                          )]
-                  [`(function ,name ,forms)
-                   (generate-function name forms)
-                   ]
-                  [`(main ,nest)
-                   (generate-main nest)])
-                P)))
-
-;; (define (generate-program G schedule)
-;;   (append header
-;;           (add-between (generate-data-structure G) `(blank))
-;;           (list
-;;            `(blank)
-;;            `(fn reflow ((: tree (ref (mut (dyn Flow))))
-;;                         (: layout_context (ref LayoutContext))
-;;                         (: relayout_mode RelayoutMode))
-;;                 (unit)
-;;                 (do . ,(generate-evaluator schedule))))))
+(define (generate-program G S)
+  (append header
+          (add-between (generate-structure G) `(blank))
+          (list `(blank))
+          (add-between (generate-traversal G S) `(blank))))

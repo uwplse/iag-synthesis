@@ -1,208 +1,267 @@
-
-function width(self) :=
-  self.bl + self.pl + self.w + self.pr + self.br + self.scroll_y;
-
-function height(self) :=
-  self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x;
-
-interface Root {
-  viewport_width : real;
-  viewport_height : real;
+traversal layout {
+    case Viewport {
+        ??;
+        recur root;
+    }
+    case Block {
+        ??;
+        iterate children { ??; recur children; ??; }
+        ??;
+    }
+    case Float {
+        ??;
+        iterate children { ??; recur children; ??; }
+        ??;
+    }
 }
 
-interface Block {
-  /* X, Y and width/height */
-  x : real;
-  y : real;
-  w : real;
-  h : real;
-
-  /* X and Y offset */
-  xo : real;
-  yo : real;
-
-  /* margins */
-  mt : real;
-  mr : real;
-  mb : real;
-  ml : real;
-
-  /* top/bottom positive/negative margins for collapsing */
-  mtp : real;
-  mtn : real;
-  mbp : real;
-  mbn : real;
-
-  mtp_up : real;
-  mtn_up : real;
-  mb_clear : bool;
-
-  collapse_top : bool;
-  // := self.pt == 0.0 && self.bt == 0.0
-  collapse_bottom : bool;
-  // := self.pb == 0.0 && self.bb == 0.0 && height_is_auto && !self.is_replaced
-  collapse_through : bool;
-  // := height(self) == 0.0 && !self.is_replaced && (...)
-
-  /* padding */
-  pt : real;
-  pr : real;
-  pb : real;
-  pl : real;
-
-  /* border */
-  bt : real;
-  br : real;
-  bb : real;
-  bl : real;
-
-  scroll_x : real;
-  scroll_y : real;
-
-  /* shrink to fit */
-  stf_width : real;
-  stf_max : real;
-  float_stf_max : real;
-  shrink_to_fit : bool; /* w_from_stf_width */
-
-  /* used for dependency creation only */
-  width_set : bool;
-
-  //text_indent : real;
-  //baseline : real;
-  //above_baseline : real;
-  //below_baseline : real;
-
-  ez_sufficient : bool;
-  ez_lookback : bool;
-
-  has_contents : bool;
-  is_first_box : bool;
-  is_last_box : bool;
-  is_component : bool;
-
-  foreground : Color;
-  background : Color;
-
-  specified : Style;
-  computed : Style;
+interface Tree {
+    input width : Pixels;
+    input height : Pixels;
 }
 
-interface Inline {
-  /* X, Y and width/height */
-  x : real;
-  y : real;
-  w : real;
-  h : real;
+interface Layout {
+    /* X, Y and width/height */
+    input x : Pixels;
+    input y : Pixels;
+    input w : Pixels;
+    input h : Pixels;
 
-  /* X and Y offset */
-  xo : real;
-  yo : real;
+    /* X and Y offset */
+    //input xo : Pixels;
+    //input yo : Pixels;
 
-  /* margins */
-  mt : real;
-  mr : real;
-  mb : real;
-  ml : real;
+    /* margins */
+    input mt : Pixels;
+    input mr : Pixels;
+    input mb : Pixels;
+    input ml : Pixels;
 
-  /* top/bottom positive/negative margins for collapsing */
-  //mtp : real;
-  //mtn : real;
-  //mbp : real;
-  //mbn : real;
+    /* top/bottom positive/negative margins for collapsing */
+    output mtp : Pixels;
+    output mtn : Pixels;
+    output mtp_up : Pixels;
+    output mtn_up : Pixels;
+    output mbp : Pixels;
+    output mbn : Pixels;
+    output mbp_prev : Pixels;
+    output mbn_prev : Pixels;
 
-  //mtp_up : real;
-  //mtn_up : real;
-  //mb_clear : bool;
+    output mb_clear : bool;
+    output mb_clear_prev : bool;
 
-  /* padding */
-  pt : real;
-  pr : real;
-  pb : real;
-  pl : real;
+    output collapse_top : bool; /* with children */
+    output collapse_bottom : bool; /* with children */
+    output collapse_through : bool; /* with parent */
+    output collapse_weird : bool; /* s831c */
 
-  /* border */
-  bt : real;
-  br : real;
-  bb : real;
-  bl : real;
+    /* padding */
+    input pt : Pixels;
+    input pr : Pixels;
+    input pb : Pixels;
+    input pl : Pixels;
 
-  scroll_x : real;
-  scroll_y : real;
+    /* border */
+    input bt : Pixels;
+    input br : Pixels;
+    input bb : Pixels;
+    input bl : Pixels;
 
-  /* shrink to fit */
-  stf_width : real;
-  stf_max : real;
-  float_stf_max : real;
-  shrink_to_fit : bool; /* w_from_stf_width */
+    output width : Pixels;
+    output height : Pixels;
 
-  /* used for dependency creation only */
-  width_set : bool;
+    input scroll_x : Pixels;
+    input scroll_y : Pixels;
 
-  text_indent : real;
+    input has_contents : bool;
+    input has_clearance : bool;
+    input is_first_box : bool;
+    input is_last_box : bool;
+    input is_replaced : bool;
 
-  baseline : real;
-  above_baseline : real;
-  below_baseline : real;
-
-  ez_sufficient : bool;
-  ez_lookback : bool;
-
-  has_contents : bool;
-  is_first_box : bool;
-  is_last_box : bool;
-  is_component : bool;
-
-  foreground : Color;
-  background : Color;
-
-  specified : Style;
-  computed : Style;
+    input style : Style; // computed
 }
 
-class RootBox : Root {
-  child block : Block;
-}
-
-class BlockBox : Block {
-  children stack : Block;
-
-  rules {
-    self.mtp := f(self.mt, self.prev_mbp, children[0].mtp_up);
-    self.mtn := f(self.mt, self.prev_mbn, children[0].mtn_up);
-    self.mbp :=  f(self.mb, self.mtp, children[-1].mbp);
-    self.mbn := f(self.mb, self.mtn children[-1].mbn);
-    self.mtp_up := f(self.mtp, self.mbp, self.next_mtp_up)
-    self.mtn_up := f(self.mtn, self.mbn, self.next_mtn_up);
-  }
+/* The document viewport. */
+class Viewport : Tree {
+    children {
+        initial : Layout;
+    }
+    rules {
+        initial.mtp_up := 0.0;
+        initial.mtn_up := 0.0;
+        initial.mbp_prev := 0.0;
+        initial.mbn_prev := 0.0;
+        initial.mb_clear_prev := false;
+    }
 }
 
 /*
-fun inorder(tree) {
-  for i in 0..len(children) {
-    children[i].prev_mbp := children[i-1].mbp;
-    children[i].prev_mbn := children[i-1].mbn;
-    inorder(child);
-  }
-  for i in len(children)..0 {
-    children[i].mtp_up := f(self.mtp, self.mbp, children[i+1].mtp_up)
-    children[i].mtn_up := f(self.mtn, self.mbn, children[i+1].mtn_up);
-  }
-  self.mtp := f(self.mt, self.prev_mbp, children[0].mtp_up);
-  self.mtn := f(self.mt, self.prev_mbn, children[0].mtn_up);
-  self.mbp :=  f(self.mb, self.mtp, children[-1].mbp);
-  self.mbn := f(self.mb, self.mtn children[-1].mbn);
+trait CollapsibleMargin {
+    rules {
+        self.mtp :=
+       (max-if
+        (max-if
+         (ite (> (mt b) 0.0) (mt b) 0.0)
+         (and (top-margin-collapses-with-children b) (is-box f) (not (has-clearance f)))
+         (mtp-up f))
+        (and (box-collapsed-through b) (not (has-clearance b)) (is-box v))
+        (mbp v));
+
+        self.mtp_up :=
+       (max-if (ite (box-collapsed-through b) (mbp b) (mtp b))
+               (and (is-box (nflow b)) (box-collapsed-through b) (not (has-clearance (nflow b))))
+               (mtp-up (nflow b)));
+
+
+        self.mtn :=
+       (min-if
+        (min-if
+         (ite (< (mt b) 0.0) (mt b) 0.0)
+         (and (top-margin-collapses-with-children b) (is-box f) (not (has-clearance f)))
+         (mtn-up f))
+        (and (box-collapsed-through b) (not (has-clearance b)) (is-box v))
+        (mbn v));
+
+        self.mtn_up :=
+       (min-if (ite (box-collapsed-through b) (mbn b) (mtn b))
+               (and (is-box (nflow b)) (box-collapsed-through b) (not (has-clearance (nflow b))))
+               (mtn-up (nflow b)));
+    (= (mb-clear b)
+       (or (has-clearance b) (and (is-box v) (box-collapsed-through b) (mb-clear v))))
+    (= (mbp b)
+       (max-if
+        (max-if
+         (ite (> (mb b) 0.0) (mb b) 0.0)
+         (and (bottom-margin-collapses-with-children b) (is-box l) (not (mb-clear l))
+              (not (change-s831c b)))
+         (mbp l))
+        (box-collapsed-through b)
+        (mtp b)))
+    (= (mbn b)
+       (min-if
+        (min-if
+         (ite (< (mb b) 0.0) (mb b) 0.0)
+         (and (bottom-margin-collapses-with-children b) (is-box l) (not (mb-clear l))
+              (not (change-s831c b)))
+         (mbn l))
+        (box-collapsed-through b)
+        (mtn b))))))
+
+        self.collapse_top := self.pt == 0.0 && self.bt == 0.0;
+        self.collapse_bottom :=
+          self.pb == 0.0 && self.bb == 0.0 &&
+          is_auto(self.style.height) && !self.is_replaced;
+
+        self.collapse_through := // last[kids.collapse_through : false]
+          (self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x) == 0.0 &&
+          !self.is_replaced && kids$$.collapse_through;
+
+        self.collapse_weird :=
+          self.collapse_top && kids$$.is_first_box && kids$$.collapse_through &&
+          is_positive_pixel_or_percent(min_height(self.computed)) &&
+          is_auto(height(self.computed));
+
+        kids.mtp_up := scanr 0.0
+            .. if kids.collapse_through then max(kids.mbp, kids.mtp_up@) else kids.mtp
+            .. if !kids.has_clearance then kids.mtp_up else 0.0;
+
+        kids.mtn_up := scanr 0.0
+            .. if kids.collapse_through then min(kids.mbn, kids.mtn_up@) else kids.mtn
+            .. if !kids.has_clearance then kids.mtn_up else 0.0;
+
+        kids.mbp_prev := scanl 0.0 .. kids.mbp_prev@ .. kids.mbp;
+        kids.mbn_prev := scanl 0.0 .. kids.mbn_prev@ .. kids.mbn;
+
+        self.mtp :=
+          max(
+            max(
+              max(self.mt, 0.0),
+              if (self.collapse_top && !kids$0.has_clearance)
+              then kids.mtp_up$
+              else 0.0
+            ),
+            if (self.collapse_through && !self.has_clearance)
+            then self.mbp_prev
+            else 0.0
+          );
+        self.mtn :=
+          min(
+            min(
+              min(self.mt, 0.0),
+              if (self.collapse_top && !kids$0.has_clearance)
+              then kids.mtn_up$
+              else 0.0
+            ),
+            if (self.collapse_through && !self.has_clearance)
+            then self.mbn_prev
+            else 0.0
+          );
+
+        self.mbp :=
+          max(
+            max(
+              max(self.mb, 0.0),
+              if (self.collapse_bottom && !kids$$.mb_clear && !self.collapse_weird)
+              then kids$$.mbp
+              else 0.0
+            ),
+            if self.collapse_through then self.mtp else 0.0
+          );
+        self.mbn :=
+          min(
+            min(
+              min(self.mb, 0.0),
+              if (self.collapse_bottom && !kids$$.mb_clear && !self.collapse_weird)
+              then kids$$.mbn
+              else 0.0
+            ),
+            if self.collapse_through then self.mtn else 0.0
+          );
+
+        kids.mb_clear_prev := scanl false .. kids.mb_clear_prev@ .. kids.mb_clear;
+
+        self.mb_clear :=
+          self.has_clearance || (self.collapse_through && self.mb_clear_prev);
+
+    }
 }
 */
 
-class Line : Block {
-  children line : Inline;
+trait NonCollapsibleMargin {
+    rules {
+        // TODO
+    }
 }
 
-class InlineBox : Inline {
-  child block : Block;
+/* A box under block layout. */
+class Block : Layout {
+    children {
+        children : [Layout];
+    }
+    rules {
+      self.width := self.bl + self.pl + self.w + self.pr + self.br + self.scroll_y;
+
+      self.height := self.bt + self.pt + self.h + self.pb + self.bb + self.scroll_x;
+
+      self.mtn := foldl 0.0 .. @{self.mtn} + children.mt;
+
+      self.mb_clear_prev := [0]{children.mb_clear : false};
+      self.mb_clear := [#]{children.mb_clear : false};
+
+      children.mtp := children.mt;
+    }
 }
 
-class Text : Inline {
-  /* blah, blah, blah... */
+/* A box under floating layout. */
+class Float(NonCollapsibleMargin) : Layout {
+    children {
+        children : [Layout];
+    }
+    rules {
+        self.width := foldl 0 .. children.width + @{self.width};
+        children.height := @{self.width};
+        self.height := [#]{children.height : 0.0};
+        // TODO
+    }
 }

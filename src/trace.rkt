@@ -8,7 +8,8 @@
          rosette/solver/smt/z3)
 
 (provide permute iter-permuted for/permuted for*/permuted join-threads join debug
-         table? make-table table-ref! table-def! break (rename-out [solve-trace solve]))
+         ref? deref set-ref! break clear
+         (rename-out [new-ref ref] [solve-trace solve]))
 
 ; Activate an ILP solver (IBM CPLEX if available, otherwise Z3 in ILP mode)
 (current-solver
@@ -19,7 +20,7 @@
 (define dependency (make-hasheq))
 ;(define antidependency (make-hasheq))
 
-; Next available memory location for a table entry.
+; Next available location for a reference.
 (define next-location 0)
 
 ; List of assumed bit-encoded conditions.
@@ -63,17 +64,17 @@
   subst)
 
 
-; Opaque, user-facing handle on a table.
-(struct table (contents) #:mutable)
+; Opaque, user-facing reference to a location.
+(struct ref (location) #:mutable)
 
-; Reset the table for a fresh, disjoint execution path.
-(struct cmd:alloc (table) #:transparent)
+; Reset the reference for a fresh, disjoint execution path.
+(struct cmd:alloc (ref) #:transparent)
 
-; Abstract read from the named entry in the table.
-(struct cmd:read (table name) #:transparent)
+; Abstract read from the reference.
+(struct cmd:read (ref) #:transparent)
 
-; Abstract write to the named entry in the table.
-(struct cmd:write (table name) #:transparent)
+; Abstract write to the reference.
+(struct cmd:write (ref) #:transparent)
 
 ; Compose two residual programs in parallel.
 (struct cmd:join (left right) #:transparent)
@@ -140,22 +141,26 @@
     [(join body bodies ...)
      (join-threads (thunk body) (thunk (join bodies ...)))]))
 
-; Create an empty table.
-(define (make-table)
-  (let ([table (table #f)])
-    (push! residue (cmd:alloc table))
+; Create an empty reference.
+(define (new-ref v)
+  (let ([r (ref (void))])
+    (push! residue (cmd:alloc r))
+    (when v
+      (push! residue (cmd:write r)))
     (flush-residue!)
-    table))
+    r))
 
-; Reference the named entry in the table.
-(define (table-ref! table name)
-  (push! residue (cmd:read table name))
-  (flush-residue!))
+(define (deref r)
+  (push! residue (cmd:read r))
+  (flush-residue!)
+  (void))
 
-; Define (and initialize) the named entry on the table.
-(define (table-def! table name)
-  (push! residue (cmd:write table name))
-  (flush-residue!))
+; TODO: Perhaps use false to "de-initialize" a reference.
+(define (set-ref! r v)
+  (when v
+    (push! residue (cmd:write r)))
+  (flush-residue!)
+  (void))
 
 ; Log a debugging event, to display in case of failure.
 (define (debug event)
@@ -219,15 +224,13 @@
        (pop! path-condition)]
       [(cmd:debug event)
        (displayln event)]
-      [(cmd:alloc table)
-       (set-table-contents! table (make-hash))]
-      [(cmd:read (table contents) name)
-       (let ([location (hash-ref! contents name (thunk (++ next-location)))]
-             [assumption (conjoin* path-condition)])
+      [(cmd:alloc r)
+       (set-ref-location! r (++ next-location))]
+      [(cmd:read (ref location))
+       (let ([assumption (conjoin* path-condition)])
          (trace-read! location assumption dependency))]
-      [(cmd:write (table contents) name)
-       (let ([location (hash-ref! contents name (thunk (++ next-location)))]
-             [assumption (conjoin* path-condition)])
+      [(cmd:write (ref location))
+       (let ([assumption (conjoin* path-condition)])
          (trace-write! location assumption dependency)
          (for-each (curry trace-write! location assumption) shared-dependency))]
       [(cmd:join left right)
@@ -252,6 +255,12 @@
   (trace-exit!)
   (set! dependency (make-hasheq))
   (set! next-location 0))
+
+(define (clear)
+  (set! residue null)
+  (set! dependency (make-hasheq))
+  (set! next-location 0)
+  (clear-asserts!))
 
 ; After one or more traces, solve for an assignment of each multichoice to an
 ; appropriately sized list of its alternatives.

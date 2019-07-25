@@ -18,7 +18,7 @@
 (define root-name (make-parameter 'Root))
 
 (define (parse-grammar filename)
-  (let ([G (elaborate-grammar (file->grammar filename))])
+  (let ([G (file->grammar filename)])
     (validate-grammar G)
     G))
 
@@ -39,6 +39,11 @@
  [("-R" "--root") classname "Name of the attribute grammar's root interface"
                    (root-name (string->symbol classname))]
  #:args (schedule-sketch grammar-filename)
+
+ ;; (let ([G (file->grammar grammar-filename)])
+ ;;   (pretty-print G)
+ ;;   (displayln (grammar->string G)))
+
  (let* ([G (parse-grammar grammar-filename)]
         [E (tree-examples G (root-name))]
         [S (parse-schedule-sketch G schedule-sketch)]

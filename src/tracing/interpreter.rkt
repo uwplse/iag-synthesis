@@ -7,182 +7,139 @@
          "../grammar/tree.rkt"
          "../trace.rkt")
 
-(provide interpret/concrete interpret/symbolic
-         traverse)
+(provide denotation *denotation* concrete-denotation abstract-denotation
+         interpret traverse)
 
-; TODO: Would be nice to factor out symbolic forking as well...
-(struct model (alloc lookup update denote debug))
-(define semantics (make-parameter #f))
+(struct denotation (ops fns ite) #:transparent)
 
-(define denotation
-  (list (cons '+ +) (cons '- -) (cons '* *) (cons '/ /)
-        (cons '< <) (cons '<= <=) (cons '== =) (cons '>= >=) (cons '> >)
-        (cons 'max max) (cons 'min min)
-        (cons '! not)
-        (cons '&& (λ (e1 e2) (and e1 e2)))
-        (cons '\|\| (λ (e1 e2) (or e1 e2)))
-        (cons 'ite (λ (e1 e2 e3) (if e1 e2 e3)))))
+(define concrete-denotation
+  (denotation (match-lambda ['+ +] ['- -] ['* *] ['/ /]
+                            ['< <] ['<= <=] ['== =] ['>= >=] ['> >]
+                            ['! not]
+                            ['&& (λ (e1 e2) (and e1 e2))]
+                            ['\|\| (λ (e1 e2) (or e1 e2))])
+              (match-lambda ['max max] ['min min])
+              (λ (e1 e2 e3) (if e1 e2 e3))))
 
-(define concrete-semantics
-  (model (const null)
-         (λ (store label) (cdr (assoc label store eq?)))
-         (λ (store label) (cons (cons label #t) store))
-         (λ (operator) (cdr (assoc operator denotation eq?)))
-         displayln))
+(define abstract-denotation
+  (denotation (const void)
+              (const void)
+              (const void)))
 
-(define symbolic-semantics
-  (model make-table
-         table-ref!
-         (λ (store label _) (table-def! store label))
-         (const void)
-         ;debug
-         void))
+(define *denotation* (make-parameter concrete-denotation))
 
-(define (alloc!)
-  ((model-alloc (semantics))))
-(define (lookup! store label)
-  ((model-lookup (semantics)) store label))
-(define (update! store label value)
-  ((model-update (semantics)) store label value))
-(define (denote operator)
-  ((model-denote (semantics)) operator))
-(define (debug! event)
-  ((model-debug (semantics)) event))
+(define (denote-op op . xs)
+  (apply (dict-ref (denotation-ops (*denotation*))) xs))
 
-(define (interpret/concrete G schedule tree)
-  (parameterize ([semantics concrete-semantics])
-    (interpret G schedule tree)))
+(define (denote-fn fn . xs)
+  (apply (dict-ref (denotation-fns (*denotation*))) xs))
 
-(define (interpret/symbolic G schedule tree)
-  (parameterize ([semantics symbolic-semantics])
-    (interpret G schedule tree)))
+(define (denote-ite if then else)
+  ((denotation-ops (*denotation*)) if then else))
 
-(define (interpret G schedule tree)
+(define (accumulator self)
+  (for/list ([attr (ag:class-counters (tree-class self))])
+    (cons attr (box #f))))
+
+(define (interpret schedule tree)
   (match schedule
-    [`(seq ,left-sched ,right-sched)
-     (interpret G left-sched tree)
-     (interpret G right-sched tree)]
-    [`(par ,left-sched ,right-sched)
-     (join (interpret G left-sched tree)
-           (interpret G right-sched tree))]
-    [`(trav ,order ,visitors)
-     (debug! `(trav ,order))
-     (traverse G visitors tree)
-     (debug! `(exit ,order))]))
+    [(ag:sequential left-sched right-sched)
+     (interpret left-sched tree)
+     (interpret right-sched tree)]
+    [(ag:parallel left-sched right-sched)
+     (join (interpret left-sched tree)
+           (interpret right-sched tree))]
+    [(ag:traversal order visitors)
+     (traverse schedule tree)]))
 
-(define (traverse G visitors self)
-  ; NOTE: Using just the attribute label for virtual nodes
-  ; is an unreliable hack.
-  (define class-body (grammar-class G (tree-class self)))
-  (debug! `(visit ,(tree-class self)))
-  (for*/permuted ([command (lookup visitors (tree-class self))])
+(define (traverse trav self)
+  (define class (tree-class self))
+  (for*/permuted ([command (ag:traversal-ref/visitor trav class)])
     (match command
-      [`(recur ,child)
-       (debug! `(recur ,child))
-       (define subtree (lookup (tree-children self) child))
+      [(ag:recur child)
+       (define subtree (tree-ref/child self child))
+       ;((distribute (curry traverse trav)) subtree)
        (if (list? subtree)
            (for ([node subtree])
-             (traverse G visitors node))
-           (traverse G visitors subtree))]
-      [`(iter-left ,child ,commands)
-       (debug! `(iter-left ,child))
-       (iterate/left! G visitors self class-body child commands)]
-      [`(iter-right ,child ,commands)
-       (debug! `(iter-right ,child))
-       (iterate/right! G visitors self class-body child commands)]
-      [`(eval ,node ,label)
-       (debug! `(eval ,node ,label))
-       (define value
-         (eval! self (class-rule-unit class-body node label)))
-       (update! (tree-select self `(unit ,node)) label value)]
-      [`(call ,method)
-       (debug! `(call ,method))
-       (call! self class-body method)]
-      [`(skip)
+             (traverse trav node))
+           (traverse trav subtree))]
+      [(ag:iter/left child commands)
+       (iterate self child identity commands trav)]
+      [(ag:iter/right child commands)
+       (iterate self child reverse commands trav)]
+      [(ag:eval attr)
+       (define rule (ag:class-ref*/rule class attr))
+       (set-box! (tree-select self attr)
+                 (evaluate self (ag:rule-formula rule)))]
+      [(ag:skip)
        (void)])))
 
-(define (iterate/left! G visitors self class-body child commands)
-  (define virt$0 (alloc!))
-  (init! self class-body commands virt$0)
-  (for/fold ([virt$- virt$0]
-             [pred #f])
-            ([curr (lookup (tree-children self) child)])
-    (define virt$+ (alloc!))
-    (for*/permuted ([command commands])
-      (match command
-        [`(recur ,(== child))
-         (debug! `(step (recur (succ ,child))))
-         (traverse G visitors curr)]
-        [`(eval ,node ,label)
-         (debug! `(step (eval (succ ,node) ,label)))
-         (let* ([expr (class-rule-iter class-body node label (not pred))]
-                [value (eval! self expr #:current curr
-                              #:virtual virt$- #:predecessor pred)]
-                [store (tree-select self `(curr ,node) #:current curr
-                                    #:virtual virt$+)])
-           (update! store label value))]
-        [`(skip)
-         (void)]))
-    (values virt$+ curr)))
+(define (iterate self child order commands trav)
+  (define class (tree-class self))
+  (define state0 (accumulator self))
 
-(define (iterate/right! G visitors self class-body child commands)
-  (define virt$$ (alloc!))
-  (init! self class-body commands virt$$)
-  (for/fold ([virt$+ virt$$]
-             [succ #f])
-            ([curr (reverse (lookup (tree-children self) child))])
-    (define virt$- (alloc!))
-    (for*/permuted ([command commands])
-      (match command
-        [`(recur ,(== child))
-         (debug! `(step (recur (pred ,child))))
-         (traverse G visitors curr)]
-        [`(eval ,node ,label)
-         (debug! `(step (eval (pred ,node) ,label)))
-         (let* ([expr (class-rule-iter class-body node label (not succ))]
-                [value (eval! self expr #:current curr
-                              #:virtual virt$+ #:successor succ)]
-                [store (tree-select self `(curr ,node) #:current curr
-                                    #:virtual virt$-)])
-           (update! store label value))]
-        [`(skip)
-         (void)]))
-    (values virt$- curr)))
-
-(define (init! self class-body commands virtual)
   (for*/permuted ([command commands])
     (match command
-      [`(recur ,child)
+      [(ag:recur _)
        (void)]
-      [`(eval ,node ,label)
-       (let ([expr (class-rule-init class-body node label)])
-         (when expr
-           (debug! `(init (eval ,node ,label)))
-           (update! virtual label (eval! self expr))))]
-      [`(skip)
-       (void)])))
+      [(ag:eval attr)
+       (define rule (ag:class-ref*/rule class attr))
+       (when (ag:rule-folds? rule)
+         (set-box! (dict-ref state0 attr)
+                   (evaluate self (ag:rule-fold-init rule))))]
+      [(ag:skip)
+       (void)]))
 
-(define (call! self class-body method-name #:current [curr #f]
-               #:predecessor [pred #f] #:successor [succ #f])
-  (define method-decl (class-method class-body method-name))
-  (for ([ref (method-inflow method-decl)])
-    (match-let ([(ag:reference object label) ref])
-      (lookup! (tree-select self object #:current curr
-                            #:predecessor pred #:successor succ)
-               label)))
-  (for ([ref (method-outflow method-decl)])
-    (match-let ([(ag:reference object label) ref])
-      (update! (tree-select self object #:current curr) label #t))))
+  (for/fold ([state- state0])
+            ([node (order (tree-ref/child self child))])
+    (define state+ (accumulator self))
+    (for*/permuted ([command commands])
+      (match command
+        [(ag:recur (== child))
+         (traverse trav node)]
+        [(ag:eval attr)
+         (define rule (ag:class-ref*/rule class attr))
+         (define eval
+           (curry evaluate self #:iterator child #:cursor node #:accumulator state-))
+         ;; (match attr
+         ;;   [(cons (== child) field)
+         ;;    (set-box! (tree-ref/field node field)
+         ;;              (eval (ag:rule-formula rule)))]
+         ;;   [_
+         ;;    (set-box! (dict-ref state+ attr)
+         ;;              (eval (ag:rule-fold-next rule)))])
+         (if (ag:rule-folds? rule)
+             (set-box! (dict-ref state+ attr)
+                       (eval (ag:rule-fold-next rule)))
+             (set-box! (tree-select self attr #:iterator child #:cursor node)
+                       (eval (ag:rule-formula rule))))]
+        [(ag:skip)
+         (void)]))
 
-(define (eval! self expr #:current [curr #f] #:virtual [virt #f]
-               #:predecessor [pred #f] #:successor [succ #f])
-  (define/match (recur expr)
-    [((or #t #f (? number?)))
-     expr]
-    [((ag:reference object label))
-     (lookup! (tree-select self object #:current curr #:virtual virt
-                           #:predecessor pred #:successor succ)
-              label)]
-    [((list (symbol op) exprs ...))
-     (apply (denote op) (map recur exprs))])
-  (recur expr))
+    state+))
+
+(define (evaluate self term #:iterator [iter #f] #:cursor [cur #f] #:accumulator [acc #f])
+  (define/match (recur term)
+    [((ag:const val))
+     val]
+    [((ag:field attr))
+     (unbox (tree-select self attr #:iterator iter #:cursor cur))]
+    [((ag:accum attr))
+     (unbox (dict-ref acc attr))]
+    [((ag:index/first (cons child field) default))
+     (define nodes (tree-ref/child self child))
+     (if (null? nodes)
+         (recur default)
+         (unbox (tree-ref/field (first nodes) field)))]
+    [((ag:index/last (cons child field) default))
+     (define nodes (tree-ref/child self child))
+     (if (null? nodes)
+         (recur default)
+         (unbox (tree-ref/field (last nodes) field)))]
+    [((ag:ite if then else))
+     (denote-ite (recur if) (recur then) (recur else))]
+    [((ag:expr operator operands))
+     (denote-op operator (map recur operands))]
+    [((ag:call function arguments))
+     (denote-fn function (map recur arguments))])
+  (recur term))

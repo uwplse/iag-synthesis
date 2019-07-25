@@ -7,15 +7,6 @@
 (define (symbol-subscript base sub)
   (string->symbol (string-append (symbol->string base) (number->string sub))))
 
-;; (define (symbol-append . xs)
-;;   (string->symbol (string-append* (map symbol->string xs))))
-
-;; (define symbol-upcase
-;;   (compose string->symbol string-upcase symbol->string))
-
-;; (define symbol-downcase
-;;   (compose string->symbol string-downcase symbol->string))
-
 ; program ::= (datatype sort (field ...) (of kind (child ...) (field ...)) ...)
 ;           | (function func (~ sort (=> kind (statement ...))) ...)
 ;
@@ -44,23 +35,28 @@
 ; func ::= symbol
 
 (define/match (elaborate-child child)
-  [(`(,link . (unit ,sort))) `(: ,link (unit ,sort))]
-  [(`(,link . (plus ,sort))) `(: ,link (plus ,sort))]
-  [(`(,link . (star ,sort))) `(: ,link (star ,sort))])
+  [((ag:child/one name (ag:interface type _ _))) `(: ,name (unit ,type))]
+  [((ag:child/seq name (ag:interface type _ _))) `(: ,name (star ,type))])
 
 (define/match (elaborate-field attribute)
-  [(`(,label . (in ,type))) `(: ,label ,type)]
-  [(`(,label . (out ,type))) `(: ,label ,type)])
+  [((ag:label name type)) `(: ,name ,type)])
 
 (define (elaborate-data G)
-  (for/list ([(sort classes) (in-dict (associate-classes G))])
-    (define public (grammar-interface G sort))
+  (for/list ([interface (ag:grammar-interfaces G)])
+    (define public (ag:interface-labels interface))
     (define variants
-      (for/list ([(kind class) (in-dict classes)])
-        (define private (remove* public (ag-class-attributes class)))
-        (define arity (ag-class-children class))
-        `(of ,kind ,(map elaborate-child arity) ,(map elaborate-field private))))
-    `(datatype ,sort ,(map elaborate-field public) . ,variants)))
+      (for/list ([class (ag:interface-classes interface)])
+        (define private
+          (append* (ag:class-labels class)
+                   (map ag:trait-labels (ag:class-traits class))))
+        (define arity (ag:class-children* class))
+        `(of ,(ag:class-name class)
+             ,(map elaborate-child arity)
+             ,(map elaborate-field private))))
+    `(datatype ,(ag:interface-name interface)
+               ,(map elaborate-field public)
+               .
+               ,variants)))
 
 (define (elaborate-iteration class order rev? child commands)
   (define virt (if rev? 'succ 'pred))
@@ -68,29 +64,31 @@
   (define loop (if rev? 'for- 'for+))
   (define virtual-statements
     (append-map (match-lambda
-                  [`(eval ,node ,label)
-                   (let ([expr (class-rule-init class node label)])
-                     (if expr
-                         (list `(:= ((,virt ,node) . ,label) ,expr))
+                  [(ag:eval attr)
+                   (let* ([rule (ag:class-ref*/rule class attr)]
+                          [term (ag:rule-fold-init rule)])
+                     (if term
+                         (list `(:= (accum ,attr) ,term))
                          null))]
-                  [`(recur ,(== child))
+                  [(ag:recur (== child))
                    null])
                 commands))
   (define basis-statements
     (append-map (match-lambda
-                  [`(eval ,node ,label)
-                   (let ([expr (class-rule-base class node label)])
+                  [(ag:eval attr)
+                   (let* ([rule (ag:class-ref*/rule class attr)]
+                          [expr (ag:rule-fold-next rule)])
                      (if expr
-                         (list `(:= ((,base ,node) . ,label) ,expr))
+                         (list `(:= (base ,attr) ,expr))
                          null))]
-                  [`(recur ,(== child))
+                  [(ag:recur (== child))
                    (list `(call ,order ((,base ,child))))])
                 commands))
   (define iterative-statements
     (map (match-lambda
-           [`(eval ,node ,label)
-            `(:= ((curr ,node) . ,label) ,(class-rule-step class node label))]
-           [`(recur ,(== child))
+           [(ag:eval (cons node label))
+            `(:= ((curr ,node) . ,label) ,(ag:class-ref*/rule class (cons node label)))]
+           [(ag:recur (== child))
             `(call ,order ((curr ,child)))])
          commands))
   (append virtual-statements
@@ -99,32 +97,33 @@
 
 (define (elaborate-visitor class order visitor)
   (append-map (match-lambda
-                [`(iter-left ,child ,body)
+                [(ag:iter/left child body)
                  (list `(when ,child ,(elaborate-iteration class order #f child body)))]
-                [`(iter-right ,child ,body)
+                [(ag:iter/right child body)
                  (elaborate-iteration class order #t child body)]
-                [`(eval ,node ,label)
-                 (let ([expr (class-rule-unit class node label)])
+                [(ag:eval (cons node label))
+                 (let* ([rule (ag:class-ref*/rule class (cons node label))]
+                        [expr (ag:rule-formula rule)])
                    (list `(:= ((unit ,node) . ,label) ,expr)))]
-                [`(recur ,child)
+                [(ag:recur child)
                  (list `(call ,order ((unit ,child))))]
-                [`(skip)
+                [(ag:skip)
                  null])
               visitor))
 
 (define (elaborate-code G S)
   (match S
-    [`(par ,S1 ,S2)
+    [(ag:parallel S1 S2)
      (append (elaborate-code G S1)
              (elaborate-code G S2))]
-    [`(seq ,S1 ,S2)
+    [(ag:sequential S1 S2)
      (append (elaborate-code G S1)
              (elaborate-code G S2))]
-    [`(trav ,order ,visitors)
+    [(ag:traversal order visitors)
      (define cases
        (for/list ([(kind visitor) (in-dict visitors)])
-         (let* ([class (grammar-class G kind)]
-                [sort (ag-class-interface class)])
+         (let* ([class (ag:grammar-ref/class G kind)]
+                [sort (ag:interface-name (ag:class-interface class))])
            `(~ ,sort (=> ,kind ,(elaborate-visitor class order visitor))))))
      (define branches
        (map (λ (group) `(~ ,(second (first group)) . ,(map third group)))
@@ -132,13 +131,13 @@
      (list `(function ,order ,branches))]))
 
 (define/match (elaborate-main S)
-  [(`(par ,S1 ,S2))
+  [((ag:parallel S1 S2))
    `(join ,(elaborate-main S1)
           ,(elaborate-main S2))]
-  [(`(seq ,S1 ,S2))
+  [((ag:sequential S1 S2))
    `(then ,(elaborate-main S1)
           ,(elaborate-main S2))]
-  [(`(trav ,order ,visitors))
+  [((ag:traversal order visitors))
    order])
 
 (define (elaborate-program G S)
@@ -148,15 +147,15 @@
           (list `(main ,(elaborate-main S0)))))
 
 (define/match (preprocess-command visitor)
-  [(`(iter-left ,child ,body))
+  [((ag:iter/left ,child ,body))
    (list `(iter-left ,child ,(preprocess-command body)))]
-  [(`(iter-right ,child ,body))
+  [((ag:iter/right ,child ,body))
    (list `(iter-right ,child ,(preprocess-command body)))]
-  [(`(eval ,node ,label))
+  [((ag:eval (cons node label)))
    (list `(eval ,node ,label))]
-  [(`(recur ,child))
+  [((ag:recur ,child))
    (list `(recur ,child))]
-  [(`(skip))
+  [((ag:skip))
    (list `(skip))]
   [((list commands ...))
    (append-map preprocess-command commands)])
@@ -164,11 +163,11 @@
 (define (preprocess-schedule S)
   (define used (make-hasheq))
   (define/match (aux S)
-    [(`(par ,S1 ,S2))
+    [((ag:parallel ,S1 ,S2))
      `(par ,(aux S1) ,(aux S2))]
-    [(`(seq ,S1 ,S2))
+    [((ag:sequential ,S1 ,S2))
      `(seq ,(aux S1) ,(aux S2))]
-    [(`(trav ,order ,visitors))
+    [((ag:traversal ,order ,visitors))
      (let ([i (hash-ref! used order 0)])
        (hash-set! used order (+ i 1))
        `(trav ,order ; ,(symbol-subscript order i)

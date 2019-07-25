@@ -137,10 +137,13 @@
    (print-location loc)])
 
 ;; field-pattern ::= `(: ,name ,pattern)
+;;                 | name
 (define/match (print-field-pattern field-pattern)
   [(`(: ,label ,pattern))
    (printf "~a: " label)
-   (print-pattern pattern)])
+   (print-pattern pattern)]
+  [((? symbol? name))
+   (display name)])
 
 ;; content-pattern ::= `(tuple ,pattern ...)
 ;;                   | `(record ,field-pattern ...)
