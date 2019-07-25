@@ -1,4 +1,10 @@
 # ignore back-up files
 *~
 **/.DS_Store
-compiled/
+**/compiled/
+
+# ignore build files
+engine/Cargo.toml
+engine/bin
+engine/target
+engine/output.*
