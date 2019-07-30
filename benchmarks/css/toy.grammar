@@ -23,7 +23,7 @@ class Viewport : Tree {
     children {
         root : LayoutBox; // The initial containing block.
     }
-    statements {
+    rules {
         root.container.x := 0.0;
         root.container.y := 0.0;
         root.container.width := self.width;
@@ -33,6 +33,7 @@ class Viewport : Tree {
 
 interface LayoutBox {
     // container box
+    //output container : Rect { x, y, width, height }; // XXX
     output container.x : Pixels;
     output container.y : Pixels;
     output container.width : Pixels;
@@ -132,7 +133,7 @@ class Block : LayoutBox {
     children {
         children : [LayoutBox];
     }
-    statements {
+    rules {
         self.underflow :=
             self.container.width -
             (value(self.style.margin.left) + value(self.style.margin.right) +
@@ -202,28 +203,12 @@ class Block : LayoutBox {
 
         self.intrinsic_height := foldl 0.0 .. @{self.intrinsic_height} + children.margin_box.height;
         children.container.height := @{self.intrinsic_height};
-        //children.container.height :=
-        //    scanl 0.0
-        //        .. children.container.height@
-        //        .. children.container.height@ + children.margin_box.height;
 
         self.content_box.height :=
             if is_auto(self.style.height) then
                 self.intrinsic_height // children.container.height$
             else
                 value(self.style.height);
-
-        /*
-        children$0.container.height := 0.0;
-        children$+.container.height :=
-            children$-.container.height + children$-.margin_box.height;
-
-        self.content_box.height :=
-            if is_auto(self.style.height) then
-                children$$.container.height + children$$.margin_box.height
-            else
-                value(self.style.height);
-        */
 
         self.padding_box.x := self.content_box.x - self.padding.left;
         self.padding_box.y := self.content_box.y - self.padding.top;
@@ -247,7 +232,7 @@ class Inline : LayoutBox {
 //    index {
 //        self.style.display == Display::Inline
 //    }
-    statements {
+    rules {
         self.underflow :=
             self.container.width -
             (value(self.style.margin.left) + value(self.style.margin.right) +

@@ -4,7 +4,8 @@
 
 (require parser-tools/lex
          (prefix-in : parser-tools/lex-sre)
-         parser-tools/yacc)
+         parser-tools/yacc
+         "../grammar/syntax.rkt")
 
 (provide parse-schedule
          file->schedule
@@ -122,7 +123,7 @@
   (call-with-input-file path parse-schedule #:mode 'text))
 
 (define/match (schedule->string sched)
-  [(`(seq ,left-sched ,right-sched))
+  [((ag:sequential ,left-sched ,right-sched))
    (format "~a ;; ~a"
            (schedule->string left-sched)
            (schedule->string right-sched))]

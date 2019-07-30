@@ -29,10 +29,10 @@
 (define *denotation* (make-parameter concrete-denotation))
 
 (define (denote-op op . xs)
-  (apply (dict-ref (denotation-ops (*denotation*))) xs))
+  (apply ((denotation-ops (*denotation*)) op) xs))
 
 (define (denote-fn fn . xs)
-  (apply (dict-ref (denotation-fns (*denotation*))) xs))
+  (apply ((denotation-fns (*denotation*)) fn) xs))
 
 (define (denote-ite if then else)
   ((denotation-ops (*denotation*)) if then else))
@@ -54,7 +54,8 @@
 
 (define (traverse trav self)
   (define class (tree-class self))
-  (for*/permuted ([command (ag:traversal-ref/visitor trav class)])
+  (define visitor (ag:traversal-ref/visitor trav class))
+  (for*/permuted ([command (ag:visitor-commands visitor)])
     (match command
       [(ag:recur child)
        (define subtree (tree-ref/child self child))
@@ -90,33 +91,37 @@
       [(ag:skip)
        (void)]))
 
-  (for/fold ([state- state0])
-            ([node (order (tree-ref/child self child))])
-    (define state+ (accumulator self))
-    (for*/permuted ([command commands])
-      (match command
-        [(ag:recur (== child))
-         (traverse trav node)]
-        [(ag:eval attr)
-         (define rule (ag:class-ref*/rule class attr))
-         (define eval
-           (curry evaluate self #:iterator child #:cursor node #:accumulator state-))
-         ;; (match attr
-         ;;   [(cons (== child) field)
-         ;;    (set-box! (tree-ref/field node field)
-         ;;              (eval (ag:rule-formula rule)))]
-         ;;   [_
-         ;;    (set-box! (dict-ref state+ attr)
-         ;;              (eval (ag:rule-fold-next rule)))])
-         (if (ag:rule-folds? rule)
-             (set-box! (dict-ref state+ attr)
-                       (eval (ag:rule-fold-next rule)))
-             (set-box! (tree-select self attr #:iterator child #:cursor node)
-                       (eval (ag:rule-formula rule))))]
-        [(ag:skip)
-         (void)]))
+  (define state#
+    (for/fold ([state- state0])
+              ([node (order (tree-ref/child self child))])
+      (define state+ (accumulator self))
+      (for*/permuted ([command commands])
+                     (match command
+                       [(ag:recur (== child))
+                        (traverse trav node)]
+                       [(ag:eval attr)
+                        (define rule (ag:class-ref*/rule class attr))
+                        (define eval
+                          (curry evaluate self #:iterator child #:cursor node #:accumulator state-))
+                        ;; (match attr
+                        ;;   [(cons (== child) field)
+                        ;;    (set-box! (tree-ref/field node field)
+                        ;;              (eval (ag:rule-formula rule)))]
+                        ;;   [_
+                        ;;    (set-box! (dict-ref state+ attr)
+                        ;;              (eval (ag:rule-fold-next rule)))])
+                        (if (ag:rule-folds? rule)
+                            (set-box! (dict-ref state+ attr)
+                                      (eval (ag:rule-fold-next rule)))
+                            (set-box! (tree-select self attr #:iterator child #:cursor node)
+                                      (eval (ag:rule-formula rule))))]
+                       [(ag:skip)
+                        (void)]))
 
-    state+))
+      state+))
+
+  (for ([(attr value) (in-dict state#)])
+    (set-box! (tree-select self attr) (unbox value))))
 
 (define (evaluate self term #:iterator [iter #f] #:cursor [cur #f] #:accumulator [acc #f])
   (define/match (recur term)

@@ -2,11 +2,15 @@
 
 (require "../grammar/syntax.rkt")
 
-(provide instantiate-sketch
+(provide *multichoose*
+         instantiate-sketch
          enumerate-sketches
          synthesize-schedules)
 
-(define multichoose (make-parameter (curry list 'choose)))
+(define *multichoose* (make-parameter (curry list 'choose)))
+
+(define (multichoose . xs)
+  (apply (*multichoose*) xs))
 
 (define (enumerate-commands class #:order [order #f] #:iterator [iterator #f])
   (for/list ([rule (ag:class-rules* class)]
@@ -29,7 +33,7 @@
      (ag:iter/right child steps)]
     [(ag:hole)
      (let ([range (enumerate-commands class #:order order #:iterator iterator)])
-       ((multichoose) (length range) range))]
+       (apply multichoose range))]
     [(ag:eval _) command]
     [(ag:recur _) command]))
 
@@ -39,7 +43,7 @@
 (define (instantiate-traversal-sketch G traversal)
   (define visitors
     (for/list ([visitor (ag:traversal-visitors traversal)])
-      (define class (ag:grammar-ref/class G (ag:visitor-class visitor)))
+      (define class (ag:visitor-class visitor))
       (ag:visitor (ag:visitor-class visitor)
                   (map (curry instantiate-command-sketch class)
                        (ag:visitor-commands visitor)))))

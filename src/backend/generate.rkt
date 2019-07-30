@@ -10,7 +10,11 @@
 ; -----------------------
 
 (define header
-  null)
+  (list `(use style (StyledNode Style Display Edge Pixels))
+        `(use paint (DisplayList DisplayCommand))
+        `(use std default Default)
+        `(use itertools Itertools)
+        `(blank)))
 
 ; ---------------------------------
 ; Generation of tree data structure
@@ -33,7 +37,7 @@
 (define (generate-class-variant class)
   (define name (ag:class-name class))
   (define fields (map generate-child-field (ag:class-children* class)))
-  `(constructor ,name (record . ,fields)))
+  `(variant ,name (record . ,fields)))
 
 (define (generate-interface-enumeration interface)
   (define sort (symbol-append (ag:interface-name interface) 'Class))
@@ -47,7 +51,7 @@
     (cons (generate-class-field interface)
           (map generate-label-field (ag:interface-labels interface))))
 
-  `(struct (constructor ,sort (record . ,fields))))
+  `(struct ,sort (record . ,fields)))
 
 (define (generate-structure G)
   (define interfaces (ag:grammar-interfaces G))
@@ -66,22 +70,17 @@
     [((ag:field (cons 'self field)))
      `(select self ,field)]
     [((ag:field (cons child field)))
-     (displayln (ag:class-ref*/child class child))
-     (define node
-       (if (ag:child/seq? (ag:class-ref*/child class child))
-           (symbol-append child '_i)
-           child))
-     `(select ,node ,field)]
+     #:when (ag:class-ref*/child class child)
+     (define child-i (symbol-append child '_i))
+     `(select ,child-i ,field)]
+    [((ag:field (cons child field)))
+     `(select ,child ,field)]
     [((ag:accum (cons object field)))
-     (symbol-join (list object field) "_")]
-    [((ag:index/first (cons child field) default))
-     (define first-child `(call (select ,child first) ()))
+     `(select ,object ,field)]
+    [((ag:index (cons child field) default))
+     (define endpoint (if (ag:index/first? term) 'first 'last))
+     (define first-child `(call (select ,child ,endpoint) ()))
      `(call (select ,first-child map_or_else)
-            ((lambda () ,(recur default))
-             (lambda (node) (select node ,field))))]
-    [((ag:index/last (cons child field) default))
-     (define last-child `(call (select ,child last) ()))
-     `(call (select ,last-child map_or_else)
             ((lambda () ,(recur default))
              (lambda (node) (select node ,field))))]
     [((ag:ite condition consequent alternate))
@@ -90,34 +89,23 @@
           ,(recur alternate))]
     [((ag:expr operator operands))
      `(,operator . ,(map recur operands))]
-    [((ag:call function (cons head-argument tail-arguments)))
-     `(call (select ,(recur head-argument) ,function)
-            ,(map recur tail-arguments))])
+    [((ag:call function (cons receiver arguments)))
+     `(call (select ,(recur receiver) ,function)
+            ,(map recur arguments))])
   (recur term))
-
-(define (generate-bindings class commands)
-  (for/list ([rule (filter-map (curry ag:eval->rule class) commands)]
-             #:when (ag:rule-folds? rule))
-    (match-define (cons object field) (ag:rule-attribute rule))
-    (define variable (symbol-join (list object field) "_"))
-    (define term (ag:rule-fold-init rule))
-    `(let-mut ,variable ,(generate-term class term))))
 
 (define (generate-command function class command #:iterated? [iterated? #f])
   (define recur (curry generate-command function class))
   (match command
-    [(ag:iter/left child commands)
-     (define iterator (symbol-append child '_i))
-     (define body (append-map (recur #:iterated? #t) commands))
-     (append (generate-bindings class commands)
-             (list `(for ,iterator (ref (mut ,child))
-                         (do . ,body))))]
-    [(ag:iter/right child commands)
-     (define iterator (symbol-append child '_i))
-     (define body (append-map (recur #:iterated? #t) commands))
-     (append (generate-bindings class commands)
-             (list `(for ,iterator (call (select (ref (mut ,child)) rev) ())
-                         (do . ,body))))]
+    [(ag:iter child commands)
+     (define reversed? (ag:iter-rev? command))
+     (define iterator `(call (select ,child iter_mut) ()))
+     (define cursor (symbol-append child '_i))
+     (define initial (append-map (recur #:iterated? #f) commands))
+     (define action (append-map (recur #:iterated? #t) commands))
+     (append initial
+             (list `(for ,cursor ,(if reversed? `(call (select ,iterator rev) ()) iterator)
+                      (do . ,action))))]
     [(ag:eval attr)
      (define rule (ag:class-ref*/rule class attr))
      (define term
@@ -127,22 +115,27 @@
      (define target (generate-term class (ag:field attr)))
      (list `(:= ,target ,(generate-term class term)))]
     [(ag:recur child)
-     (define receiver (if iterated? (symbol-append child '_i) child))
-     (list `(call (select ,receiver ,function) ()))]
+     (define child-i (symbol-append child '_i))
+     (if (implies (ag:child/seq? (ag:class-ref*/child class child)) iterated?)
+         (let ([receiver (if iterated? child-i child)])
+           (list `(call (select ,receiver ,function) ())))
+         null)]
     [(ag:skip)
      (list `(skip))]))
 
 (define (generate-visitor name visitor)
   (define class (ag:visitor-class visitor))
-  (define sort (ag:interface-name (ag:class-interface class)))
-  (define kind (ag:class-name class))
-  (define children (ag:class-children* class))
-
+  (define interface (ag:class-interface class))
   (define commands (ag:visitor-commands visitor))
+
+  (define sort (symbol-append (ag:interface-name interface) 'Class))
+  (define kind (ag:class-name class))
+  (define variant `(:: ,sort ,kind))
+  (define fields (map ag:child-name (ag:class-children* class)))
+  (define pattern `(constructor ,variant (record . ,fields)))
   (define body (append-map (curry generate-command name class) commands))
 
-  `(=> (constructor (:: ,sort ,kind) (record . ,(map ag:child-name children)))
-       (do . ,body)))
+  `(=> ,pattern (do . ,body)))
 
 (define (generate-traversal G traversal)
   (define name (ag:traversal-name traversal))
@@ -153,9 +146,9 @@
       (map (curry generate-visitor name)
            (ag:traversal-ref/interface traversal interface)))
 
-    `(impl ,sort
+    `(impl (life a ,sort)
            (fn ,name ((: self (ref (mut Self)))) (unit)
-               (do (match (select self class)
+               (do (match (ref (mut (select self class)))
                      .
                      ,cases))))))
 

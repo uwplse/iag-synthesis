@@ -39,14 +39,19 @@
    (display var)])
 
 ;; type ::= `(unit) | ref-type
-;; ref-type ::= `(ref ,dyn-type) | `(ref (mut ,dyn-type)) | gen-type
+;; ref-type ::= `(ref ,mut-type) | `(ref ,lifetime ,mut-type)) | gen-type
+;; mut-type ::= `(mut ,dyn-type) | dyn-type
 ;; dyn-type ::= `(dyn ,gen-type) | gen-type
-;; gen-type ::= `(gen ,global (,type ...)) | global
+;; gen-type ::= `(gen ,global (,life-type ...)) | global
+;; life-type ::= `(life ,lifetime) | type
 (define/match (print-type type)
   [(`(unit))
    (display "()")]
   [(`(ref ,type))
    (display "&")
+   (print-type type)]
+  [(`(ref ,lifetime ,type))
+   (printf "&'~a " lifetime)
    (print-type type)]
   [(`(mut ,type))
    (display "mut ")
@@ -57,6 +62,9 @@
   [(`(gen ,global ,arg-type-list))
    (print-global global)
    (print-each print-type arg-type-list "<" ">")]
+  [(`(life ,lifetime))
+   (display "'")
+   (display lifetime)]
   [(global)
    (print-global global)])
 
@@ -269,28 +277,35 @@
    (print-type return-type)
    (print-body body)])
 
-;; cons ::= `(constructor ,name (tuple ,type ...))
-;;        | `(constructor ,name (record ,binder ...))
-;;        | `(constructor ,name (unit))
-(define/match (print-constructor constructor)
-  [(`(constructor ,name (tuple ,type-list ...)))
-   (display name)
+;; data ::= `(tuple ,type ...)
+;;        | `(record ,binder ...)
+;;        | `(unit)
+(define/match (print-data data)
+  [(`(tuple ,type-list ...))
    (print-each print-type type-list "(" ")")]
-  [(`(constructor ,name (record ,field-list ...)))
+  [(`(record ,field-list ...))
    (define (print-field field)
      (display "pub ")
      (print-binder field))
-   (display name)
    (print-each print-field field-list " {" "}" #:indent? #t)]
-  [(`(constructor ,name (unit)))
-   (display name)])
+  [(`(unit))
+   (void)])
+
+;; variant ::= `(variant ,name ,data)
+(define/match (print-variant variant)
+  [(`(variant ,name ,data))
+   (display name)
+   (print-data data)])
 
 ;; decl ::= `(extern ,name)
 ;;        | `(use ,name ...)
 ;;        | `(type ,name ,type)
-;;        | `(struct ,cons)
-;;        | `(enum ,name ,cons ...)
+;;        | `(derive ,name ...)
+;;        | `(struct ,name ,data)
+;;        | `(struct ,lifetime ,name ,data)
+;;        | `(enum ,name ,variant ...)
 ;;        | `(impl ,name ,func ...)
+;;        | `(impl ,lifetime ,name ,func ...)
 ;;        | `(impl (for ,trait ,name) ,func ...)
 ;;        | func
 ;;        | `blank
@@ -314,16 +329,33 @@
    (print-type type)
    (display ";")
    (newline)]
-  [(`(struct ,constructor))
-   (printf "pub struct ")
-   (print-constructor constructor)
+  [(`(derive ,name-list ...))
+   (display "#[derive")
+   (print-each display name-list "(" ")")
+   (display "]")
    (newline)]
-  [(`(enum ,name ,constructor-list ...))
+  [(`(struct ,name ,data))
+   (printf "pub struct ~a" name)
+   (print-data data)
+   (newline)]
+  [(`(struct ,lifetime ,name ,data))
+   (printf "pub struct ~a<'~a>" name lifetime)
+   (print-data data)
+   (newline)]
+  [(`(enum ,name ,variant-list ...))
    (printf "pub enum ~a" name)
-   (print-each print-constructor constructor-list " {" "}" #:indent? #t)
+   (print-each print-variant variant-list " {" "}" #:indent? #t)
+   (newline)]
+  [(`(enum ,lifetime ,name ,variant-list ...))
+   (printf "pub enum ~a<'~a>" name lifetime)
+   (print-each print-variant variant-list " {" "}" #:indent? #t)
    (newline)]
   [(`(impl (for ,trait ,name) ,function-list ...))
    (printf "impl ~a for ~a" trait name)
+   (print-each print-function function-list " {" "}" #:separator "" #:indent? #t)
+   (newline)]
+  [(`(impl (life ,lifetime ,name) ,function-list ...))
+   (printf "impl<'~a> ~a<'~a>" lifetime name lifetime)
    (print-each print-function function-list " {" "}" #:separator "" #:indent? #t)
    (newline)]
   [(`(impl ,name ,function-list ...))

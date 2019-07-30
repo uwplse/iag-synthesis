@@ -137,8 +137,9 @@
 
 ; Validate some property of every output attribute value.
 (define (tree-validate tree check)
-  (for ([label (node-attributes tree)])
-    (check (tree-fields tree) label))
+  (for ([(label value) (in-dict (tree-fields tree))])
+    (displayln `(check ,(ag:class-name (tree-class tree)) ,label))
+    (check value))
   (for ([(name subtree) (in-dict (tree-children tree))])
     (if (list? subtree)
         (for ([node subtree])

@@ -367,6 +367,9 @@
     [(ite if then else)
      (ormap (curry term-iterates class) (list if then else))]))
 
+(define fold-rev? fold/right?)
+(define iter-rev? iter/right?)
+
 (define (attribute->string attr)
   (format "~a.~a" (car attr) (cdr attr)))
 
