@@ -1,7 +1,7 @@
 ///! Basic CSS block layout.
 
-use style::{StyledNode, Style, Display, Edge, Pixels};
-use paint::{DisplayList, DisplayCommand};
+use crate::style::{StyledNode, Style, Display, Edge, Pixels};
+use crate::paint::{DisplayList, DisplayCommand};
 use std::default::Default;
 use itertools::Itertools;
 

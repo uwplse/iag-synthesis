@@ -1,6 +1,6 @@
 #![allow(unstable_name_collisions)]
-use css::Color;
-use style::Pixels;
+use crate::css::Color;
+use crate::style::Pixels;
 
 pub struct Canvas {
     pub pixels: Vec<Color>,
