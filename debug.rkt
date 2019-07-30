@@ -1,3 +1,4 @@
+#!/usr/bin/env racket
 #lang rosette
 
 (require "src/grammar/syntax.rkt"
