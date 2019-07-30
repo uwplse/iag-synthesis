@@ -12,12 +12,22 @@
   (newline)
   (display (string-append* (make-list indent-level INDENT-UNIT))))
 
+(define (indent++)
+  (set! indent-level (+ indent-level 1))
+  (indent-line))
+
+(define (indent)
+  (indent-line))
+
+(define (indent--)
+  (set! indent-level (- indent-level 1))
+  (indent-line))
+
 (define (print-each print-item item-list open close #:separator [separator ","] #:indent? [indent? #f])
   (display open)
   (unless (empty? item-list)
     (when indent?
-      (set! indent-level (+ indent-level 1))
-      (indent-line))
+      (indent++))
     (print-item (first item-list))
     (for ([item (rest item-list)])
       (display separator)
@@ -26,8 +36,7 @@
           (display " "))
       (print-item item))
     (when indent?
-      (set! indent-level (- indent-level 1))
-      (indent-line)))
+      (indent--)))
   (display close))
 
 ;; global ::= `(:: ,name ...) | name
@@ -42,8 +51,8 @@
 ;; ref-type ::= `(ref ,mut-type) | `(ref ,lifetime ,mut-type)) | gen-type
 ;; mut-type ::= `(mut ,dyn-type) | dyn-type
 ;; dyn-type ::= `(dyn ,gen-type) | gen-type
-;; gen-type ::= `(gen ,global (,life-type ...)) | global
-;; life-type ::= `(life ,lifetime) | type
+;; gen-type ::= `(gen ,global (,par-type ...)) | global
+;; par-type ::= `(life ,name) | type
 (define/match (print-type type)
   [(`(unit))
    (display "()")]
@@ -51,7 +60,9 @@
    (display "&")
    (print-type type)]
   [(`(ref ,lifetime ,type))
-   (printf "&'~a " lifetime)
+   (display "&")
+   (print lifetime)
+   (display " ")
    (print-type type)]
   [(`(mut ,type))
    (display "mut ")
@@ -59,12 +70,12 @@
   [(`(dyn ,type))
    (display "dyn ")
    (print-type type)]
-  [(`(gen ,global ,arg-type-list))
+  [(`(gen ,global ,par-type-list))
    (print-global global)
-   (print-each print-type arg-type-list "<" ">")]
+   (unless (empty? par-type-list)
+     (print-each print-type par-type-list "<" ">"))]
   [(`(life ,lifetime))
-   (display "'")
-   (display lifetime)]
+   (print lifetime)]
   [(global)
    (print-global global)])
 
@@ -83,15 +94,26 @@
   [(id)
    (print-global id)])
 
+;; field ::= `(: ,name ,expr)
+(define/match (print-field field)
+  [(`(: ,label ,expr))
+   (display label)
+   (display ": ")
+   (print-expression expr)])
+
 ;; expr ::= `(unsafe ,expr)
 ;;        | `(if ,expr ,expr ,expr)
+;;        | `(match ,expr ,match-case ...)
 ;;        | `(+ ,expr ,expr) | `(* ,expr ,expr) | ...
 ;;        | `(range ,expr ,expr)
 ;;        | `(call ,path (,expr ...))
 ;;        | `(lambda (,name ...) ,body)
 ;;        | `(ref ,expr)
 ;;        | `(ref (mut ,expr))
+;;        | `(as ,expr ,type)
+;;        | `(struct ,global (,field ...))
 ;;        | int
+;;        | str
 ;;        | loc
 (define/match (print-expression expression)
   [(`(unsafe ,expr))
@@ -106,6 +128,10 @@
    (display " } else { ")
    (print-expression else-expr)
    (display " }")]
+  [(`(match ,expr ,match-case-list ...))
+   (display "match ")
+   (print-expression expr)
+   (print-each print-match-case match-case-list " {" "}" #:indent? #t)]
   [(`(,(and operator (or '- '!)) ,expr))
    (display "(")
    (display operator)
@@ -126,17 +152,26 @@
   [(`(call ,fun-expr ,arg-expr-list))
    (print-expression fun-expr)
    (print-each print-expression arg-expr-list "(" ")")]
-  [(`(lambda ,name-list ,body))
-   (print-each display name-list "|" "|")
-   (print-body body)]
+  [(`(lambda ,name-list ,expr))
+   (print-each display name-list "|" "| ")
+   (print-expression expr)]
   [(`(mut ,expr))
    (display "mut ")
    (print-expression expr)]
   [(`(ref ,expr))
    (display "&")
    (print-expression expr)]
+  [(`(as ,expr ,type))
+   (print-expression expr)
+   (display " as ")
+   (print-type type)]
+  [(`(struct ,cons ,field-list))
+   (print-global cons)
+   (print-each print-field field-list " {" "}" #:indent? #t)]
   [((? integer? int))
    (display int)]
+  [((? string? str))
+   (printf "\"~a\"" str)]
   [(#t)
    (display "true")]
   [(#f)
@@ -167,6 +202,7 @@
 ;; pattern ::= `(constructor ,global ,content-pattern)
 ;;           | `(ref ,pattern)
 ;;           | `(mut ,pattern)
+;;           | `(tuple ,pattern ...)
 ;;           | name
 (define/match (print-pattern pattern)
   [(`(constructor ,global ,content-pattern))
@@ -178,6 +214,8 @@
   [(`(mut ,pattern))
    (display "mut ")
    (print-pattern pattern)]
+  [(`(tuple ,pattern-list ...))
+   (print-each print-pattern pattern-list "(" ")")]
   [(var)
    (display var)])
 
@@ -234,8 +272,10 @@
    (display "match ")
    (print-expression expr)
    (print-each print-match-case match-case-list " {" "}" #:indent? #t)]
-  [(`(for ,name ,expr ,body))
-   (printf "for ~a in " name)
+  [(`(for ,pattern ,expr ,body))
+   (display "for ")
+   (print-pattern pattern)
+   (display " in ")
    (print-expression expr)
    (print-body body)]
   [(`(return ,expr))
@@ -268,10 +308,11 @@
   [(binder)
    (print-binder binder)])
 
-;; func ::= `(fn ,name (,param ...) ,type ,body)
+;; func ::= `(fn ,name (,par-type ...) (,param ...) ,type ,body)
 (define/match (print-function function)
-  [(`(fn ,name ,parameter-list ,return-type ,body))
-   (printf "pub fn ~a" name)
+  [(`(fn ,name ,par-type-list ,parameter-list ,return-type ,body))
+   (printf "pub fn ")
+   (print-type `(gen ,name ,par-type-list))
    (print-each print-function-parameter parameter-list "(" ")")
    (display " -> ")
    (print-type return-type)
@@ -284,10 +325,7 @@
   [(`(tuple ,type-list ...))
    (print-each print-type type-list "(" ")")]
   [(`(record ,field-list ...))
-   (define (print-field field)
-     (display "pub ")
-     (print-binder field))
-   (print-each print-field field-list " {" "}" #:indent? #t)]
+   (print-each print-binder field-list " {" "}" #:indent? #t)]
   [(`(unit))
    (void)])
 
@@ -300,12 +338,10 @@
 ;; decl ::= `(extern ,name)
 ;;        | `(use ,name ...)
 ;;        | `(type ,name ,type)
-;;        | `(derive ,name ...)
-;;        | `(struct ,name ,data)
-;;        | `(struct ,lifetime ,name ,data)
-;;        | `(enum ,name ,variant ...)
-;;        | `(impl ,name ,func ...)
-;;        | `(impl ,lifetime ,name ,func ...)
+;;        | `(hash ,name (,name ...))
+;;        | `(struct ,name (,par-type ...) ,data)
+;;        | `(enum ,name (,par-type ...) ,variant ...)
+;;        | `(impl ,name (,par-type ...) ,func ...)
 ;;        | `(impl (for ,trait ,name) ,func ...)
 ;;        | func
 ;;        | `blank
@@ -329,37 +365,31 @@
    (print-type type)
    (display ";")
    (newline)]
-  [(`(derive ,name-list ...))
-   (display "#[derive")
-   (print-each display name-list "(" ")")
+  [(`(hash ,macro ,option-list))
+   (printf "#[~a" macro)
+   (print-each display option-list "(" ")")
    (display "]")
    (newline)]
-  [(`(struct ,name ,data))
-   (printf "pub struct ~a" name)
+  [(`(struct ,name ,par-type-list ,data))
+   (display "pub struct ")
+   (print-type `(gen ,name ,par-type-list))
    (print-data data)
    (newline)]
   [(`(struct ,lifetime ,name ,data))
-   (printf "pub struct ~a<'~a>" name lifetime)
-   (print-data data)
    (newline)]
-  [(`(enum ,name ,variant-list ...))
-   (printf "pub enum ~a" name)
-   (print-each print-variant variant-list " {" "}" #:indent? #t)
-   (newline)]
-  [(`(enum ,lifetime ,name ,variant-list ...))
-   (printf "pub enum ~a<'~a>" name lifetime)
+  [(`(enum ,name ,par-type-list ,variant-list ...))
+   (display "pub enum ")
+   (print-type `(gen ,name ,par-type-list))
    (print-each print-variant variant-list " {" "}" #:indent? #t)
    (newline)]
   [(`(impl (for ,trait ,name) ,function-list ...))
    (printf "impl ~a for ~a" trait name)
    (print-each print-function function-list " {" "}" #:separator "" #:indent? #t)
    (newline)]
-  [(`(impl (life ,lifetime ,name) ,function-list ...))
-   (printf "impl<'~a> ~a<'~a>" lifetime name lifetime)
-   (print-each print-function function-list " {" "}" #:separator "" #:indent? #t)
-   (newline)]
-  [(`(impl ,name ,function-list ...))
-   (printf "impl ~a" name)
+  [(`(impl ,name ,par-type-list ,function-list ...))
+   (print-type `(gen impl ,par-type-list))
+   (display " ")
+   (print-type `(gen ,name ,par-type-list))
    (print-each print-function function-list " {" "}" #:separator "" #:indent? #t)
    (newline)]
   [(`(comment ,text))

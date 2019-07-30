@@ -9,12 +9,175 @@
 ; Standard program header
 ; -----------------------
 
+(define imports
+  (list '(use crate style (StyledNode Style Display Edge Pixels))
+        '(use crate paint (DisplayList DisplayCommand))
+        '(use std default Default)
+        '(use itertools Itertools)))
+
+(define struct-Rect
+  (list '(blank)
+        '(hash derive (Clone Copy Default PartialEq Debug))
+        '(struct Rect ()
+           (record (: x Pixels)
+                   (: y Pixels)
+                   (: width Pixels)
+                   (: height Pixels)))))
+
+(define impl-Rect-expanded_by
+  (list '(blank)
+        '(impl Rect ()
+               (fn expanded_by () ((: self (ref Self)) (: edge (gen Edge (Pixels)))) Rect
+                   (do (return (struct Rect
+                                 ((: x (- (select self x) (select edge left)))
+                                  (: y (- (select self y) (select edge top)))
+                                  (: width (+ (select self width) (+ (select edge left) (select edge right))))
+                                  (: height (+ (select self height) (+ (select edge top) (select edge bottom))))))))))))
+
+(define enum-BoxType
+  (list '(blank)
+        '(hash derive (Clone Copy PartialEq Eq Debug))
+        '(enum BoxType ()
+               (variant None (unit))
+               (variant Inline (unit))
+               (variant Block (unit))
+               (variant Float (unit)))))
+
+(define struct-LayoutBox
+  (list '(blank)
+        '(struct LayoutBox ((life a))
+           (record (: container Rect)
+                   (: content_box Rect)
+                   (: padding_box Rect)
+                   (: border_box Rect)
+                   (: margin_box Rect)
+                   (: padding (gen Edge (Pixels)))
+                   (: border (gen Edge (Pixels)))
+                   (: margin (gen Edge (Pixels)))
+                   (: underflow Pixels)
+                   (: style (ref a Style))
+                   (: anonymous bool)
+                   (: box_type BoxType)
+                   (: children (gen Vec ((gen LayoutBox ((life a))))))))))
+
+(define impl-LayoutBox-new
+  (list '(blank)
+        '(impl LayoutBox ((life a))
+               (fn new () ((: box_type BoxType) (: style (ref a Style))) Self
+                   (do (return (struct LayoutBox
+                                 ((: container (call (:: Rect default) ()))
+                                  (: content_box (call (:: Rect default) ()))
+                                  (: padding_box (call (:: Rect default) ()))
+                                  (: border_box (call (:: Rect default) ()))
+                                  (: margin_box (call (:: Rect default) ()))
+                                  (: padding (call (:: Edge default) ()))
+                                  (: border (call (:: Edge default) ()))
+                                  (: margin (call (:: Edge default) ()))
+                                  (: underflow 0.0)
+                                  (: style style)
+                                  (: anonymous #t)
+                                  (: box_type box_type)
+                                  (: children (call (:: Vec new) ()))))))))))
+
+(define fn-layout_tree
+  (list '(blank)
+        '(hash allow (unused_variables))
+        '(fn layout_tree ((life a)) ((: node (ref a (gen StyledNode ((life a)))))
+                                     (: width usize)
+                                     (: height usize))
+             (gen LayoutBox ((life a)))
+             (do (let-mut root_box (call build_layout_tree (node)))
+                 (:= (select (select root_box container) width) (as width Pixels))
+               (call (select root_box layout) ())
+               (return root_box)))))
+
+(define fn-build_layout_tree
+  (list '(blank)
+        '(fn build_layout_tree ((life a)) ((: style_node (ref a (gen StyledNode ((life a))))))
+             (gen LayoutBox ((life a)))
+             (do (let box_type (match (select (select style_node specified) display)
+                                 (=> (constructor (:: Display Inline) (unit)) (:: BoxType Inline))
+                                 (=> (constructor (:: Display Block) (unit)) (:: BoxType Block))
+                                 (=> (constructor (:: Display Float) (unit)) (:: BoxType Float))
+                                 (=> (constructor (:: Display None) (unit)) (:: BoxType None))))
+                 (let style (ref (select style_node specified)))
+                 (let-mut root (call (:: LayoutBox new) (box_type style)))
+                 (:= (select root anonymous) #f)
+                 (let children (call (select (call (select (select style_node children) iter) ()) map) (build_layout_tree)))
+                 (for (tuple box_type children) (call (select (ref children) group_by) ((lambda (child) (select child box_type))))
+                      (do (if (!= (select root box_type) box_type)
+                              (do (let-mut wrapper (call (:: LayoutBox new) ((select root box_type) style)))
+                                  (call (select (select wrapper children) extend) (children))
+                                  (call (select (select root children) push) (wrapper)))
+                              (do (call (select (select root children) extend) (children))))))
+                 (return root)))))
+
+(define fn-display_list
+  (list '(blank)
+        '(fn display_list ((life a)) ((: layout_root (ref (gen LayoutBox ((life a)))))) DisplayList
+             (do (let-mut list (call (:: Vec new) ()))
+                 (call (select layout_root render) ((ref (mut list))))
+                 (return list)))))
+
+(define impl-LayoutBox-render
+  (list '(blank)
+        '(impl LayoutBox ((life a))
+               (fn render () ((: self (ref Self)) (: list (ref (mut DisplayList)))) (unit)
+                   (do (call (select list push)
+                             ((struct (:: DisplayCommand SolidColor)
+                                ((: color (select (select self style) background_color))
+                                 (: x (select (select self border_box) x))
+                                 (: y (select (select self border_box) y))
+                                 (: width (select (select self border_box) width))
+                                 (: height (select (select self border_box) height))))))
+                     (call (select list push)
+                           ((struct (:: DisplayCommand SolidColor)
+                              ((: color (select (select self style) border_color))
+                               (: x (select (select self border_box) x))
+                               (: y (select (select self border_box) y))
+                               (: width (select (select self border) left))
+                               (: height (select (select self border_box) height))))))
+                     (call (select list push)
+                           ((struct (:: DisplayCommand SolidColor)
+                              ((: color (select (select self style) border_color))
+                               (: x (- (+ (select (select self border_box) x)
+                                          (select (select self border_box) width))
+                                       (select (select self border) right)))
+                               (: y (select (select self border_box) y))
+                               (: width (select (select self border) right))
+                               (: height (select (select self border_box) height))))))
+                     (call (select list push)
+                           ((struct (:: DisplayCommand SolidColor)
+                              ((: color (select (select self style) border_color))
+                               (: x (select (select self border_box) x))
+                               (: y (select (select self border_box) y))
+                               (: width (select (select self border_box) width))
+                               (: height (select (select self border) top))))))
+                     (call (select list push)
+                           ((struct (:: DisplayCommand SolidColor)
+                              ((: color (select (select self style) border_color))
+                               (: x (select (select self border_box) x))
+                               (: y (- (+ (select (select self border_box) y)
+                                          (select (select self border_box) height))
+                                       (select (select self border) bottom)))
+                               (: width (select (select self border_box) width))
+                               (: height (select (select self border) bottom))))))
+
+
+                     (for child (ref (select self children))
+                          (do (call (select child render) (list)))))))))
+
 (define header
-  (list `(use style (StyledNode Style Display Edge Pixels))
-        `(use paint (DisplayList DisplayCommand))
-        `(use std default Default)
-        `(use itertools Itertools)
-        `(blank)))
+  (append imports
+          struct-Rect
+          impl-Rect-expanded_by
+          enum-BoxType
+          struct-LayoutBox
+          impl-LayoutBox-new
+          fn-layout_tree
+          fn-build_layout_tree
+          fn-display_list
+          impl-LayoutBox-render))
 
 ; ---------------------------------
 ; Generation of tree data structure
@@ -43,7 +206,7 @@
   (define sort (symbol-append (ag:interface-name interface) 'Class))
   (define classes (ag:interface-classes interface))
 
-  `(enum ,sort . ,(map generate-class-variant classes)))
+  `(enum ,sort () . ,(map generate-class-variant classes)))
 
 (define (generate-interface-structure interface)
   (define sort (ag:interface-name interface))
@@ -51,7 +214,7 @@
     (cons (generate-class-field interface)
           (map generate-label-field (ag:interface-labels interface))))
 
-  `(struct ,sort (record . ,fields)))
+  `(struct ,sort () (record . ,fields)))
 
 (define (generate-structure G)
   (define interfaces (ag:grammar-interfaces G))
@@ -70,7 +233,7 @@
     [((ag:field (cons 'self field)))
      `(select self ,field)]
     [((ag:field (cons child field)))
-     #:when (ag:class-ref*/child class child)
+     #:when (ag:child/seq? (ag:class-ref*/child class child))
      (define child-i (symbol-append child '_i))
      `(select ,child-i ,field)]
     [((ag:field (cons child field)))
@@ -99,7 +262,7 @@
   (match command
     [(ag:iter child commands)
      (define reversed? (ag:iter-rev? command))
-     (define iterator `(call (select ,child iter_mut) ()))
+     (define iterator `(call (select (select self ,child) iter_mut) ()))
      (define cursor (symbol-append child '_i))
      (define initial (append-map (recur #:iterated? #f) commands))
      (define action (append-map (recur #:iterated? #t) commands))
@@ -135,7 +298,7 @@
   (define pattern `(constructor ,variant (record . ,fields)))
   (define body (append-map (curry generate-command name class) commands))
 
-  `(=> ,pattern (do . ,body)))
+  `(=> (constructor (:: BoxType ,kind) (unit)) (do . ,body)))
 
 (define (generate-traversal G traversal)
   (define name (ag:traversal-name traversal))
@@ -146,14 +309,14 @@
       (map (curry generate-visitor name)
            (ag:traversal-ref/interface traversal interface)))
 
-    `(impl (life a ,sort)
-           (fn ,name ((: self (ref (mut Self)))) (unit)
-               (do (match (ref (mut (select self class)))
+    `(impl ,sort ((life a))
+           (fn ,name () ((: self (ref (mut Self)))) (unit)
+               (do (match (select self class)
                      .
                      ,cases))))))
 
 (define (generate-program G S)
   (append header
-          (add-between (generate-structure G) `(blank))
+          ;(add-between (generate-structure G) `(blank))
           (list `(blank))
           (add-between (generate-traversal G S) `(blank))))
