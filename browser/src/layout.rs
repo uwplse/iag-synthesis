@@ -16,7 +16,7 @@ struct Rect {
 }
 
 impl Rect {
-    pub fn expanded_by(self, edge: Edge<Pixels>) -> Rect {
+    pub fn expanded_by(&self, edge: Edge<Pixels>) -> Rect {
         Rect {
             x: self.x - edge.left,
             y: self.y - edge.top,
@@ -28,6 +28,7 @@ impl Rect {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum BoxType {
+    None, // display: none
     Inline, // display: inline
     Block, // display: block
     Float, // float: left|right
@@ -89,7 +90,7 @@ impl<'a> LayoutBox<'a> {
 /// Transform a style tree into a layout tree.
 #[allow(unused_variables)]
 pub fn layout_tree<'a>(node: &'a StyledNode<'a>, width: usize, height: usize) -> LayoutBox<'a> {
-    let mut root_box = build_layout_tree(node).expect("Root style node has `display: none`");
+    let mut root_box = build_layout_tree(node);//.expect("Root style node has `display: none`");
     root_box.container.width = width as Pixels;
     //root_box.container.height = height as Pixels; // this "height" is really box's top edge
     root_box.layout();
@@ -97,20 +98,20 @@ pub fn layout_tree<'a>(node: &'a StyledNode<'a>, width: usize, height: usize) ->
 }
 
 /// Build the tree of LayoutBoxes, but don't perform any layout calculations yet.
-fn build_layout_tree<'a>(style_node: &'a StyledNode<'a>) -> Option<LayoutBox<'a>> {
+fn build_layout_tree<'a>(style_node: &'a StyledNode<'a>) -> LayoutBox<'a> {
     // Create the root box.
     let box_type = match style_node.specified.display {
-        Display::Inline => Some(BoxType::Inline),
-        Display::Block => Some(BoxType::Block),
-        Display::Float => Some(BoxType::Float),
-        Display::None => None,
-    }?;
+        Display::Inline => BoxType::Inline,
+        Display::Block => BoxType::Block,
+        Display::Float => BoxType::Float,
+        Display::None => BoxType::None,
+    };
     let style = &style_node.specified;
     let mut root = LayoutBox::new(box_type, style);
     root.anonymous = false;
 
     // Create (an iterator over) the descendant boxes.
-    let children = style_node.children.iter().filter_map(build_layout_tree);
+    let children = style_node.children.iter().map(build_layout_tree);
 
     // Wrap child segments with anonymous boxes as needed.
     for (box_type, children) in &children.group_by(|child| child.box_type) {
@@ -126,20 +127,14 @@ fn build_layout_tree<'a>(style_node: &'a StyledNode<'a>) -> Option<LayoutBox<'a>
             root.children.extend(children);
         }
     }
-    Some(root)
-}
-
-/// Fold the layout tree into a display list to render.
-pub fn display_list<'a>(layout_root: &LayoutBox<'a>) -> DisplayList {
-    let mut list = Vec::new();
-    layout_root.render(&mut list);
-    list
+    root
 }
 
 impl<'a> LayoutBox<'a> {
     /// Lay out a box and its descendants.
     fn layout(&mut self) {
         match self.box_type {
+            BoxType::None => {},
             BoxType::Inline => {},
             BoxType::Block => self.layout_block(),
             BoxType::Float => self.layout_block(), // FIXME
@@ -252,6 +247,13 @@ impl<'a> LayoutBox<'a> {
             self.style.margin.right.value()
         };
     }
+}
+
+/// Fold the layout tree into a display list to render.
+pub fn display_list<'a>(layout_root: &LayoutBox<'a>) -> DisplayList {
+    let mut list = Vec::new();
+    layout_root.render(&mut list);
+    list
 }
 
 impl<'a> LayoutBox<'a> {
