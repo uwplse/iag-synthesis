@@ -57,7 +57,7 @@
                    (: underflow Pixels)
                    (: style (ref a Style))
                    (: anonymous bool)
-                   (: box_type BoxType)
+                   (: class BoxType)
                    (: children (gen Vec ((gen LayoutBox ((life a))))))))))
 
 (define impl-LayoutBox-new
@@ -76,7 +76,7 @@
                                   (: underflow 0.0)
                                   (: style style)
                                   (: anonymous #t)
-                                  (: box_type box_type)
+                                  (: class box_type)
                                   (: children (call (:: Vec new) ()))))))))))
 
 (define fn-layout_tree
@@ -104,9 +104,9 @@
                  (let-mut root (call (:: LayoutBox new) (box_type style)))
                  (:= (select root anonymous) #f)
                  (let children (call (select (call (select (select style_node children) iter) ()) map) (build_layout_tree)))
-                 (for (tuple box_type children) (call (select (ref children) group_by) ((lambda (child) (select child box_type))))
-                      (do (if (!= (select root box_type) box_type)
-                              (do (let-mut wrapper (call (:: LayoutBox new) ((select root box_type) style)))
+                 (for (tuple box_type children) (call (select (ref children) group_by) ((lambda (child) (select child class))))
+                      (do (if (!= (select root class) box_type)
+                              (do (let-mut wrapper (call (:: LayoutBox new) ((select root class) style)))
                                   (call (select (select wrapper children) extend) (children))
                                   (call (select (select root children) push) (wrapper)))
                               (do (call (select (select root children) extend) (children))))))
@@ -230,6 +230,9 @@
 (define (generate-term class term)
   (define/match (recur term)
     [((ag:const v)) v]
+    [((or (ag:field (cons 'self 'intrinsic_height))
+          (ag:accum (cons 'self 'intrinsic_height))))
+     `(select (select self content_box) height)]
     [((ag:field (cons 'self field)))
      `(select self ,field)]
     [((ag:field (cons child field)))
@@ -264,19 +267,22 @@
      (define reversed? (ag:iter-rev? command))
      (define iterator `(call (select (select self ,child) iter_mut) ()))
      (define cursor (symbol-append child '_i))
-     (define initial (append-map (recur #:iterated? #f) commands))
-     (define action (append-map (recur #:iterated? #t) commands))
+     (define initial (append-map (recur #:iterated? #f) (flatten commands)))
+     (define action (append-map (recur #:iterated? #t) (flatten commands)))
      (append initial
              (list `(for ,cursor ,(if reversed? `(call (select ,iterator rev) ()) iterator)
                       (do . ,action))))]
     [(ag:eval attr)
      (define rule (ag:class-ref*/rule class attr))
+     (define iterator (ag:rule-iteration rule))
      (define term
        (match (ag:rule-formula rule)
          [(ag:fold init next) (if iterated? next init)]
          [term term]))
      (define target (generate-term class (ag:field attr)))
-     (list `(:= ,target ,(generate-term class term)))]
+     (if (implies (ag:rule-iteration rule) (or (ag:rule-folds? rule) iterated?))
+         (list `(:= ,target ,(generate-term class term)))
+         null)]
     [(ag:recur child)
      (define child-i (symbol-append child '_i))
      (if (implies (ag:child/seq? (ag:class-ref*/child class child)) iterated?)
@@ -296,14 +302,15 @@
   (define variant `(:: ,sort ,kind))
   (define fields (map ag:child-name (ag:class-children* class)))
   (define pattern `(constructor ,variant (record . ,fields)))
-  (define body (append-map (curry generate-command name class) commands))
+  (define body (append-map (curry generate-command name class) (flatten commands)))
 
   `(=> (constructor (:: BoxType ,kind) (unit)) (do . ,body)))
 
 (define (generate-traversal G traversal)
   (define name (ag:traversal-name traversal))
 
-  (for/list ([interface (ag:grammar-interfaces G)])
+  (for/list ([interface (ag:grammar-interfaces G)]
+             #:when (eq? (ag:interface-name interface) 'LayoutBox))
     (define sort (ag:interface-name interface))
     (define cases
       (map (curry generate-visitor name)
@@ -312,6 +319,8 @@
     `(impl ,sort ((life a))
            (fn ,name () ((: self (ref (mut Self)))) (unit)
                (do (match (select self class)
+                     (=> (constructor (:: BoxType None) (unit)) (skip))
+                     (=> (constructor (:: BoxType Float) (unit)) (skip))
                      .
                      ,cases))))))
 
