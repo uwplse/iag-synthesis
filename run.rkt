@@ -36,8 +36,8 @@
  #:once-each
  ;[("-v" "--verbose") "Display verbose intermediate information"
  ;                    (verbose? #t)]
- [("-R" "--root") classname "Name of the attribute grammar's root interface"
-                   (root-name (string->symbol classname))]
+ [("-R" "--root") classname "Name of the attribute grammar's root class"
+                  (root-name (string->symbol classname))]
  #:args (schedule-sketch grammar-filename)
  (let* ([G (parse-grammar grammar-filename)]
         [E (tree-examples G (root-name))]
@@ -46,5 +46,5 @@
    (when S*
      (displayln (schedule->string S*))
      (let ([P (generate-program G S*)])
-       ;(pretty-print P)
-       (print-program P)))))
+       (parameterize ([current-output-port (open-output-file "browser/src/layout.rs" #:mode 'text #:exists 'replace)])
+         (print-program P))))))
