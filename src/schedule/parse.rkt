@@ -123,15 +123,15 @@
   (call-with-input-file path parse-schedule #:mode 'text))
 
 (define/match (schedule->string sched)
-  [((ag:sequential ,left-sched ,right-sched))
+  [((ag:sequential left-sched right-sched))
    (format "~a ;; ~a"
            (schedule->string left-sched)
            (schedule->string right-sched))]
-  [(`(par ,left-sched ,right-sched))
+  [((ag:parallel left-sched right-sched))
    (format "(~a || ~a)"
            (schedule->string left-sched)
            (schedule->string right-sched))]
-  [(`(trav ,order ,visitors))
+  [((ag:traversal order visitors))
    (format "traversal ~a {\n~a\n}"
            order
            (string-join (map visitor->string visitors) "\n"))])
@@ -142,37 +142,35 @@
   (build-string (* (indentation) 2) (thunk* #\ )))
 
 (define/match (visitor->string visitor)
-  [((cons class-name body))
+  [((ag:visitor class commands))
    (parameterize ([indentation (+ (indentation) 1)])
      (define content
        (parameterize ([indentation (+ (indentation) 1)])
-         (string-join (map command->string body) "\n")))
+         (string-join (map command->string commands) "\n")))
      (format "~acase ~a {\n~a\n~a}"
              (indent)
-             class-name
+             (ag:class-name class)
              content
              (indent)))])
 
 (define/match (command->string command)
-  [(`(iter-left ,child ,commands))
+  [((ag:iter/left child commands))
    (define content
      (parameterize ([indentation (+ (indentation) 1)])
        (string-join (map command->string commands) "\n")))
    (format "~aiterate[left] ~a {\n~a\n~a}"
            (indent) child content (indent))]
-  [(`(iter-right ,child ,commands))
+  [((ag:iter/right child commands))
    (define content
      (parameterize ([indentation (+ (indentation) 1)])
        (string-join (map command->string commands) "\n")))
    (format "~aiterate[right] ~a {\n~a\n~a}"
            (indent) child content (indent))]
-  [(`(recur ,child))
+  [((ag:recur child))
    (format "~arecur ~a;" (indent) child)]
-  [(`(call ,method-name))
-   (format "~acall ~a;" (indent) method-name)]
-  [(`(eval ,node ,label))
+  [((ag:eval (cons node label)))
    (format "~aeval ~a.~a;" (indent) node label)]
-  [(`(hole)) (format "~a??;" (indent))]
-  [(`(skip)) (format "~askip;" (indent) (indent))]
+  [((ag:hole)) (format "~a??;" (indent))]
+  [((ag:skip)) (format "~askip;" (indent) (indent))]
   [((list commands ...))
    (string-join (map command->string commands) "\n")])
