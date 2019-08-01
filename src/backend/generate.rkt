@@ -132,6 +132,7 @@
                                   (: padding_box (call (:: Rect default) ()))
                                   (: border_box (call (:: Rect default) ()))
                                   (: margin_box (call (:: Rect default) ()))
+                                  (: computedHeight 0.0)
                                   ;(: margin_acc (call (:: MarginAccumulator default) ()))
                                   (: floatLstIn (call (:: FloatList empty) ()))
                                   (: floatLstOut (call (:: FloatList empty) ()))
