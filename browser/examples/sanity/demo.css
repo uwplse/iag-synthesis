@@ -1,0 +1,29 @@
+div {
+  /* border: 1px solid black; */
+  margin-top: 100px;
+  margin-bottom: 100px;
+  /* height: 10px; */
+}
+
+#box1 {
+  height: 10px;
+  background-color: lightblue;
+}
+
+#box2 {
+  background-color: pink;
+}
+
+#box3 {
+  height: 0px;
+  margin-left: 100px;
+  /* margin-bottom: 1000px; */
+  background-color: yellow;
+}
+
+#box4 {
+  height: 10px;
+  margin-top: 200px;
+  margin-left: 100px;
+  background-color: green;
+}
