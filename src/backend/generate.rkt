@@ -392,7 +392,6 @@
            (fn ,name () ((: self (ref (mut Self)))) (unit)
                (do (match (select self class)
                      (=> (constructor (:: BoxType None) (unit)) (skip))
-                     (=> (constructor (:: BoxType Float) (unit)) (skip))
                      .
                      ,cases))))))
 
