@@ -11,6 +11,11 @@ traversal layout {
     case Inline {
         ??;
     }
+    case Float {
+        ??;
+        iterate children { ??; recur children; ??; }
+        ??;
+    }
 }
 
 interface Tree {
@@ -28,6 +33,7 @@ class Viewport : Tree {
         root.container.y := 0.0;
         root.container.width := self.width;
         root.container.height := 0.0; // self.height
+        root.floatLstIn := FloatList::empty();
     }
 }
 
@@ -123,6 +129,11 @@ interface LayoutBox {
     input style.border.right : Pixels;
     input style.border.top : Pixels;
     input style.border.bottom : Pixels;
+
+    // float related
+    input style.float : FloatPosition;
+    output floatLstIn : FloatList;
+    output floatLstOut : FloatList;
 }
 
 /* display: block */
@@ -224,6 +235,9 @@ class Block : LayoutBox {
         self.margin_box.y := self.border_box.y - self.margin.top;
         self.margin_box.width := self.border_box.width + self.margin.left + self.margin.right;
         self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
+
+        children.floatLstIn := FloatList::empty();
+        self.floatLstOut := self.floatLstIn;
     }
 }
 
@@ -312,5 +326,90 @@ class Inline : LayoutBox {
         self.margin_box.y := self.border_box.y - self.margin.top;
         self.margin_box.width := self.border_box.width + self.margin.left + self.margin.right;
         self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
+
+        self.floatLstOut := self.floatLstIn;
+    }
+}
+
+// maybe wrong
+class Float : LayoutBox {
+    children {
+        children : [LayoutBox];
+    }
+
+    rules {
+        self.floatLstOut := addLeft(self.floatLstIn, 0, self.container.width, self.style.width, self.margin_box.height, false);
+
+        ///copy paste
+        self.underflow :=
+            self.container.width -
+            (value(self.style.margin.left) + value(self.style.margin.right) +
+             self.style.border.left + self.style.border.right +
+             self.style.padding.left + self.style.padding.right +
+             value(self.style.width));
+
+        self.padding.left := 0;
+        self.padding.right := 0;
+
+        self.border.left := self.style.border.left;
+        self.border.right := self.style.border.right;
+
+        self.content_box.width :=
+            if is_auto(self.style.width) then
+                max(self.underflow, 0.0)
+            else
+                value(self.style.width);
+
+        self.margin.left := 0;
+
+        self.margin.right := 0;
+
+        self.margin.top := 0; // auto ==> 0
+        self.margin.bottom := 0; // auto ==> 0
+
+        self.border.top := self.style.border.top;
+        self.border.bottom := self.style.border.bottom;
+
+        self.padding.top := 0;
+        self.padding.bottom := 0;
+
+        self.content_box.x :=
+            self.container.x +
+            self.margin.left + self.border.left + self.padding.left;
+
+        self.content_box.y :=
+            self.container.y + self.container.height +
+            self.margin.top + self.border.top + self.padding.top;
+
+        children.container.x := self.content_box.x;
+        children.container.y := self.content_box.y;
+
+        children.container.width := self.content_box.width;
+
+        self.intrinsic_height := foldl 0.0 .. @{self.intrinsic_height} + children.margin_box.height;
+        children.container.height := @{self.intrinsic_height};
+
+        self.content_box.height :=
+            if is_auto(self.style.height) then
+                self.intrinsic_height // children.container.height$
+            else
+                value(self.style.height);
+
+        self.padding_box.x := self.content_box.x - self.padding.left;
+        self.padding_box.y := self.content_box.y - self.padding.top;
+        self.padding_box.width := self.content_box.width + self.padding.left + self.padding.right;
+        self.padding_box.height := self.content_box.height + self.padding.top + self.padding.bottom;
+
+        self.border_box.x := self.padding_box.x - self.border.left;
+        self.border_box.y := self.padding_box.y - self.border.top;
+        self.border_box.width := self.padding_box.width + self.border.left + self.border.right;
+        self.border_box.height := self.padding_box.height + self.border.top + self.border.bottom;
+
+        self.margin_box.x := self.border_box.x - self.margin.left;
+        self.margin_box.y := self.border_box.y - self.margin.top;
+        self.margin_box.width := self.border_box.width + self.margin.left + self.margin.right;
+        self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
+
+        children.floatLstIn := FloatList::empty();
     }
 }
