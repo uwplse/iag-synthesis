@@ -109,6 +109,7 @@
                    (: padding_box Rect)
                    (: border_box Rect)
                    (: margin_box Rect)
+                   (: computedHeight Pixels)
                    ;(: margin_acc MarginAccumulator)
                    (: padding (gen Edge (Pixels)))
                    (: border (gen Edge (Pixels)))
