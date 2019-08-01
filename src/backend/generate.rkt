@@ -34,6 +34,60 @@
                                   (: width (+ (select self width) (+ (select edge left) (select edge right))))
                                   (: height (+ (select self height) (+ (select edge top) (select edge bottom))))))))))))
 
+(define struct-CollapsibleMargin
+  (list '(blank)
+        '(hash derive (Clone Copy Default PartialEq Debug))
+        '(struct CollapsibleMargin ()
+           (record (: positive Pixels)
+                   (: negative Pixels)
+                   (: collapse bool)))))
+
+(define struct-MarginAccumulator
+  (list '(blank)
+        '(hash derive (Clone Copy Default PartialEq Debug))
+        '(struct MarginAccumulator ()
+           (record (: clearance bool)
+                   (: weirdness bool)
+                   (: top CollapsibleMargin)
+                   (: bottom CollapsibleMargin)))))
+
+(define struct-FloatItem
+  (list '(blank)
+        '(hash derive (Clone Copy Default PartialEq Debug))
+        '(struct FloatItem ()
+            (record (: adjusted Pixels)
+                    (: available Pixels)
+                    (: width Pixels)
+                    (: height Pixels)
+                    (: clearance bool)))))
+
+(define struct-FloatList
+  (list '(blank)
+        '(hash derive (Clone))
+        '(struct FloatList () (tuple (gen Vec (FloatItem))))))
+
+(define impl-FloatList
+  (list '(blank) ; TODO
+        '(impl FloatList ()
+            (fn empty () () FloatList (do (return (call FloatList ((call (:: Vec new) ()))))))
+            
+            (fn addLeft () ((: self (ref Self))
+                            (: adjusted Pixels) (: available Pixels)
+                            (: width Pixels) (: height Pixels)
+                            (: clearance bool))
+              FloatList
+              (do (let-mut list (call (select self clone) ()))
+                  (let item (struct FloatItem
+                              ((: adjusted adjusted) (: available available)
+                               (: width width) (: height height)
+                               (: clearance clearance))))
+                  (call (select (select list 0) push) (item))
+                  (return list)
+                )
+              )
+            )
+        ))
+
 (define enum-BoxType
   (list '(blank)
         '(hash derive (Clone Copy PartialEq Eq Debug))
@@ -51,9 +105,12 @@
                    (: padding_box Rect)
                    (: border_box Rect)
                    (: margin_box Rect)
+                   ;(: margin_acc MarginAccumulator)
                    (: padding (gen Edge (Pixels)))
                    (: border (gen Edge (Pixels)))
                    (: margin (gen Edge (Pixels)))
+                   (: floatLstIn FloatList)
+                   (: floatLstOut FloatList)
                    (: underflow Pixels)
                    (: style (ref a Style))
                    (: anonymous bool)
@@ -70,6 +127,9 @@
                                   (: padding_box (call (:: Rect default) ()))
                                   (: border_box (call (:: Rect default) ()))
                                   (: margin_box (call (:: Rect default) ()))
+                                  ;(: margin_acc (call (:: MarginAccumulator default) ()))
+                                  (: floatLstIn (call (:: FloatList empty) ()))
+                                  (: floatLstOut (call (:: FloatList empty) ()))
                                   (: padding (call (:: Edge default) ()))
                                   (: border (call (:: Edge default) ()))
                                   (: margin (call (:: Edge default) ()))
@@ -171,6 +231,11 @@
   (append imports
           struct-Rect
           impl-Rect-expanded_by
+          struct-CollapsibleMargin
+          struct-MarginAccumulator
+          struct-FloatItem
+          struct-FloatList
+          impl-FloatList
           enum-BoxType
           struct-LayoutBox
           impl-LayoutBox-new
@@ -255,6 +320,8 @@
           ,(recur alternate))]
     [((ag:expr operator operands))
      `(,operator . ,(map recur operands))]
+    [((ag:call function (list)))
+     `(call ,function ())]
     [((ag:call function (cons receiver arguments)))
      `(call (select ,(recur receiver) ,function)
             ,(map recur arguments))])

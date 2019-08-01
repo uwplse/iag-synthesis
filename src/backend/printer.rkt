@@ -374,6 +374,8 @@
    (display "pub struct ")
    (print-type `(gen ,name ,par-type-list))
    (print-data data)
+   (unless (eq? (first data) 'record)
+    (display ";"))
    (newline)]
   [(`(struct ,lifetime ,name ,data))
    (newline)]
