@@ -29,7 +29,7 @@
      (map (compose ag:traverse string->symbol)
           (filter non-empty-string?
                   (map string-trim (string-split S0 ";"))))))
-  (foldr (curry list 'seq) (first traversals) (rest traversals)))
+  (foldr ag:sequential (first traversals) (rest traversals)))
 
 (command-line
  #:program "synthesize"
