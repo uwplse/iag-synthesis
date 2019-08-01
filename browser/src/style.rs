@@ -236,7 +236,11 @@ pub struct Style {
 
     // content dimensions (None ~ auto)
     pub width: Automatic<Pixels>,
+    pub min_width: Automatic<Pixels>,
+    pub max_width: Automatic<Pixels>,
     pub height: Automatic<Pixels>,
+    pub min_height: Automatic<Pixels>,
+    pub max_height: Automatic<Pixels>,
 
     // content edge in pixels (None ~ auto)
     //pub content: Edge<Automatic<f32>>,
@@ -262,7 +266,11 @@ impl Default for Style {
             border_color: Color::default(),
 
             width: Automatic::Auto,
+            min_width: Automatic::Auto,
+            max_width: Automatic::Auto,
             height: Automatic::Auto,
+            min_height: Automatic::Auto,
+            max_height: Automatic::Auto,
 
             margin: Edge {
                 left: Automatic::Given(0.0),
@@ -312,7 +320,11 @@ fn specified_values(elem: &ElementData, stylesheet: &Stylesheet) -> Style {
                 "clear" => { style.clear = value.try_into().expect(property); },
 
                 "width" => { style.width = value.try_into().expect(property); },
+                "min-width" => { style.min_width = value.try_into().expect(property); },
+                "max-width" => { style.max_width = value.try_into().expect(property); },
                 "height" => { style.height = value.try_into().expect(property); },
+                "min-height" => { style.min_height = value.try_into().expect(property); },
+                "max-height" => { style.max_height = value.try_into().expect(property); },
 
                 "background-color" => { style.background_color = value.try_into().expect(property); },
                 "border-color" => { style.border_color = value.try_into().expect(property); },
