@@ -230,7 +230,7 @@
                                (: height (select (select self border) bottom))))))
 
 
-                     (for child (ref (select self children))
+                     (for child (call (select (call (select (select self children) iter) ()) rev) ())
                           (do (call (select child render) (list)))))))))
 
 (define header
