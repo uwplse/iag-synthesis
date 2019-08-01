@@ -15,7 +15,8 @@
          "src/backend/printer.rkt")
 
 ;(define verbose? (make-parameter #f))
-(define root-name (make-parameter 'Root))
+(define *root* (make-parameter 'Root))
+(define *output* (make-parameter "browser/src/layout.rs"))
 
 (define (parse-grammar filename)
   (let ([G (file->grammar filename)])
@@ -36,15 +37,18 @@
  #:once-each
  ;[("-v" "--verbose") "Display verbose intermediate information"
  ;                    (verbose? #t)]
- [("-R" "--root") classname "Name of the attribute grammar's root class"
-                  (root-name (string->symbol classname))]
+ [("-R" "--root") classname "Class to use as tree root"
+                  (*root* (string->symbol classname))]
+ [("-o" "--out") filename "File to output generated code"
+                  (*output* filename)]
  #:args (schedule-sketch grammar-filename)
  (let* ([G (parse-grammar grammar-filename)]
-        [E (tree-examples G (root-name))]
+        [E (tree-examples G (*root*))]
         [S (parse-schedule-sketch G schedule-sketch)]
         [S* (complete-sketch G S E)])
    (when S*
      (displayln (schedule->string S*))
-     (let ([P (generate-program G S*)])
-       (parameterize ([current-output-port (open-output-file "browser/src/layout.rs" #:mode 'text #:exists 'replace)])
+     (let ([P (generate-program G S*)]
+           [file (open-output-file (*output*) #:mode 'text #:exists 'replace)])
+       (parameterize ([current-output-port file])
          (print-program P))))))
