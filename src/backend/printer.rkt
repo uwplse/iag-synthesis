@@ -365,6 +365,11 @@
    (print-type type)
    (display ";")
    (newline)]
+  [(`(hash-bang ,macro ,option-list))
+   (printf "#![~a" macro)
+   (print-each display option-list "(" ")")
+   (display "]")
+   (newline)]
   [(`(hash ,macro ,option-list))
    (printf "#[~a" macro)
    (print-each display option-list "(" ")")

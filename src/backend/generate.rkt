@@ -9,6 +9,10 @@
 ; Standard program header
 ; -----------------------
 
+(define directives
+  (list '(hash-bang allow (unused_parens))
+        '(blank)))
+
 (define imports
   (list '(use crate style (StyledNode Style Display Edge Pixels))
         '(use crate paint (DisplayList DisplayCommand))
@@ -228,7 +232,8 @@
                           (do (call (select child render) (list)))))))))
 
 (define header
-  (append imports
+  (append directives
+          imports
           struct-Rect
           impl-Rect-expanded_by
           struct-CollapsibleMargin
