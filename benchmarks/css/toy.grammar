@@ -134,6 +134,7 @@ interface LayoutBox {
     input style.float : FloatPosition;
     output floatLstIn : FloatList;
     output floatLstOut : FloatList;
+    output computedHeight : Pixels;
 }
 
 /* display: block */
@@ -211,8 +212,9 @@ class Block : LayoutBox {
         children.container.y := self.content_box.y;
 
         children.container.width := self.content_box.width;
+        self.computedHeight := self.margin_box.height;
 
-        self.intrinsic_height := foldl 0.0 .. @{self.intrinsic_height} + children.margin_box.height;
+        self.intrinsic_height := foldl 0.0 .. @{self.intrinsic_height} + children.computedHeight;
         children.container.height := @{self.intrinsic_height};
 
         self.content_box.height :=
@@ -237,7 +239,7 @@ class Block : LayoutBox {
         self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
 
         children.floatLstIn := FloatList::empty();
-        self.floatLstOut := self.floatLstIn;
+        self.floatLstOut := clone(self.floatLstIn);
     }
 }
 
@@ -327,7 +329,9 @@ class Inline : LayoutBox {
         self.margin_box.width := self.border_box.width + self.margin.left + self.margin.right;
         self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
 
-        self.floatLstOut := self.floatLstIn;
+        self.floatLstOut := clone(self.floatLstIn);
+        // not sure if it's correct.
+        self.computedHeight := self.content_box.height;
     }
 }
 
@@ -338,7 +342,7 @@ class Float : LayoutBox {
     }
 
     rules {
-        self.floatLstOut := addLeft(self.floatLstIn, 0, self.container.width, self.style.width, self.margin_box.height, false);
+        self.floatLstOut := addLeft(self.floatLstIn, 0.0, self.container.width, value(self.style.width), self.margin_box.height, false);
 
         ///copy paste
         self.underflow :=
@@ -348,8 +352,8 @@ class Float : LayoutBox {
              self.style.padding.left + self.style.padding.right +
              value(self.style.width));
 
-        self.padding.left := 0;
-        self.padding.right := 0;
+        self.padding.left := 0.0;
+        self.padding.right := 0.0;
 
         self.border.left := self.style.border.left;
         self.border.right := self.style.border.right;
@@ -360,18 +364,18 @@ class Float : LayoutBox {
             else
                 value(self.style.width);
 
-        self.margin.left := 0;
+        self.margin.left := 0.0;
 
-        self.margin.right := 0;
+        self.margin.right := 0.0;
 
-        self.margin.top := 0; // auto ==> 0
-        self.margin.bottom := 0; // auto ==> 0
+        self.margin.top := 0.0; // auto ==> 0
+        self.margin.bottom := 0.0; // auto ==> 0
 
         self.border.top := self.style.border.top;
         self.border.bottom := self.style.border.bottom;
 
-        self.padding.top := 0;
-        self.padding.bottom := 0;
+        self.padding.top := 0.0;
+        self.padding.bottom := 0.0;
 
         self.content_box.x :=
             self.container.x +
@@ -411,5 +415,7 @@ class Float : LayoutBox {
         self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
 
         children.floatLstIn := FloatList::empty();
+
+        self.computedHeight := 0.0;
     }
 }
