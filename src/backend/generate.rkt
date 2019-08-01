@@ -11,6 +11,9 @@
 
 (define directives
   (list '(hash-bang allow (unused_parens))
+        '(hash-bang allow (unused_variables))
+        '(hash-bang allow (non_snake_case))
+        '(hash-bang allow (dead_code))
         '(blank)))
 
 (define imports
@@ -110,7 +113,7 @@
                    (: border_box Rect)
                    (: margin_box Rect)
                    (: computedHeight Pixels)
-                   ;(: margin_acc MarginAccumulator)
+                   (: margin_acc MarginAccumulator)
                    (: padding (gen Edge (Pixels)))
                    (: border (gen Edge (Pixels)))
                    (: margin (gen Edge (Pixels)))
@@ -133,7 +136,7 @@
                                   (: border_box (call (:: Rect default) ()))
                                   (: margin_box (call (:: Rect default) ()))
                                   (: computedHeight 0.0)
-                                  ;(: margin_acc (call (:: MarginAccumulator default) ()))
+                                  (: margin_acc (call (:: MarginAccumulator default) ()))
                                   (: floatLstIn (call (:: FloatList empty) ()))
                                   (: floatLstOut (call (:: FloatList empty) ()))
                                   (: padding (call (:: Edge default) ()))
@@ -147,7 +150,6 @@
 
 (define fn-layout_tree
   (list '(blank)
-        '(hash allow (unused_variables))
         '(fn layout_tree ((life a)) ((: node (ref a (gen StyledNode ((life a)))))
                                      (: width usize)
                                      (: height usize))

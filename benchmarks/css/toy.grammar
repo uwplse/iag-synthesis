@@ -130,18 +130,58 @@ interface LayoutBox {
     input style.border.top : Pixels;
     input style.border.bottom : Pixels;
 
-    // float related
-    input style.float : FloatPosition;
+    // margin collapse
+    //output margin_acc.top.positive : Pixels;
+    //output margin_acc.top.negative : Pixels;
+    output margin_acc.top.collapse : bool;
+    //output margin_acc.bottom.positive : Pixels;
+    //output margin_acc.bottom.negative : Pixels;
+    output margin_acc.bottom.collapse : bool;
+
+    // float positioning
+    input style.float : Float;
     output floatLstIn : FloatList;
     output floatLstOut : FloatList;
     output computedHeight : Pixels;
 }
 
+trait CollapsingMargins {
+    rules {
+        self.margin_acc.top.collapse := self.padding.top == 0.0 && self.border.top == 0.0;
+        self.margin_acc.bottom.collapse := self.padding.bottom == 0.0 && self.border.bottom == 0.0 &&
+            is_auto(self.style.height); //&& !self.is_replaced;
+
+        /*
+        self.mtp :=
+            max(
+                max(
+                    max(self.mt, 0.0),
+                    if (self.margin_acc.top.collapse && !kids$0.has_clearance)
+                    then kids$0.mtp_up
+                    else 0.0
+                ),
+                if (self.collapse_through && !self.has_clearance)
+                then self.mbp_prev
+                else 0.0
+            );
+        self.mtn :=
+            min(
+                min(
+                    min(self.mt, 0.0),
+                    if (self.margin_acc.top.collapse && !kids$0.has_clearance)
+                    then kids$0.mtn_up
+                    else 0.0
+                ),
+                if (self.collapse_through && !self.has_clearance)
+                then self.mbn_prev
+                else 0.0
+            );
+        */
+    }
+}
+
 /* display: block */
-class Block : LayoutBox {
-//    index {
-//        self.style.display == Display::Block
-//    }
+class Block(CollapsingMargins) : LayoutBox {
     children {
         children : [LayoutBox];
     }
@@ -244,10 +284,7 @@ class Block : LayoutBox {
 }
 
 /* display: inline (but completely wrong) */
-class Inline : LayoutBox {
-//    index {
-//        self.style.display == Display::Inline
-//    }
+class Inline(CollapsingMargins) : LayoutBox {
     rules {
         self.underflow :=
             self.container.width -
@@ -336,11 +373,10 @@ class Inline : LayoutBox {
 }
 
 // maybe wrong
-class Float : LayoutBox {
+class Float(CollapsingMargins) : LayoutBox {
     children {
         children : [LayoutBox];
     }
-
     rules {
         self.floatLstOut := addLeft(self.floatLstIn, 0.0, self.container.width, value(self.style.width), self.margin_box.height, false);
 
