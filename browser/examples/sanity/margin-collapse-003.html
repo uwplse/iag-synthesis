@@ -1,0 +1,33 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!-- saved from url=(0077)http://test.csswg.org/suites/css21_dev/20110323/html4/margin-collapse-003.htm -->
+<html class="gr__test_csswg_org"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <title>CSS Test: Margin collapsing - negative margins adjoining positive margins</title>
+        <link rel="author" title="Microsoft" href="http://www.microsoft.com/">
+        <link rel="help" href="http://www.w3.org/TR/CSS21/box.html#collapsing-margins">
+        <meta name="flags" content="">
+        <meta name="assert" content="Negative margins deduct from the maximum of the adjoining positive margin.">
+        <style type="text/css">
+            div div
+            {
+                height: 20px;
+                width: 50px;
+            }
+            #div1
+            {
+                background: blue;
+                margin-bottom: 2in;
+            }
+            #div2
+            {
+                background: orange;
+                margin-top: -2in;
+            }
+        </style>
+    </head>
+    <body data-gr-c-s-loaded="true">
+        <div>
+            <div id="div1"></div>
+            <div id="div2"></div>
+        </div>
+    
+</body></html>

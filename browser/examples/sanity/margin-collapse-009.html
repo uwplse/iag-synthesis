@@ -1,0 +1,37 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!-- saved from url=(0077)http://test.csswg.org/suites/css21_dev/20110323/html4/margin-collapse-009.htm -->
+<html class="gr__test_csswg_org"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <title>CSS Test: Margin collapsing and elements with 'overflow' set to 'hidden'</title>
+        <link rel="author" title="Microsoft" href="http://www.microsoft.com/">
+        <link rel="help" href="http://www.w3.org/TR/CSS21/box.html#collapsing-margins">
+        <meta name="flags" content="ahem">
+        <meta name="assert" content="Elements with &#39;overflow&#39; set to &#39;hidden&#39; do not collapse margin with in-flow children.">
+        <style type="text/css">
+            div
+            {
+                font: 20px/1em Ahem;
+                height: 5em;
+                width: 5em;
+            }
+            #div1
+            {
+                height: 2em;
+                margin-top: 2em;
+                overflow: hidden;
+            }
+            #div2
+            {
+                height: 1em;
+                background: red;
+                margin-top: 2em;
+            }
+        </style>
+    </head>
+    <body data-gr-c-s-loaded="true">
+        <div>
+            <div id="div1">
+                <div id="div2"></div>
+            </div>
+        </div>
+    
+</body></html>
