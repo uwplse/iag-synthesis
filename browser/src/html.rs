@@ -14,17 +14,12 @@ use std::collections::HashMap;
 
 /// Parse an HTML document and return the root element.
 pub fn parse(source: String) -> dom::Node {
-    let mut nodes = Parser { pos: 0, input: source }.parse_nodes();
-
-    // If the document contains a root element, just return it. Otherwise, create one.
-    if nodes.len() == 1 {
-        nodes.swap_remove(0)
-    } else {
-        dom::elem("html".to_string(), HashMap::new(), nodes)
-    }
+    let mut nodes = Parser { num: 0, pos: 0, input: source }.parse_nodes();
+    nodes.swap_remove(0)
 }
 
 struct Parser {
+    num: dom::NodeId,
     pos: usize,
     input: String,
 }
@@ -55,26 +50,26 @@ impl Parser {
     fn parse_element(&mut self) -> dom::Node {
         // Opening tag.
         assert_eq!(self.consume_char(), '<');
+        let num = self.number();
         let tag = self.parse_identifier();
         let attrs = self.parse_attributes();
-        if self.next_char() == '/' {
+        let children = if self.next_char() == '/' {
             // Self-closing tag.
             assert_eq!(self.consume_char(), '/');
             assert_eq!(self.consume_char(), '>');
-            return dom::elem(tag, attrs, vec![]);
-        }
-        assert_eq!(self.consume_char(), '>');
+            vec![]
+        } else {
+            // Content-enclosing pair of tags.
+            assert_eq!(self.consume_char(), '>');
+            let nodes = self.parse_nodes();
+            assert_eq!(self.consume_char(), '<');
+            assert_eq!(self.consume_char(), '/');
+            assert_eq!(self.parse_identifier(), tag);
+            assert_eq!(self.consume_char(), '>');
+            nodes
+        };
 
-        // Contents.
-        let children = self.parse_nodes();
-
-        // Closing tag.
-        assert_eq!(self.consume_char(), '<');
-        assert_eq!(self.consume_char(), '/');
-        assert_eq!(self.parse_identifier(), tag);
-        assert_eq!(self.consume_char(), '>');
-
-        dom::elem(tag, attrs, children)
+        dom::elem(num, tag, attrs, children)
     }
 
     /// Parse a tag or attribute name.
@@ -118,7 +113,7 @@ impl Parser {
 
     /// Parse a text node.
     fn parse_text(&mut self) -> dom::Node {
-        dom::text(self.consume_while(|c| c != '<'))
+        dom::text(self.number(), self.consume_while(|c| c != '<'))
     }
 
     /// Consume and discard zero or more whitespace characters.
@@ -158,5 +153,12 @@ impl Parser {
     /// Return true if all input is consumed.
     fn eof(&self) -> bool {
         self.pos >= self.input.len()
+    }
+
+    /// Return the next available number for an element node.
+    fn number(&mut self) -> dom::NodeId {
+        let id = self.num;
+        self.num += 1;
+        id
     }
 }

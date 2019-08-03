@@ -2,11 +2,13 @@
 
 use std::collections::{HashMap,HashSet};
 
+pub type NodeId = i32;
 pub type AttrMap = HashMap<String, String>;
 
 #[derive(Debug)]
 pub struct Node {
     // data common to all nodes:
+    pub number: NodeId,
     pub children: Vec<Node>,
 
     // data specific to each node type:
@@ -27,12 +29,17 @@ pub struct ElementData {
 
 // Constructor functions for convenience:
 
-pub fn text(data: String) -> Node {
-    Node { children: vec![], node_type: NodeType::Text(data) }
+pub fn text(no: NodeId, data: String) -> Node {
+    Node {
+        number: no,
+        children: vec![],
+        node_type: NodeType::Text(data)
+    }
 }
 
-pub fn elem(name: String, attrs: AttrMap, children: Vec<Node>) -> Node {
+pub fn elem(no: NodeId, name: String, attrs: AttrMap, children: Vec<Node>) -> Node {
     Node {
+        number: no,
         children: children,
         node_type: NodeType::Element(ElementData {
             tag: name,
