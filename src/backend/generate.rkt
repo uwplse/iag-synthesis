@@ -17,9 +17,11 @@
         '(blank)))
 
 (define imports
-  (list '(use crate style (StyledNode Style Display Edge Pixels))
+  (list '(use crate dom)
+        '(use crate style (StyledNode Style Display Edge Pixels))
         '(use crate paint (DisplayList DisplayCommand))
         '(use std default Default)
+        '(use std fmt)
         '(use itertools Itertools)))
 
 (define struct-Rect
@@ -33,7 +35,7 @@
 
 (define impl-Rect-expanded_by
   (list '(blank)
-        '(impl Rect ()
+        '(impl () Rect
                (fn expanded_by () ((: self (ref Self)) (: edge (gen Edge (Pixels)))) Rect
                    (do (return (struct Rect
                                  ((: x (- (select self x) (select edge left)))
@@ -75,9 +77,9 @@
 
 (define impl-FloatList
   (list '(blank) ; TODO
-        '(impl FloatList ()
+        '(impl () FloatList
             (fn empty () () FloatList (do (return (call FloatList ((call (:: Vec new) ()))))))
-            
+            ;(blank)
             (fn addLeft () ((: self (ref Self))
                             (: adjusted Pixels) (: available Pixels)
                             (: width Pixels) (: height Pixels)
@@ -107,7 +109,8 @@
 (define struct-LayoutBox
   (list '(blank)
         '(struct LayoutBox ((life a))
-           (record (: container Rect)
+           (record (: element (gen Option ((:: dom NodeId))))
+                   (: container Rect)
                    (: content_box Rect)
                    (: padding_box Rect)
                    (: border_box Rect)
@@ -127,10 +130,11 @@
 
 (define impl-LayoutBox-new
   (list '(blank)
-        '(impl LayoutBox ((life a))
+        '(impl ((life a)) LayoutBox
                (fn new () ((: box_type BoxType) (: style (ref a Style))) Self
                    (do (return (struct LayoutBox
-                                 ((: container (call (:: Rect default) ()))
+                                 ((: element None)
+                                  (: container (call (:: Rect default) ()))
                                   (: content_box (call (:: Rect default) ()))
                                   (: padding_box (call (:: Rect default) ()))
                                   (: border_box (call (:: Rect default) ()))
@@ -148,16 +152,46 @@
                                   (: class box_type)
                                   (: children (call (:: Vec new) ()))))))))))
 
+(define impl-Display-for-LayoutBox
+  (list '(blank)
+        '(impl ((life a)) (for (:: fmt Display) LayoutBox)
+               (fn fmt () ((: self (ref Self)) (: f (ref (mut (:: fmt Formatter))))) (:: fmt Result)
+                          (do (if (== (select self class) (:: BoxType None))
+                                  (do (? (call write! (f "#|")))))
+                              (? (call write! (f "(")))
+                              (match (select self element)
+                                (=> (constructor None (unit))
+                                    (do (? (call write! (f "[ANON]")))))
+                                (=> (constructor Some (tuple id))
+                                    (do (let kind
+                                             (match (select self class)
+                                                (=> (constructor (:: BoxType None) (unit)) "NONE")
+                                                (=> (constructor (:: BoxType Block) (unit)) "BLOCK")
+                                                (=> (constructor (:: BoxType Float) (unit)) "BLOCK")
+                                                (=> (constructor (:: BoxType Inline) (unit)) "INLINE")))
+                                        (let x (select (select self content_box) x))
+                                        (let y (select (select self content_box) y))
+                                        (let w (select (select self content_box) width))
+                                        (let h (select (select self content_box) height))
+                                        (? (call write! (f "[{} :x {} :y {} :w {} :h {} :elt {}]" kind x y w h id))))))
+                              (for child (call (select (select self children) iter) ())
+                                (do (? (call write! (f " {}" child)))))
+                              (? (call write! (f ")")))
+                              (if (== (select self class) (:: BoxType None))
+                                  (do (? (call write! (f "|#")))))
+                              (return (call (:: Result Ok) ((unit)))))))))
+
 (define fn-layout_tree
   (list '(blank)
-        '(fn layout_tree ((life a)) ((: node (ref a (gen StyledNode ((life a)))))
-                                     (: width usize)
-                                     (: height usize))
-             (gen LayoutBox ((life a)))
-             (do (let-mut root_box (call build_layout_tree (node)))
-                 (:= (select (select root_box container) width) (as width Pixels))
-               (call (select root_box layout) ())
-               (return root_box)))))
+        '(pub (fn layout_tree ((life a)) ((: node (ref a (gen StyledNode ((life a)))))
+                                          (: width usize)
+                                          (: height usize))
+                  (gen LayoutBox ((life a)))
+                  (do (let-mut root_box (call build_layout_tree (node)))
+                      (:= (select (select root_box container) width) (as width Pixels))
+                    (call (select root_box layout) ())
+                    (call println! ("([VIEW :w {}] {})" width root_box))
+                    (return root_box))))))
 
 (define fn-build_layout_tree
   (list '(blank)
@@ -170,6 +204,7 @@
                                  (=> (constructor (:: Display None) (unit)) (:: BoxType None))))
                  (let style (ref (select style_node specified)))
                  (let-mut root (call (:: LayoutBox new) (box_type style)))
+                 (:= (select root element) (call Some ((select (select style_node node) number))))
                  (:= (select root anonymous) #f)
                  (let children (call (select (call (select (select style_node children) iter) ()) map) (build_layout_tree)))
                  (for (tuple box_type children) (call (select (ref children) group_by) ((lambda (child) (select child class))))
@@ -182,14 +217,14 @@
 
 (define fn-display_list
   (list '(blank)
-        '(fn display_list ((life a)) ((: layout_root (ref (gen LayoutBox ((life a)))))) DisplayList
-             (do (let-mut list (call (:: Vec new) ()))
-                 (call (select layout_root render) ((ref (mut list))))
-                 (return list)))))
+        '(pub (fn display_list ((life a)) ((: layout_root (ref (gen LayoutBox ((life a)))))) DisplayList
+              (do (let-mut list (call (:: Vec new) ()))
+                  (call (select layout_root render) ((ref (mut list))))
+                  (return list))))))
 
 (define impl-LayoutBox-render
   (list '(blank)
-        '(impl LayoutBox ((life a))
+        '(impl ((life a)) LayoutBox
                (fn render () ((: self (ref Self)) (: list (ref (mut DisplayList)))) (unit)
                    (do (call (select list push)
                              ((struct (:: DisplayCommand SolidColor)
@@ -248,6 +283,7 @@
           enum-BoxType
           struct-LayoutBox
           impl-LayoutBox-new
+          impl-Display-for-LayoutBox
           fn-layout_tree
           fn-build_layout_tree
           fn-display_list
@@ -392,7 +428,7 @@
       (map (curry generate-visitor name)
            (ag:traversal-ref/interface traversal interface)))
 
-    `(impl ,sort ((life a))
+    `(impl ((life a)) ,sort
            (fn ,name () ((: self (ref (mut Self)))) (unit)
                (do (match (select self class)
                      (=> (constructor (:: BoxType None) (unit)) (skip))

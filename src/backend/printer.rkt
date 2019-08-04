@@ -111,7 +111,9 @@
 ;;        | `(ref ,expr)
 ;;        | `(ref (mut ,expr))
 ;;        | `(as ,expr ,type)
+;;        | `(? ,expr)
 ;;        | `(struct ,global (,field ...))
+;;        | `(unit)
 ;;        | int
 ;;        | str
 ;;        | loc
@@ -165,9 +167,14 @@
    (print-expression expr)
    (display " as ")
    (print-type type)]
+  [(`(? ,expr))
+   (print-expression expr)
+   (display "?")]
   [(`(struct ,cons ,field-list))
    (print-global cons)
    (print-each print-field field-list " {" "}" #:indent? #t)]
+  [(`(unit))
+   (display "()")]
   [((? integer? int))
    (display int)]
   [((? string? str))
@@ -237,7 +244,8 @@
    (display " ")
    (print-expression expression)])
 
-;; stmt ::= `(if ,expr ,body ,body)
+;; stmt ::= `(if ,expr ,body)
+;;        | `(if ,expr ,body ,body)
 ;;        | `(let ,name ,expr)
 ;;        | `(let-mut ,name ,expr)
 ;;        | `(:= ,path ,expr)
@@ -245,10 +253,17 @@
 ;;        | `(for ,name ,expr ,body)
 ;;        | `(return ,expr)
 ;;        | `(skip)
+;;        | `(blank)
 ;;        | expr
 (define/match (print-statement statement)
+  [(`(blank))
+   (newline)]
   [(`(do ,statement-list ...))
    (print-each print-statement statement-list " {" "}" #:separator "" #:indent? #t)]
+  [(`(if ,cond-expr ,then-body))
+   (display "if ")
+   (print-expression cond-expr)
+   (print-body then-body)]
   [(`(if ,cond-expr ,then-body ,else-body))
    (display "if ")
    (print-expression cond-expr)
@@ -309,9 +324,13 @@
    (print-binder binder)])
 
 ;; func ::= `(fn ,name (,par-type ...) (,param ...) ,type ,body)
+;;        | `(pub (fn ,name (,par-type ...) (,param ...) ,type ,body))
 (define/match (print-function function)
+  [(`(pub ,func))
+   (display "pub ")
+   (print-function func)]
   [(`(fn ,name ,par-type-list ,parameter-list ,return-type ,body))
-   (printf "pub fn ")
+   (printf "fn ")
    (print-type `(gen ,name ,par-type-list))
    (print-each print-function-parameter parameter-list "(" ")")
    (display " -> ")
@@ -344,7 +363,7 @@
 ;;        | `(impl ,name (,par-type ...) ,func ...)
 ;;        | `(impl (for ,trait ,name) ,func ...)
 ;;        | func
-;;        | `blank
+;;        | `(blank)
 ;;        | `(comment ,text)
 (define/match (print-declaration declaration)
   [(`(blank))
@@ -389,11 +408,15 @@
    (print-type `(gen ,name ,par-type-list))
    (print-each print-variant variant-list " {" "}" #:indent? #t)
    (newline)]
-  [(`(impl (for ,trait ,name) ,function-list ...))
-   (printf "impl ~a for ~a" trait name)
+  [(`(impl ,par-type-list (for ,trait ,name) ,function-list ...))
+   (print-type `(gen impl ,par-type-list))
+   (display " ")
+   (print-global trait)
+   (printf " for ")
+   (print-type `(gen ,name ,par-type-list))
    (print-each print-function function-list " {" "}" #:separator "" #:indent? #t)
    (newline)]
-  [(`(impl ,name ,par-type-list ,function-list ...))
+  [(`(impl ,par-type-list ,name ,function-list ...))
    (print-type `(gen impl ,par-type-list))
    (display " ")
    (print-type `(gen ,name ,par-type-list))
