@@ -190,7 +190,8 @@
                   (do (let-mut root_box (call build_layout_tree (node)))
                       (:= (select (select root_box container) width) (as width Pixels))
                     (call (select root_box layout) ())
-                    (call println! ("([VIEW :w {}] {})" width root_box))
+                    (call println! ("(define-layout (doc-2 :matched true :w {} :h {} :fs 16 :scrollw 0) ([VIEW :w {}] {}))"
+                                    width height width root_box))
                     (return root_box))))))
 
 (define fn-build_layout_tree
