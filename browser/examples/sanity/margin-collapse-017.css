@@ -1,0 +1,18 @@
+#div1
+{
+    border-bottom: solid;
+}
+div div
+{
+    height: 20px;
+    margin-top: 60px;
+    width: 60px;
+}
+#div2
+{
+    background: red;
+}
+#div3
+{
+    background: blue;
+}

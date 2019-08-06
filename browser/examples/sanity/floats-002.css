@@ -1,0 +1,13 @@
+#div1
+{
+    border: solid 5px black;
+    height: 1in;
+    width: 2in;
+}
+div div
+{
+    background-color: blue;
+    height: 1in;
+    float: right;
+    width: 1in;
+}

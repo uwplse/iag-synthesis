@@ -1,0 +1,17 @@
+#div1
+{
+    border: solid 5px black;
+    height: 1in;
+    width: 2in;
+}
+div div
+{
+    display: inline-block;
+    height: 1in;
+    width: 1in;
+}
+#div3
+{
+    background-color: blue;
+    float: left;
+}

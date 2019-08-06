@@ -1,37 +1,7 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<!-- saved from url=(0079)http://test.csswg.org/suites/css21_dev/20110323/html4/position-absolute-004.htm -->
-<html class="gr__test_csswg_org"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <title>CSS Test: Absolutely positioned elements establishes a new containing block for normal flow children</title>
-        <link rel="author" title="Microsoft" href="http://www.microsoft.com/">
-        <link rel="help" href="http://www.w3.org/TR/CSS21/visuren.html#absolute-positioning">
-        <meta name="flags" content="">
-        <meta name="assert" content="An absolutely positioned box establishes a new containing block for normal flow children.">
-        <style type="text/css">
-            #div1
-            {
-                height: 2in;
-                position: relative;
-                width: 2in;
-            }
-            div div
-            {
-                height: 1in;
-                width: 1in;
-            }
-            #div2
-            {
-                background: blue;
-                left: 1in;
-                height: 2in;
-                position: absolute;
-            }
-            #div3
-            {
-                background: orange;
-            }
-        </style>
+<html><head>
+        <link rel="stylesheet" type="text/css" href="position-absolute-004.css" />
     </head>
-    <body data-gr-c-s-loaded="true">
+    <body>
         <div id="div1">
             <div id="div2">
                 <div id="div3"></div>

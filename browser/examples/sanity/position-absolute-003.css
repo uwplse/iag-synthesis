@@ -1,0 +1,22 @@
+#div1
+{
+    height: 1in;
+    position: relative;
+    width: 2in;
+}
+#div2, #div3
+{
+    height: 1in;
+    width: 1in;
+}
+#div2
+{
+    background: red;
+}
+#div3
+{
+    background: green;
+    position: absolute;
+    left: 0;
+    top: 0;
+}

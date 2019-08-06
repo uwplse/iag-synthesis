@@ -1,0 +1,14 @@
+div div
+{
+    height: 20px;
+}
+#div1
+{
+    background: blue;
+    margin-bottom: 0;
+}
+#div2
+{
+    background: orange;
+    margin-top: -40px;
+}

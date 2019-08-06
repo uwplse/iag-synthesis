@@ -1,0 +1,18 @@
+div
+{
+    font: 20px/1em Ahem;
+    height: 5em;
+    width: 5em;
+}
+#div1
+{
+    height: 2em;
+    margin-top: 2em;
+    overflow: hidden;
+}
+#div2
+{
+    height: 1em;
+    background: red;
+    margin-top: 2em;
+}

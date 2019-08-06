@@ -1,0 +1,15 @@
+#div1, #div2
+{
+    height: 1in;
+    width: 1in;
+}
+#div1
+{
+    background: orange;
+    float: right;
+}
+#div2
+{
+    background: blue;
+    float: right;
+}

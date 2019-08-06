@@ -1,0 +1,24 @@
+div
+{
+    font: 20px/1em Ahem;
+    width: 5em;
+}
+#div1
+{
+    background: url('support/margin-collapse-2em-space.png');
+    height: 4em;
+}
+div div
+{
+    background: green;
+    height: 1em;
+}
+#div2
+{
+    margin-bottom: 1em;
+}
+#div3
+{
+    float: left;
+    margin-top: 1em;
+}

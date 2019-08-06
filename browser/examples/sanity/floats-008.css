@@ -1,0 +1,18 @@
+div
+{
+    height: 1in;
+    width: 1in;
+}
+#div1
+{
+    background-color: orange;
+}
+#div2
+{
+    background-color: blue;
+    float: left;
+}
+#div3
+{
+    background-color: red;
+}

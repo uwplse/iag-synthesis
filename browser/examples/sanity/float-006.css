@@ -1,0 +1,27 @@
+#rel-pos-containing-block {position: relative;}
+
+#green-overlapping-abs-pos
+{
+background-color: green;
+border-top: green solid 2em;
+border-bottom: green solid 2em;
+left: 0em;
+padding: 3em;
+position: absolute;
+width: 8em;
+z-index: auto;
+}
+
+#zero-height-first-float
+{
+float: left;
+width: 18em; /* or any other width number which would represent less than the document box width */
+}
+
+#red-overlapped-second-float
+{
+background-color: red;
+float: left;
+padding: 5em;
+width: 4em; 
+}

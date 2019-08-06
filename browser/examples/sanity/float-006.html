@@ -1,48 +1,9 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<!-- saved from url=(0067)http://test.csswg.org/suites/css21_dev/20110323/html4/float-006.htm -->
-<html class="gr__test_csswg_org"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
-  <title>CSS Test: floats - zero height empty float</title>
-
-  <link rel="author" title="Gérard Talbot" href="http://www.gtalbot.org/BrowserBugsSection/css21testsuite/">
-  <!-- Inspired by http://test.csswg.org/suites/css2.1/20100727/html4/floats-107.htm -->
-  <link rel="help" title="Section 9.5 Floats" href="http://www.w3.org/TR/CSS21/visuren.html#floats">
-  <meta content="A zero-height (margin-box) empty float without border and without padding will not require the line box to be shortened; in such case, the zero-height (margin-box) empty float will slide in or will fit in at the top of the line box." name="assert">
-  <meta content="" name="flags">
-
-  <style type="text/css">
-   #rel-pos-containing-block {position: relative;}
-
-   #green-overlapping-abs-pos
-   {
-   background-color: green;
-   border-top: green solid 2em;
-   border-bottom: green solid 2em;
-   left: 0em;
-   padding: 3em;
-   position: absolute;
-   width: 8em;
-   z-index: auto;
-   }
-
-   #zero-height-first-float
-   {
-   float: left;
-   width: 18em; /* or any other width number which would represent less than the document box width */
-   }
-   
-   #red-overlapped-second-float
-   {
-   background-color: red;
-   float: left;
-   padding: 5em;
-   width: 4em; 
-   }
-  </style>
+<html><head>
+  <link rel="stylesheet" type="text/css" href="float-006.css" />
 
  </head>
 
- <body data-gr-c-s-loaded="true">
+ <body>
 
 
   <div id="rel-pos-containing-block">

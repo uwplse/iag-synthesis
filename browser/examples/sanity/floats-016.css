@@ -1,0 +1,24 @@
+#container
+{
+    margin: 0.5in;
+}
+#inline
+{
+    background: yellow;
+    margin-left: -0.5in;
+}
+#float, #block
+{
+    height: 1in;
+    width: 1in;
+}
+#float
+{
+    background: orange;
+    float: left;
+}
+#block
+{
+    background: blue;
+    margin: -0.25in;
+}

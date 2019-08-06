@@ -1,0 +1,26 @@
+#d1 {
+    float: left;
+    background-color: pink;
+    height: 100px;
+    width: 500px;
+  }
+  #d2 {
+    float: right;
+    background-color: pink;
+    height: 100px;
+    width: 500px;
+  }
+  
+  #d2 {
+    float: right;
+    background-color: lightblue;
+    height: 100px;
+    width: 500px;
+  }
+  
+  #d3 {
+    float: left;
+    background-color: yellow;
+    height: 100px;
+    width: 4000px;
+  }

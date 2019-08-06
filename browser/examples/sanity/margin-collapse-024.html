@@ -1,38 +1,7 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<!-- saved from url=(0077)http://test.csswg.org/suites/css21_dev/20110323/html4/margin-collapse-024.htm -->
-<html class="gr__test_csswg_org"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <title>CSS Test: Margin collapsing - in-flow block-level margin adjoining child's margin</title>
-        <link rel="author" title="Microsoft" href="http://www.microsoft.com/">
-        <link rel="help" href="http://www.w3.org/TR/CSS21/box.html#collapsing-margins">
-        <meta name="flags" content="ahem image">
-        <meta name="assert" content="When an in-flow block-level element (#div3) is adjoining its in-flow block-level child&#39;s top margin and the child has no top border, no top padding or no clearance applied to it, then such top margins collapse.">
-        <style type="text/css">
-            div
-            {
-                font: 20px/1em Ahem;
-                width: 5em;
-            }
-            #div1
-            {
-                background: url('support/margin-collapse-2em-space.png');
-                height: 4em;
-            }
-            #div2, #div4
-            {
-                background: green;
-                height: 1em;
-            }
-            #div3
-            {
-                background: red;
-            }
-            #div3, #div4
-            {
-                margin-top: 2em;
-            }
-        </style>
+<html><head>
+        <link rel="stylesheet" type="text/css" href="margin-collapse-024.css" />
     </head>
-    <body data-gr-c-s-loaded="true">
+    <body>
         <div id="div1">
             <div id="div2"></div>
             <div id="div3">
