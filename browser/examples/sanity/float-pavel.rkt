@@ -36,7 +36,7 @@
 (define-document doc-1
   ([html :num 0]
    ([head :num 1]
-    ([style :num 2]))
+    ([link :num 2]))
    ([body :num 3]
     ([div :num 4 :id d1]) " "
     ([div :num 5 :id d2]) " "

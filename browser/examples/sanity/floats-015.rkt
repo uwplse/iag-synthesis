@@ -50,32 +50,26 @@
 (define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
   ([BLOCK :x 0 :y 0 :w 1280 :h 258 :elt 0]
-   ([BLOCK :x 8 :y 8 :w 1264 :h 242 :elt 9]
-    ([BLOCK :x 8 :y 8 :w 242 :h 242 :elt 10]
-     ([BLOCK :x 139 :y 23 :w 96 :h 96 :elt 11])
-     ([BLOCK :x 23 :y 23 :w 96 :h 96 :elt 12])
-     ([BLOCK :x 23 :y 139 :w 96 :h 96 :elt 13])
-     ([BLOCK :x 139 :y 139 :w 96 :h 96 :elt 14]))))))
+   ([BLOCK :x 8 :y 8 :w 1264 :h 242 :elt 3]
+    ([BLOCK :x 8 :y 8 :w 242 :h 242 :elt 4]
+     ([BLOCK :x 139 :y 23 :w 96 :h 96 :elt 5])
+     ([BLOCK :x 23 :y 23 :w 96 :h 96 :elt 6])
+     ([BLOCK :x 23 :y 139 :w 96 :h 96 :elt 7])
+     ([BLOCK :x 139 :y 139 :w 96 :h 96 :elt 8]))))))
 
 (define-document doc-1
-  ([html :num 0 :class (gr__test_csswg_org)]
+  ([html :num 0]
    ([head :num 1]
-    ([meta :num 2])
-    ([title :num 3])
-    ([link :num 4])
-    ([link :num 5])
-    ([meta :num 6])
-    ([meta :num 7])
-    ([style :num 8]))
-   ([body :num 9]
-    ([div :num 10 :id div1]
-     ([div :num 11 :id div2])
-     ([div :num 12])
-     ([div :num 13 :id div3]) " "
-     ([div :num 14 :id div4])) " ")))
+    ([link :num 2]))
+   ([body :num 3]
+    ([div :num 4 :id div1]
+     ([div :num 5 :id div2])
+     ([div :num 6])
+     ([div :num 7 :id div3]) " "
+     ([div :num 8 :id div4])) " ")))
 
 (define-problem doc-1
-  :title "CSS Test: Right floated elements margins do not collapse"
+  :title ""
   :url "file:///Users/yufeng/research/other/iag-synthesis/browser/examples/sanity/floats-015.html"
   :sheets firefox doc-1
   :fonts doc-1

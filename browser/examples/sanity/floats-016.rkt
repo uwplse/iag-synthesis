@@ -55,38 +55,32 @@
 (define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
   ([BLOCK :x 0 :y 0 :w 1280 :h 163.2 :elt 0]
-   ([BLOCK :x 8 :y 48 :w 1264 :h 91.2 :elt 9]
-    ([BLOCK :x 56 :y 48 :w 1168 :h 91.2 :elt 10]
+   ([BLOCK :x 8 :y 48 :w 1264 :h 91.2 :elt 3]
+    ([BLOCK :x 56 :y 48 :w 1168 :h 91.2 :elt 4]
      ([ANON]
       ([LINE]
-       ([INLINE :elt 11]
+       ([INLINE :elt 5]
         ([TEXT :x 104 :y 49.6 :w (/ 4007 60) :h 16 :text "Filler Text"]))
        ([TEXT :x (/ 10247 60) :y 49.6 :w 0 :h 16 :text " "])
-       ([BLOCK :x 56 :y 48 :w 96 :h 96 :elt 12]
+       ([BLOCK :x 56 :y 48 :w 96 :h 96 :elt 6]
         ([LINE]
          ([TEXT :x 56 :y 49.6 :w (/ 4007 60) :h 16 :text "Filler Text"])))))
-     ([BLOCK :x 32 :y 43.2 :w 96 :h 96 :elt 13]
+     ([BLOCK :x 32 :y 43.2 :w 96 :h 96 :elt 7]
       ([LINE]
        ([TEXT :x 32 :y 145.6 :w (/ 4007 60) :h 16 :text "Filler Text"]))))))))
 
 (define-document doc-1
-  ([html :num 0 :class (gr__test_csswg_org)]
+  ([html :num 0]
    ([head :num 1]
-    ([meta :num 2])
-    ([title :num 3])
-    ([link :num 4])
-    ([link :num 5])
-    ([meta :num 6])
-    ([meta :num 7])
-    ([style :num 8]))
-   ([body :num 9]
-    ([div :num 10 :id container]
-     ([span :num 11 :id inline] "Filler Text") " "
-     ([div :num 12 :id float] "Filler Text")
-     ([div :num 13 :id block] "Filler Text")) " ")))
+    ([link :num 2]))
+   ([body :num 3]
+    ([div :num 4 :id container]
+     ([span :num 5 :id inline] "Filler Text") " "
+     ([div :num 6 :id float] "Filler Text")
+     ([div :num 7 :id block] "Filler Text")) " ")))
 
 (define-problem doc-1
-  :title "CSS Test: Floated elements stacked with blocks and inline elements"
+  :title ""
   :url "file:///Users/yufeng/research/other/iag-synthesis/browser/examples/sanity/floats-016.html"
   :sheets firefox doc-1
   :fonts doc-1

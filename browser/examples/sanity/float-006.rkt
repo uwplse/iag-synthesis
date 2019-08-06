@@ -37,30 +37,24 @@
 (define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
   ([BLOCK :x 0 :y 0 :w 1280 :h 168 :elt 0]
-   ([BLOCK :x 8 :y 8 :w 1264 :h 0 :elt 9]
-    ([BLOCK :x 8 :y 8 :w 1264 :h 0 :elt 10]
-     ([BLOCK :x 8 :y 8 :w 224 :h 160 :elt 11])
-     ([BLOCK :x 8 :y 8 :w 288 :h 0 :elt 12])
-     ([BLOCK :x 8 :y 8 :w 224 :h 160 :elt 13]))))))
+   ([BLOCK :x 8 :y 8 :w 1264 :h 0 :elt 3]
+    ([BLOCK :x 8 :y 8 :w 1264 :h 0 :elt 4]
+     ([BLOCK :x 8 :y 8 :w 224 :h 160 :elt 5])
+     ([BLOCK :x 8 :y 8 :w 288 :h 0 :elt 6])
+     ([BLOCK :x 8 :y 8 :w 224 :h 160 :elt 7]))))))
 
 (define-document doc-1
-  ([html :num 0 :class (gr__test_csswg_org)]
+  ([html :num 0]
    ([head :num 1]
-    ([meta :num 2])
-    ([title :num 3])
-    ([link :num 4])
-    ([link :num 5])
-    ([meta :num 6])
-    ([meta :num 7])
-    ([style :num 8]))
-   ([body :num 9]
-    ([div :num 10 :id rel-pos-containing-block]
-     ([div :num 11 :id green-overlapping-abs-pos]) " "
-     ([div :num 12 :id zero-height-first-float]) " "
-     ([div :num 13 :id red-overlapped-second-float])) " ")))
+    ([link :num 2]))
+   ([body :num 3]
+    ([div :num 4 :id rel-pos-containing-block]
+     ([div :num 5 :id green-overlapping-abs-pos]) " "
+     ([div :num 6 :id zero-height-first-float]) " "
+     ([div :num 7 :id red-overlapped-second-float])) " ")))
 
 (define-problem doc-1
-  :title "CSS Test: floats - zero height empty float"
+  :title ""
   :url "file:///Users/yufeng/research/other/iag-synthesis/browser/examples/sanity/float-006.html"
   :sheets firefox doc-1
   :fonts doc-1

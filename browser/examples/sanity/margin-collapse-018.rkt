@@ -59,34 +59,28 @@
 (define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
   ([BLOCK :x 0 :y 0 :w 1280 :h 136 :elt 0]
-   ([BLOCK :x 8 :y 8 :w 1264 :h 120 :elt 9]
-    ([BLOCK :x 8 :y 8 :w 100 :h 120 :elt 10]
-     ([BLOCK :x 8 :y 8 :w 100 :h 20 :elt 11])
-     ([BLOCK :x 8 :y 28 :w 100 :h 60 :elt 12]
-      ([BLOCK :x 8 :y 28 :w 100 :h 60 :elt 13])
-      ([BLOCK :x 8 :y 88 :w 100 :h 0 :elt 14]))
-     ([BLOCK :x 8 :y 108 :w 100 :h 20 :elt 15]))))))
+   ([BLOCK :x 8 :y 8 :w 1264 :h 120 :elt 3]
+    ([BLOCK :x 8 :y 8 :w 100 :h 120 :elt 4]
+     ([BLOCK :x 8 :y 8 :w 100 :h 20 :elt 5])
+     ([BLOCK :x 8 :y 28 :w 100 :h 60 :elt 6]
+      ([BLOCK :x 8 :y 28 :w 100 :h 60 :elt 7])
+      ([BLOCK :x 8 :y 88 :w 100 :h 0 :elt 8]))
+     ([BLOCK :x 8 :y 108 :w 100 :h 20 :elt 9]))))))
 
 (define-document doc-1
-  ([html :num 0 :class (gr__test_csswg_org)]
+  ([html :num 0]
    ([head :num 1]
-    ([meta :num 2])
-    ([title :num 3])
-    ([link :num 4])
-    ([link :num 5])
-    ([meta :num 6])
-    ([meta :num 7])
-    ([style :num 8]))
-   ([body :num 9]
-    ([div :num 10 :id div1]
-     ([div :num 11 :class (class1)])
-     ([div :num 12 :id div2]
-      ([div :num 13 :id div3])
-      ([div :num 14 :id div4]))
-     ([div :num 15 :class (class1)])) " ")))
+    ([link :num 2]))
+   ([body :num 3]
+    ([div :num 4 :id div1]
+     ([div :num 5 :class (class1)])
+     ([div :num 6 :id div2]
+      ([div :num 7 :id div3])
+      ([div :num 8 :id div4]))
+     ([div :num 9 :class (class1)])) " ")))
 
 (define-problem doc-1
-  :title "CSS Test: Margin collapsing - element with clearance"
+  :title ""
   :url "file:///Users/yufeng/research/other/iag-synthesis/browser/examples/sanity/margin-collapse-018.html"
   :sheets firefox doc-1
   :fonts doc-1

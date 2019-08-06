@@ -47,28 +47,22 @@
 (define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
   ([BLOCK :x 0 :y 0 :w 1280 :h 148 :elt 0]
-   ([BLOCK :x 8 :y 40 :w 1264 :h 100 :elt 9]
-    ([BLOCK :x 8 :y 40 :w 100 :h 100 :elt 10]
-     ([BLOCK :x 8 :y 40 :w 100 :h 40 :elt 11]
-      ([BLOCK :x 8 :y 80 :w 100 :h 20 :elt 12])))))))
+   ([BLOCK :x 8 :y 40 :w 1264 :h 100 :elt 3]
+    ([BLOCK :x 8 :y 40 :w 100 :h 100 :elt 4]
+     ([BLOCK :x 8 :y 40 :w 100 :h 40 :elt 5]
+      ([BLOCK :x 8 :y 80 :w 100 :h 20 :elt 6])))))))
 
 (define-document doc-1
-  ([html :num 0 :class (gr__test_csswg_org)]
+  ([html :num 0]
    ([head :num 1]
-    ([meta :num 2])
-    ([title :num 3])
-    ([link :num 4])
-    ([link :num 5])
-    ([meta :num 6])
-    ([meta :num 7])
-    ([style :num 8]))
-   ([body :num 9]
-    ([div :num 10]
-     ([div :num 11 :id div1]
-      ([div :num 12 :id div2]))) " ")))
+    ([link :num 2]))
+   ([body :num 3]
+    ([div :num 4]
+     ([div :num 5 :id div1]
+      ([div :num 6 :id div2]))) " ")))
 
 (define-problem doc-1
-  :title "CSS Test: Margin collapsing and elements with 'overflow' set to 'hidden'"
+  :title ""
   :url "file:///Users/yufeng/research/other/iag-synthesis/browser/examples/sanity/margin-collapse-009.html"
   :sheets firefox doc-1
   :fonts doc-1
