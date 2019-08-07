@@ -1,0 +1,14 @@
+#box{
+    background-color: #080b0c;
+    height: 100px;
+    overflow: hidden;
+    padding: 0 15px;
+    position: relative;
+}
+#inside {
+    position: absolute;
+    right: 0px;
+    width: 100px;
+    height: 100%;
+    background: red;
+}
