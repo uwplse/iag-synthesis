@@ -331,6 +331,15 @@ pub struct Rect<T> {
 }
 
 impl<T: Additive> Rect<T> {
+    pub fn from_diagonal(origin: Point<T>, bound: Point<T>) -> Self {
+        Rect {
+            x: origin.x,
+            y: origin.y,
+            width: bound.x - origin.x,
+            height: bound.y - origin.y
+        }
+    }
+
     pub fn transform<U, F: Fn(T) -> U>(&self, f: F) -> Rect<U> {
         Rect {
             x: f(self.x),
@@ -387,8 +396,39 @@ impl<T: Additive> Rect<T> {
         }
     }
 
-    pub fn diagonal(&self) -> (Point<T>, Point<T>) {
+    pub fn to_diagonal(&self) -> (Point<T>, Point<T>) {
         (self.origin(), self.bound())
+    }
+}
+
+impl Rect<f32> {
+    // pub fn from_diagonal(origin: Point<f32>, bound: Point<f32>) -> Self {
+    //     assert!(0.0 <= origin.x);
+    //     assert!(0.0 <= origin.y);
+    //     assert!(origin.x <= bound.x);
+    //     assert!(origin.y <= bound.y);
+    //     Rect {
+    //         x: origin.x,
+    //         y: origin.y,
+    //         width: bound.x - origin.x,
+    //         height: bound.y - origin.y
+    //     }
+    // }
+
+    pub fn from_dimensions(width: f32, height: f32) -> Self {
+        Rect { x: 0.0, y: 0.0, width, height }
+    }
+
+    pub fn clip(&self, pt: Point<f32>) -> Point<f32> {
+        Point {
+            x: pt.x.max(self.x).min(self.width),
+            y: pt.y.max(self.y).min(self.height),
+        }
+    }
+
+    pub fn clip_rect(&self, rect: &Self) -> Self {
+        let (origin, bound) = rect.to_diagonal();
+        Rect::from_diagonal(self.clip(origin), self.clip(bound))
     }
 }
 

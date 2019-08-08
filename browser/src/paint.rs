@@ -103,13 +103,19 @@ impl std::ops::IndexMut<(usize, usize)> for Canvas {
 impl Canvas {
     /// Draw the output of a `DisplayCommand` onto this canvas.
     pub fn paint_command(&mut self, command: &DisplayCommand) {
-        let clip = |px: Pixels| px.max(0.0).min(self.width as f32).round() as usize;
+        let viewport = Rect::from_dimensions(self.width as f32, self.height as f32);
+        //let clip = |px: Pixels| px.max(0.0).min(self.width as f32).round() as usize;
         match command {
             SolidColor(color, rect) => {
                 // Clip the rectangle to the canvas boundaries.
-                let (origin, bound) = rect.transform(clip).diagonal();
-                for y in origin.y..=bound.y {
-                    for x in origin.x..=bound.x {
+                let (origin, bound) =
+                    viewport
+                        .clip_rect(rect)
+                        .transform(|px| px as usize)
+                        .to_diagonal();
+                //let (origin, bound) = rect.transform(clip).diagonal();
+                for y in origin.y..bound.y {
+                    for x in origin.x..bound.x {
                         self[(x, y)] = color.over(&self[(x, y)]);
                     }
                 }
