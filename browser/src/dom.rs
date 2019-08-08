@@ -36,7 +36,7 @@ impl DocumentTree {
         let mut document_root = if root_nodes.len() == 1 {
             root_nodes.into_iter().next().unwrap()
         } else {
-            DocumentNode::elem("html".to_string(), AttributeMap::default(), root_nodes)
+            DocumentNode::new_elem("html".to_string(), AttributeMap::default(), root_nodes)
         };
         document_root.number_preorder();
         DocumentTree { document_root }
@@ -48,7 +48,7 @@ impl DocumentNode {
     ///
     /// Note that node indices are assigned only when a complete `DocumentTree`
     /// is created from a root node.
-    pub fn text(data: String) -> Self {
+    pub fn new_text(data: String) -> Self {
         DocumentNode {
             index: 0,
             children: vec![],
@@ -60,7 +60,7 @@ impl DocumentNode {
     ///
     /// Note that node indices are assigned only when a complete `DocumentTree`
     /// is created from a root node.
-    pub fn elem(tag_name: String, attr_map: AttributeMap, children: Vec<Self>) -> Self {
+    pub fn new_elem(tag_name: String, attr_map: AttributeMap, children: Vec<Self>) -> Self {
         DocumentNode {
             index: 0,
             children: children,
@@ -71,7 +71,14 @@ impl DocumentNode {
         }
     }
 
-    pub fn text_of(&self) -> Option<&str> {
+    pub fn as_elem(&self) -> Option<&ElementData> {
+        match self.node_type {
+            NodeType::Element(ref elem) => Some(elem),
+            NodeType::Text(_) => None,
+        }
+    }
+
+    pub fn as_text(&self) -> Option<&str> {
         match self.node_type {
             NodeType::Element(_) => None,
             NodeType::Text(ref s) => Some(s),

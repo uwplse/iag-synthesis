@@ -202,7 +202,7 @@ impl Color {
         (r, g, b)
     }
 
-    pub fn too_rgb(&self) -> (u8, u8, u8) {
+    pub fn to_rgb(&self) -> (u8, u8, u8) {
         let r = ((self.r as u16) * (self.a as u16) / 255) as u8;
         let g = ((self.g as u16) * (self.a as u16) / 255) as u8;
         let b = ((self.b as u16) * (self.a as u16) / 255) as u8;
@@ -402,19 +402,6 @@ impl<T: Additive> Rect<T> {
 }
 
 impl Rect<f32> {
-    // pub fn from_diagonal(origin: Point<f32>, bound: Point<f32>) -> Self {
-    //     assert!(0.0 <= origin.x);
-    //     assert!(0.0 <= origin.y);
-    //     assert!(origin.x <= bound.x);
-    //     assert!(origin.y <= bound.y);
-    //     Rect {
-    //         x: origin.x,
-    //         y: origin.y,
-    //         width: bound.x - origin.x,
-    //         height: bound.y - origin.y
-    //     }
-    // }
-
     pub fn from_dimensions(width: f32, height: f32) -> Self {
         Rect { x: 0.0, y: 0.0, width, height }
     }

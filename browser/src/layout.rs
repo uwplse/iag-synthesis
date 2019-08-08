@@ -8,7 +8,7 @@
 /// attribute grammar. Please don't check in each new auto-generated version,
 /// especially while still debugging.
 
-use crate::dom::{DocumentNode, NodeIndex};
+use crate::dom::DocumentNode;
 use crate::style::{StyledTree, StyledNode, Style, DisplayMode};
 use crate::paint::DisplayList;
 use crate::utility::{Pixels, Edge, Rect, FloatCursor};
@@ -18,7 +18,7 @@ use itertools::Itertools;
 
 const CASSIUS_LAYOUT_NAME: &str = "doc-2";
 
-/// Construct the layout tree parallel to the style tree, returning it with all
+/// Construct the layout tree around to the style tree, returning it with all
 /// layout constraints solved.
 pub fn layout_tree<'a>(style_tree: &'a StyledTree<'a>, parameters: Parameters) -> LayoutTree<'a> {
     let mut layout_tree = LayoutTree::new(style_tree, parameters);
@@ -27,13 +27,8 @@ pub fn layout_tree<'a>(style_tree: &'a StyledTree<'a>, parameters: Parameters) -
 }
 
 /// Fold the layout tree into a display list to render.
-pub fn display_list<'a>(layout_tree: &'a LayoutTree<'a>) -> DisplayList {
+pub fn display_list(layout_tree: &LayoutTree) -> DisplayList {
     layout_tree.render()
-}
-
-/// Fold the layout tree into a display list to render.
-pub fn print_layout<'a>(layout_tree: &'a LayoutTree<'a>) {
-    println!("{}", layout_tree);
 }
 
 /// Output parameters.
@@ -64,15 +59,16 @@ impl<'a> LayoutTree<'a> {
 
 impl<'a> fmt::Display for LayoutTree<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let p =&self.parameters;
         let head = format!(
             "({} :matched true :w {} :h {} :fs {} :scrollw {})",
             CASSIUS_LAYOUT_NAME,
-            p.viewport_width, p.viewport_height, p.font_size, p.scrollbar_width
+            self.parameters.viewport_width, self.parameters.viewport_height,
+            self.parameters.font_size, self.parameters.scrollbar_width
         );
         let body = format!(
             "([VIEW :w {}] {})",
-            p.viewport_width, self.layout_root
+            self.parameters.viewport_width,
+            self.layout_root
         );
         write!(f, "(define-layout {} {})", head, body)
     }
@@ -141,7 +137,7 @@ impl<'a> LayoutNode<'a> {
         }
     }
 
-    /// Create an anonymous layout node to wrap a segment of
+    /// Create an anonymous layout node wrapping a segment of nodes.
     fn anon(wrapper_class: LayoutClass, parent_style: &'a Style, wrapped_nodes: Vec<Self>) -> Self {
         LayoutNode {
             document_node: None,
@@ -159,14 +155,6 @@ impl<'a> LayoutNode<'a> {
     fn is_anon(&self) -> bool {
         self.document_node.is_none()
     }
-
-    fn is_elem(&self) -> bool {
-        self.document_node.is_some()
-    }
-
-    fn doc_index(&self) -> Option<NodeIndex> {
-        self.document_node.map(|doc_node| doc_node.index)
-    }
 }
 
 impl<'a> fmt::Display for LayoutNode<'a> {
@@ -179,7 +167,7 @@ impl<'a> fmt::Display for LayoutNode<'a> {
             self.layout.content_box.height
         );
         let elem = self.document_node.map(|doc_node| doc_node.index);
-        let text = self.document_node.and_then(DocumentNode::text_of);
+        let text = self.document_node.and_then(DocumentNode::as_text);
         let header = match self.class {
             _ if self.is_anon() =>
                 String::from("[ANON]"),

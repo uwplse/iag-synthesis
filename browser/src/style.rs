@@ -4,9 +4,9 @@
 //! complicated if I add support for compound selectors.
 
 use crate::css::{
-    Declaration, Rule, Selector, SimpleSelector, Specificity, Stylesheet, Unit, Value,
+    self, Declaration, Rule, Selector, SimpleSelector, Specificity, Stylesheet, Unit, Value,
 };
-use crate::dom::{DocumentNode, DocumentTree, ElementData, NodeType};
+use crate::dom::{DocumentNode, DocumentTree, ElementData};
 use crate::utility::{
     Automatic::{self, Auto, Given},
     Pixels, Color, Edge,
@@ -21,23 +21,26 @@ pub fn style_tree<'a>(
     document_tree: &'a DocumentTree,
     stylesheet: &'a Stylesheet,
 ) -> StyledTree<'a> {
-    StyledTree::new(document_tree, stylesheet)
+    StyledTree::new(document_tree)
+        .cascade(&css::user_agent())
+        .cascade(stylesheet)
 }
 
 /// The full styled tree, with ownership of the composite styled nodes.
 pub struct StyledTree<'a> {
     pub document_tree: &'a DocumentTree,
-    pub stylesheet: &'a Stylesheet, // Not actually used for anything at the moment.
     pub style_root: StyledNode<'a>,
 }
 
 impl<'a> StyledTree<'a> {
-    pub fn new(document_tree: &'a DocumentTree, stylesheet: &'a Stylesheet) -> StyledTree<'a> {
-        StyledTree {
-            document_tree,
-            stylesheet,
-            style_root: StyledNode::new(&document_tree.document_root, stylesheet),
-        }
+    pub fn new(document_tree: &'a DocumentTree) -> StyledTree<'a> {
+        let style_root = StyledNode::new(&document_tree.document_root);
+        StyledTree { document_tree, style_root }
+    }
+
+    pub fn cascade(mut self, stylesheet: &Stylesheet) -> Self {
+        self.style_root.cascade(stylesheet);
+        self
     }
 }
 
@@ -49,18 +52,33 @@ pub struct StyledNode<'a> {
 }
 
 impl<'a> StyledNode<'a> {
-    pub fn new(document_node: &'a DocumentNode, stylesheet: &'a Stylesheet) -> StyledNode<'a> {
+    /// Construct the style tree, initializing style properties to their
+    /// CSS-defined defaults.
+    pub fn new(document_node: &'a DocumentNode) -> StyledNode<'a> {
         StyledNode {
             node: document_node,
-            specified: match document_node.node_type {
-                NodeType::Element(ref elem) => specified_values(elem, stylesheet),
-                NodeType::Text(_) => Style::initial(),
-            },
-            children: document_node
-                .children
+            specified: Style::initial(),
+            children: document_node.children
                 .iter()
-                .map(|child| StyledNode::new(child, stylesheet))
-                .collect(),
+                .map(StyledNode::new)
+                .collect()
+        }
+    }
+
+    /// Compute style properties throughout the style tree for a given stylesheet.
+    pub fn cascade(&mut self, stylesheet: &Stylesheet) {
+        let style = &mut self.specified;
+        if let Some(elem) = self.node.as_elem() {
+            let mut rules = matching_rules(elem, stylesheet);
+
+            // Go through the rules from lowest to highest specificity.
+            rules.sort_by(|&(a, _), &(b, _)| a.cmp(&b));
+            for (_, rule) in rules {
+                for declaration in &rule.declarations {
+                    style.apply_declaration(declaration);
+                }
+            }
+            style.display = style.display.floated(style.float);
         }
     }
 }
@@ -271,24 +289,6 @@ impl TryFrom<Bound> for Automatic<Pixels> {
             v => Err(format!("recognized but unimplemented keyword `{}`", v)),
         }
     }
-}
-
-/// Apply styles to a single element, returning the specified styles.
-///
-/// To do: Allow multiple UA/author/user stylesheets, and implement the cascade.
-fn specified_values(elem: &ElementData, stylesheet: &Stylesheet) -> Style {
-    let mut style = Style::initial();
-    let mut rules = matching_rules(elem, stylesheet);
-
-    // Go through the rules from lowest to highest specificity.
-    rules.sort_by(|&(a, _), &(b, _)| a.cmp(&b));
-    for (_, rule) in rules {
-        for declaration in &rule.declarations {
-            style.apply_declaration(declaration);
-        }
-    }
-    style.display = style.display.floated(style.float);
-    style
 }
 
 impl Style {

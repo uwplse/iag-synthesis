@@ -1,5 +1,5 @@
 
-pub static USER_AGENT_STYLESHEET: &str = "
+pub static STYLESHEET_SOURCE: &str = "
 html, address,
 blockquote,
 body, dd, div,
@@ -67,5 +67,10 @@ ol              { list-style-type: decimal; }
 ol ul, ul ol,
 ul ul, ol ol    { margin-top: 0; margin-bottom: 0; }
 u, ins          { text-decoration: underline; }
+br:before       { content: \"\\A\" }
+:before, :after { white-space: pre-line }
+center          { text-align: center }
+:link, :visited { text-decoration: underline }
+:focus          { outline: thin dotted invert }
 */
 ";

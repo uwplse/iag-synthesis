@@ -4,6 +4,7 @@ extern crate image;
 extern crate itertools;
 
 use std::fs;
+use std::path::{Path, PathBuf};
 
 pub mod css;
 pub mod dom;
@@ -17,23 +18,23 @@ pub mod user_agent;
 
 const COMMAND_NAME: &str = "browser";
 const COMMAND_HELP: &str = "
-Expects that a benchmark is located at \"examples/bug/$NAME.{{html,css}}\".
-Expects that a testcase is located at \"examples/sanity/$NAME.{{html,css}}\".
+Expects that any benchmark is located at \"examples/bug/$NAME.{{html,css}}\".
+Expects that any testcase is located at \"examples/sanity/$NAME.{{html,css}}\".
 
-Since benchmark (--bench), testcase (--test), and manual (--html, --css) are
-mutually exclusive modes of input, the program checks for each following a
-priority order: first benchmark (--bench), second testcase (--test), third
-manual (--html, --css), and fourth the default (\"examples/test.{{html,css}}\").
+The three input modes --- benchmark (--bench), testcase (--test), and manual
+(--html,--css) --- are all mutually exclusive. If no input mode is given, the
+default document and stylesheet (\"examples/test.{{html,css}}\") are used.
+
+Cassius output is only supported in the benchmark and testcase input modes.
 ";
 
 const DEFAULT_VIEWPORT_WIDTH: usize = 1280;
 const DEFAULT_VIEWPORT_HEIGHT: usize = 703;
 const DEFAULT_SCROLLBAR_WIDTH: usize = 0;
 const DEFAULT_FONT_SIZE: usize = 16;
-const DEFAULT_DOCUMENT: &str = "examples/test.html";
-const DEFAULT_STYLESHEET: &str = "examples/test.css";
-const DEFAULT_OUTPUT: &str = "output.png";
 
+const CASSIUS_READ_ERR: &str = "Error reading Cassius input.";
+const CASSIUS_WRITE_ERR: &str = "Error writing Cassius output.";
 
 /// Initialize a recognizer for the command-line interface.
 fn command_options() -> getopts::Options {
@@ -47,34 +48,47 @@ fn command_options() -> getopts::Options {
     opts.optopt("", "height", "Viewport height", "PIXELS");
     opts.optopt("", "scrollbar", "Scrollbar width", "PIXELS");
     opts.optopt("", "font-size", "Font size", "POINTS");
-    opts.optflag("", "dump-layout-tree", "Print Cassius layout tree");
+    //opts.optflag("", "dump-layout-tree", "Print Cassius layout tree");
+    opts.optflag("v", "cassius", "Output Cassius file");
     opts.optflag("h", "help", "Print this usage summary");
     opts
 }
 
-/// Indicate user's chosen inputs as a pair (HTML, CSS) of filenames.
-fn select_input_filenames(args: &getopts::Matches) -> (String, String) {
+fn path_to_input(args: &getopts::Matches, ext: &str) -> PathBuf {
+    if let Some(manual) = args.opt_str(ext) {
+        return PathBuf::from(manual);
+    }
+
+    let mut path = PathBuf::from("examples");
     if let Some(benchmark) = args.opt_str("bench") {
-        let html = format!("examples/bug/{}.html", benchmark);
-        let css = format!("examples/bug/{}.css", benchmark);
-        (html, css)
+        path.push("bug");
+        path.set_file_name(benchmark);
     } else if let Some(testcase) = args.opt_str("test") {
-        let html = format!("examples/sanity/{}.html", testcase);
-        let css = format!("examples/sanity/{}.css", testcase);
-        (html, css)
-    } else {
-        let html = args.opt_str("html").unwrap_or(DEFAULT_DOCUMENT.into());
-        let css = args.opt_str("css").unwrap_or(DEFAULT_STYLESHEET.into());
-        (html, css)
+        path.push("sanity");
+        path.set_file_name(testcase);
+    } else { // The default case
+        path.set_file_name("test");
+    }
+    path.set_extension(ext);
+    path
+}
+
+fn path_to_html(args: &getopts::Matches) -> PathBuf {
+    path_to_input(args, "html")
+}
+
+fn path_to_css(args: &getopts::Matches) -> PathBuf {
+    path_to_input(args, "css")
+}
+
+fn path_to_png(args: &getopts::Matches) -> PathBuf {
+    match args.opt_str("out") {
+        Some(filename) => PathBuf::from(filename),
+        None => PathBuf::from(String::from("output.png"))
     }
 }
 
-/// Get the user's chosen output filename.
-fn select_output_filename(args: &getopts::Matches) -> String {
-    args.opt_str("out").unwrap_or(DEFAULT_OUTPUT.into())
-}
-
-fn select_layout_parameters(args: &getopts::Matches) -> layout::Parameters {
+fn layout_parameters(args: &getopts::Matches) -> layout::Parameters {
     layout::Parameters {
         viewport_width:
             args.opt_get_default("width", DEFAULT_VIEWPORT_WIDTH)
@@ -89,6 +103,33 @@ fn select_layout_parameters(args: &getopts::Matches) -> layout::Parameters {
             args.opt_get_default("font-size", DEFAULT_FONT_SIZE)
                 .expect("Font size (--font-size) is malformed"),
     }
+}
+
+fn generate_cassius(html_path: &Path, layout_tree: &layout::LayoutTree) {
+    let mut path = html_path.with_extension("rkt"); // TODO: Use ".cassius"
+    let mut cassius = fs::read_to_string(&path).expect(CASSIUS_READ_ERR);
+
+    // Reuse the list of active CSS features from the captured Cassius problem.
+    let mut problem = String::from("
+(define-problem doc-2
+  :sheets baseline doc-1
+  :fonts doc-1
+  :documents doc-1
+  :layouts doc-2
+");
+    let features_index = cassius.find(":features").unwrap();
+    problem.push_str(&cassius[features_index..]);
+    assert_eq!(problem.matches('(').count(), 1);
+    assert_eq!(problem.matches(')').count(), 1);
+
+    // Append the layout entry and then the problem definition.
+    cassius.push('\n');
+    cassius.push_str(layout_tree.to_string().as_str());
+    cassius.push('\n');
+    cassius.push_str(problem.as_str());
+
+    path.set_extension("out.cassius");
+    fs::write(&path, cassius).expect(CASSIUS_WRITE_ERR);
 }
 
 fn main() {
@@ -107,22 +148,20 @@ fn main() {
     }
 
     // Gather requisite command-line arguments:
-    let (html_filename, css_filename) = select_input_filenames(&args);
-    let png_filename = select_output_filename(&args);
-    let layout_params = select_layout_parameters(&args);
+    let html_path = path_to_html(&args);
+    let css_path = path_to_css(&args);
+    let png_path = path_to_png(&args);
+    let layout_params = layout_parameters(&args);
 
     // Read input files:
-    let html = fs::read_to_string(html_filename).unwrap();
-    let css = fs::read_to_string(css_filename).unwrap();
+    let html = fs::read_to_string(&html_path).unwrap();
+    let css = fs::read_to_string(&css_path).unwrap();
 
     // Parse, style, layout, paint and raster:
     let document = html::parse_document(html);
     let stylesheet = css::parse(css);
     let style_tree = style::style_tree(&document, &stylesheet);
     let layout_tree = layout::layout_tree(&style_tree, layout_params);
-    if args.opt_present("dump-layout-tree") {
-        layout::print_layout(&layout_tree);
-    }
     let display_list = layout::display_list(&layout_tree);
     let canvas = paint::paint_canvas(
         &display_list,
@@ -131,8 +170,12 @@ fn main() {
     );
     let image = paint::buffer_image(&canvas);
 
+    if args.opt_present("cassius") {
+        generate_cassius(&html_path, &layout_tree);
+    }
+
     // Write image to output:
-    if let Err(err) = image.save_with_format(png_filename, ::image::PNG) {
-        println!("Error saving output image: {}", err)
+    if let Err(err) = image.save_with_format(png_path, ::image::PNG) {
+        eprintln!("Error saving output image: {}", err)
     }
 }

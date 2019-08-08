@@ -93,7 +93,7 @@ impl Parser {
             nodes
         };
 
-        DocumentNode::elem(tag_name, attr_map, children)
+        DocumentNode::new_elem(tag_name, attr_map, children)
     }
 
     /// Parse a tag or attribute name.
@@ -137,7 +137,7 @@ impl Parser {
 
     /// Parse a text node.
     fn parse_text(&mut self) -> DocumentNode {
-        DocumentNode::text(self.consume_while(|c| c != '<'))
+        DocumentNode::new_text(self.consume_while(|c| c != '<'))
     }
 
     /// Consume and discard zero or more whitespace characters.
