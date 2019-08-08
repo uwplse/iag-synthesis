@@ -1,13 +1,13 @@
 #div1
 {
-    height: 1in;
+    height: 96px;
     position: relative;
-    width: 2in;
+    width: 192px;
 }
 #div2, #div3
 {
-    height: 1in;
-    width: 1in;
+    height: 96px;
+    width: 96px;
 }
 #div2
 {
@@ -17,6 +17,6 @@
 {
     background: green;
     position: absolute;
-    left: 0;
-    top: 0;
+    left: 0px;
+    top: 0px;
 }

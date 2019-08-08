@@ -1,18 +1,18 @@
 div
 {
-    font: 20px/1em Ahem;
-    height: 5em;
-    width: 5em;
+    /* font: 20px/1em Ahem; */
+    height: 80px;
+    width: 80px;
 }
 #div1
 {
-    height: 2em;
-    margin-top: 2em;
+    height: 32px;
+    margin-top: 32px;
     overflow: scroll;
 }
 #div2
 {
     background: red;
-    height: 1em;
-    margin-top: 2em;
+    height: 16px;
+    margin-top: 16px;
 }

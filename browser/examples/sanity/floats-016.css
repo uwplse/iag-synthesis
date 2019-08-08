@@ -1,16 +1,16 @@
 #container
 {
-    margin: 0.5in;
+    margin: 48px;
 }
 #inline
 {
     background: yellow;
-    margin-left: -0.5in;
+    margin-left: -48px;
 }
 #float, #block
 {
-    height: 1in;
-    width: 1in;
+    height: 96px;
+    width: 96px;
 }
 #float
 {
@@ -20,5 +20,5 @@
 #block
 {
     background: blue;
-    margin: -0.25in;
+    margin: -24px;
 }

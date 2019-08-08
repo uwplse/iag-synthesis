@@ -1,19 +1,19 @@
 #div1
 {
-    height: 2in;
+    height: 192px;
     position: relative;
-    width: 2in;
+    width: 192px;
 }
 div div
 {
-    height: 1in;
-    width: 1in;
+    height: 96px;
+    width: 96px;
 }
 #div2
 {
     background: blue;
-    left: 1in;
-    height: 2in;
+    left: 96px;
+    height: 192px;
     position: absolute;
 }
 #div3

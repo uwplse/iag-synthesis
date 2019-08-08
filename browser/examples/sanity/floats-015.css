@@ -1,6 +1,8 @@
 #div1
 {
-    border: solid 5px black;
+    border-style: solid;
+    border-width: 5px;
+    border-color: black;
     height: 232px;
     width: 232px;
 }

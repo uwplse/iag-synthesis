@@ -6,10 +6,10 @@ div div
 #div1
 {
     background: blue;
-    margin-bottom: 2in;
+    margin-bottom: 192px;
 }
 #div2
 {
     background: orange;
-    margin-top: -2in;
+    margin-top: -192px;
 }
