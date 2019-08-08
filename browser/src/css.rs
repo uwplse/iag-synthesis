@@ -199,7 +199,9 @@ impl Parser {
         self.advance();
         let value = self.parse_value();
         self.advance();
-        assert_eq!(self.consume_char(), ';');
+        if self.next_char() != '}' {
+            assert_eq!(self.consume_char(), ';');
+        }
 
         Declaration {
             name: property_name,
