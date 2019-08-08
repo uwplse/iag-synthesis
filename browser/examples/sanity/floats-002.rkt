@@ -16,7 +16,7 @@
    #;[border-left-color black]
    [height (px 96)]
    [width (px 192)])
-  ((desc (tag div) (tag div))
+  ((id div2)
    [background-color blue]
    [height (px 96)]
    [float right]
@@ -38,7 +38,7 @@
     ([link :num 2]))
    ([body :num 3]
     ([div :num 4 :id div1]
-     ([div :num 5])) " ")))
+     ([div :num 5 :id div2])) " ")))
 
 (define-problem doc-1
   :title ""

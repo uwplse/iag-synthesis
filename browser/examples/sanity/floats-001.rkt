@@ -16,7 +16,11 @@
    #;[border-left-color black]
    [height (px 96)]
    [width (px 192)])
-  ((desc (tag div) (tag div))
+  ((id div2)
+   [display inline-block]
+   [height (px 96)]
+   [width (px 96)])
+  ((id div3)
    [display inline-block]
    [height (px 96)]
    [width (px 96)])

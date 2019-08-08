@@ -1,7 +1,9 @@
 ;; From file:///Users/yufeng/research/other/iag-synthesis/browser/examples/sanity/margin-collapse-004.html
 
 (define-stylesheet doc-1
-  ((desc (tag div) (tag div))
+  ((id div1)
+   [height (px 20)])
+  ((id div2)
    [height (px 20)])
   ((id div1)
    [background-color blue]

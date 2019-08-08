@@ -16,7 +16,7 @@
    #;[border-left-color black]
    [height (px 232)]
    [width (px 232)])
-  ((desc (tag div) (tag div))
+  ((class inner)
    [background-color blue]
    #;[background-position-x (% 0)]
    #;[background-position-y (% 0)]
@@ -58,10 +58,10 @@
     ([link :num 2]))
    ([body :num 3]
     ([div :num 4 :id div1]
-     ([div :num 5 :id div2])
-     ([div :num 6])
-     ([div :num 7 :id div3]) " "
-     ([div :num 8 :id div4])) " ")))
+     ([div :num 5 :id div2 :class (inner)])
+     ([div :num 6 :class (inner)])
+     ([div :num 7 :id div3 :class (inner)]) " "
+     ([div :num 8 :id div4 :class (inner)])) " ")))
 
 (define-problem doc-1
   :title ""

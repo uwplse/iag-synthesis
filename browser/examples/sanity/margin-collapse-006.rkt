@@ -14,7 +14,18 @@
    #;[background-origin padding-box]
    #;[background-clip border-box]
    [height (px 64)])
-  ((desc (tag div) (tag div))
+  ((id div2)
+   [background-color green]
+   #;[background-position-x (% 0)]
+   #;[background-position-y (% 0)]
+   #;[background-repeat repeat]
+   #;[background-attachment scroll]
+   #;[background-image none]
+   #;[background-size auto]
+   #;[background-origin padding-box]
+   #;[background-clip border-box]
+   [height (px 16)])
+  ((id div3)
    [background-color green]
    #;[background-position-x (% 0)]
    #;[background-position-y (% 0)]
