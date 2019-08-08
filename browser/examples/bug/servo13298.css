@@ -1,7 +1,7 @@
 body {
     margin: 0;
   }
-  
+
   .scrollbox {
     margin: 50px;
     width: 200px;
@@ -9,7 +9,7 @@ body {
     overflow: auto;
     background: red;
   }
-  
+
   .overlay {
     position: absolute;
     left: 50px;
