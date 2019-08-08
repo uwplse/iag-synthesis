@@ -8,30 +8,30 @@ use crate::user_agent;
 
 // Data structures:
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Stylesheet {
     pub rules: Vec<Rule>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Rule {
     pub selectors: Vec<Selector>,
     pub declarations: Vec<Declaration>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Selector {
     Simple(SimpleSelector),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SimpleSelector {
     pub tag: Option<String>,
     pub id: Option<String>,
     pub class: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Declaration {
     pub name: String,
     pub value: Value,
@@ -84,15 +84,14 @@ impl std::fmt::Display for Unit {
     }
 }
 
-/// Parse a whole CSS stylesheet.
+/// Parse a CSS stylesheet.
 pub fn parse(source: String) -> Stylesheet {
-    let mut parser = Parser {
-        pos: 0,
-        input: source + user_agent::USER_AGENT_STYLESHEET,
-    };
-    Stylesheet {
-        rules: parser.parse_rules(),
-    }
+    Stylesheet { rules: Parser::new(source).parse_rules() }
+}
+
+/// Parse the user agent stylesheet.
+pub fn user_agent() -> Stylesheet {
+    parse(user_agent::STYLESHEET_SOURCE.to_owned())
 }
 
 struct Parser {
@@ -101,6 +100,11 @@ struct Parser {
 }
 
 impl Parser {
+    /// Assemble initial parser state for an owned string of input.
+    fn new(input: String) -> Self {
+        Parser { pos: 0, input }
+    }
+
     /// Parse a list of rule sets, separated by optional whitespace.
     fn parse_rules(&mut self) -> Vec<Rule> {
         let mut rules = Vec::new();
