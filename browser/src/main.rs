@@ -62,12 +62,12 @@ fn path_to_input(args: &getopts::Matches, ext: &str) -> PathBuf {
     let mut path = PathBuf::from("examples");
     if let Some(benchmark) = args.opt_str("bench") {
         path.push("bug");
-        path.set_file_name(benchmark);
+        path.push(benchmark);
     } else if let Some(testcase) = args.opt_str("test") {
         path.push("sanity");
-        path.set_file_name(testcase);
+        path.push(testcase);
     } else { // The default case
-        path.set_file_name("test");
+        path.push("test");
     }
     path.set_extension(ext);
     path
