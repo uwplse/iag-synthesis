@@ -318,10 +318,10 @@ impl Style {
         }
     }
 
-    /// Create a syle record with each inherited-by-default property copied
-    /// the receiver, presumably the parent element's style record, and the
-    /// initialize the other (uninherited) properties anew, as in `initial()`.
-    pub fn inherit(&self) -> Style {
+    /// Create a style record with each inherited-by-default property copied
+    /// from a parent style record, initializing the other (uninherited)
+    /// properties anew, as in `initial()`.
+    pub fn inherit(_: &Self) -> Style {
         // Apparently none of these CSS properties is inherited.
         Style::initial()
     }

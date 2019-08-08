@@ -71,6 +71,13 @@ impl DocumentNode {
         }
     }
 
+    pub fn text_of(&self) -> Option<&str> {
+        match self.node_type {
+            NodeType::Element(_) => None,
+            NodeType::Text(ref s) => Some(s),
+        }
+    }
+
     /// Number each node in the document tree such that assigned node indices
     /// ascend with preorder traversal, also returning the maximal node index.
     ///

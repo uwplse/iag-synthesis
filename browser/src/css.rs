@@ -4,6 +4,7 @@
 //! hand-rolled parser with one based on a library or parser generator.
 
 use crate::utility::Color;
+use crate::user_agent;
 
 // Data structures:
 
@@ -87,7 +88,7 @@ impl std::fmt::Display for Unit {
 pub fn parse(source: String) -> Stylesheet {
     let mut parser = Parser {
         pos: 0,
-        input: source,
+        input: source + user_agent::USER_AGENT_STYLESHEET,
     };
     Stylesheet {
         rules: parser.parse_rules(),
