@@ -33,7 +33,7 @@
 (define-fonts doc-1
   [16 "serif" 400 normal 12 4 0 0 19.2])
 
-(define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
+(define-layout (doc-1 :matched true :w 1280 :h 737 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
   ([BLOCK :x 0 :y 0 :w 1280 :h 104 :elt 0]
    ([BLOCK :x 8 :y 8 :w 1264 :h 0 :elt 3]

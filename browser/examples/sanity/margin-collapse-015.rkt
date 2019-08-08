@@ -2,42 +2,24 @@
 
 (define-stylesheet doc-1
   ((tag div)
-   [font-style normal]
-   #;[font-variant-caps normal]
-   [font-weight normal]
-   #;[font-stretch normal]
-   [font-size (px 20)]
-   [line-height 0]
-   [font-family "Ahem"]
-   #;[font-size-adjust none]
-   #;[font-kerning auto]
-   #;[font-optical-sizing auto]
-   #;[font-variant-alternates normal]
-   #;[font-variant-east-asian normal]
-   #;[font-variant-ligatures normal]
-   #;[font-variant-numeric normal]
-   #;[font-variant-position normal]
-   #;[font-language-override normal]
-   #;[font-feature-settings normal]
-   #;[font-variation-settings normal]
-   [width (em 5)])
+   [width (px 80)])
   ((id div1)
-   [background-color transparent]
+   [background-color yellow]
    #;[background-position-x (% 0)]
    #;[background-position-y (% 0)]
    #;[background-repeat repeat]
    #;[background-attachment scroll]
-   #;[background-image url("support/margin-collapse-2em-space.png")]
+   #;[background-image none]
    #;[background-size auto]
    #;[background-origin padding-box]
    #;[background-clip border-box]
-   [height (em 4)])
+   [height (px 64)])
   ((id div2)
    [display inline-block]
-   [margin-bottom (em 1)])
+   [margin-bottom (px 16)])
   ((id div3)
    [display inline-block]
-   [margin-bottom (em 1)])
+   [margin-bottom (px 16)])
   ((id div3)
    [background-color green]
    #;[background-position-x (% 0)]
@@ -48,7 +30,7 @@
    #;[background-size auto]
    #;[background-origin padding-box]
    #;[background-clip border-box]
-   [height (em 1)])
+   [height (px 16)])
   ((id div4)
    [background-color green]
    #;[background-position-x (% 0)]
@@ -59,23 +41,22 @@
    #;[background-size auto]
    #;[background-origin padding-box]
    #;[background-clip border-box]
-   [height (em 1)]))
+   [height (px 16)]))
 
 (define-fonts doc-1
-  [16 "serif" 400 normal 12 4 0 0 19.2]
-  [20 "Ahem" 400 normal 15 5 0 0 24])
+  [16 "serif" 400 normal 12 4 0 0 19.2])
 
-(define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
+(define-layout (doc-1 :matched true :w 1280 :h 737 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
-  ([BLOCK :x 0 :y 0 :w 1280 :h 96 :elt 0]
-   ([BLOCK :x 8 :y 8 :w 1264 :h 80 :elt 3]
-    ([BLOCK :x 8 :y 8 :w 100 :h 80 :elt 4]
+  ([BLOCK :x 0 :y 0 :w 1280 :h 80 :elt 0]
+   ([BLOCK :x 8 :y 8 :w 1264 :h 64 :elt 3]
+    ([BLOCK :x 8 :y 8 :w 80 :h 64 :elt 4]
      ([ANON]
       ([LINE]
-       ([INLINE :x 8 :y 8 :w 100 :h 40 :elt 5]
+       ([INLINE :x 8 :y 8 :w 80 :h 32 :elt 5]
         ([LINE]
-         ([INLINE :x 8 :y 8 :w 100 :h 20 :elt 6])))))
-     ([BLOCK :x 8 :y 68 :w 100 :h 20 :elt 7]))))))
+         ([INLINE :x 8 :y 8 :w 80 :h 16 :elt 6])))))
+     ([BLOCK :x 8 :y 56 :w 80 :h 16 :elt 7]))))))
 
 (define-document doc-1
   ([html :num 0]
@@ -94,5 +75,5 @@
   :fonts doc-1
   :documents doc-1
   :layouts doc-1
-  :features css:font-size display:inline-block float:0)
+  :features display:inline-block float:0)
 
