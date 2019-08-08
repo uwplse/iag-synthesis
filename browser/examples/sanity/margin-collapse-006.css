@@ -8,7 +8,7 @@ div
     background: yellow; /* url('support/margin-collapse-2em-space.png'); */
     height: 64px;
 }
-div div
+#div2, #div3
 {
     background: green;
     height: 16px;

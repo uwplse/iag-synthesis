@@ -5,10 +5,10 @@ div
 }
 #div1
 {
-    background: url('support/margin-collapse-2em-space.png');
+    background: yellow; /* url('support/margin-collapse-2em-space.png'); */
     min-height: 64px;
 }
-div div
+#div2, #div3, #div4
 {
     background: green;
     height: 16px;

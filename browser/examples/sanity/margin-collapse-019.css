@@ -1,16 +1,18 @@
 div
 {
-    font: 20px/1em Ahem;
-    width: 5em;
+    /* font: 20px/1em Ahem; */
+    width: 80px;
 }
-div div
+#div2, #div3, #div4
 {
-    height: 1em;
+    height: 16px;
 }
 #div1
 {
-    background: url('support/margin-collapse-2em-space.png') left -1em;
-    border-top: 1em solid green;
+    background: yellow; /* url('support/margin-collapse-2em-space.png') left -1em; */
+    border-top-width: 16px;
+    border-top-style: solid;
+    border-top-color: green;
 }
 #div2
 {
@@ -19,12 +21,12 @@ div div
 #div3
 {
     background: red;
-    height: 0;
-    margin-top: 2em;
-    margin-bottom: 2em;
+    height: 0px;
+    margin-top: 32px;
+    margin-bottom: 32px;
 }
 #div4
 {
     background: green;
-    margin-top: 2em;
+    margin-top: 32px;
 }

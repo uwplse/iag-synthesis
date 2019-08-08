@@ -1,29 +1,29 @@
 div
 {
-    font: 20px/1em Ahem;
-    width: 5em;
+    /* font: 20px/1em Ahem; */
+    width: 80px;
 }
 #div1
 {
-    background: url('support/margin-collapse-4em-space.png');
-    height: 6em
+    background: yellow; /* url('support/margin-collapse-4em-space.png'); */
+    height: 96px
 }
 .class1
 {
     background: green;
-    height: 1em;
+    height: 16px;
 }
 #div2
 {
-    margin-bottom: 1em;
+    margin-bottom: 16px;
 }
 #div3
 {
     float: left;
-    height: 3em;
+    height: 48px;
 }
 #div4
 {
     clear: both;
-    margin-top: 1em;
+    margin-top: 16px;
 }

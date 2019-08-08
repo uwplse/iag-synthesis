@@ -1,17 +1,17 @@
 div
 {
-    font: 20px/1em Ahem;
-    width: 5em;
+    /* font: 20px/1em Ahem; */
+    width: 80px;
 }
 #div1
 {
-    background: url('support/margin-collapse-2em-space.png');
-    height: 4em;
+    background: blue; /* url('support/margin-collapse-2em-space.png'); */
+    height: 64px;
 }
 #div2, #div4
 {
     background: green;
-    height: 1em;
+    height: 16px;
 }
 #div3
 {
@@ -19,5 +19,5 @@ div
 }
 #div3, #div4
 {
-    margin-top: 2em;
+    margin-top: 32px;
 }
