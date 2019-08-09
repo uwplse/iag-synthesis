@@ -35,6 +35,14 @@ const DEFAULT_FONT_SIZE: usize = 16;
 
 const CASSIUS_READ_ERR: &str = "Error reading Cassius input.";
 const CASSIUS_WRITE_ERR: &str = "Error writing Cassius output.";
+const CASSIUS_PROBLEM: &str = "
+
+(define-problem doc-2
+  :sheets baseline doc-1
+  :fonts doc-1
+  :documents doc-1
+  :layouts doc-2)
+";
 
 /// Initialize a recognizer for the command-line interface.
 fn command_options() -> getopts::Options {
@@ -105,31 +113,16 @@ fn layout_parameters(args: &getopts::Matches) -> layout::Parameters {
     }
 }
 
-fn generate_cassius(html_path: &Path, layout_tree: &layout::LayoutTree) {
+fn output_cassius_layout(html_path: &Path, layout_tree: &layout::LayoutTree) {
     let mut path = html_path.with_extension("rkt"); // TODO: Use ".cassius"
-    let mut cassius = fs::read_to_string(&path).expect(CASSIUS_READ_ERR);
-
-    // Reuse the list of active CSS features from the captured Cassius problem.
-    let mut problem = String::from("
-(define-problem doc-2
-  :sheets baseline doc-1
-  :fonts doc-1
-  :documents doc-1
-  :layouts doc-2
-");
-    let features_index = cassius.find(":features").unwrap();
-    problem.push_str(&cassius[features_index..]);
-    assert_eq!(problem.matches('(').count(), 1);
-    assert_eq!(problem.matches(')').count(), 1);
+    let mut buffer = fs::read_to_string(&path).expect(CASSIUS_READ_ERR);
 
     // Append the layout entry and then the problem definition.
-    cassius.push('\n');
-    cassius.push_str(layout_tree.to_string().as_str());
-    cassius.push('\n');
-    cassius.push_str(problem.as_str());
+    buffer.push_str(layout_tree.to_string().as_str());
+    buffer.push_str(CASSIUS_PROBLEM);
 
     path.set_extension("out.cassius");
-    fs::write(&path, cassius).expect(CASSIUS_WRITE_ERR);
+    fs::write(&path, buffer).expect(CASSIUS_WRITE_ERR);
 }
 
 fn main() {
@@ -171,7 +164,7 @@ fn main() {
     let image = paint::buffer_image(&canvas);
 
     if args.opt_present("cassius") {
-        generate_cassius(&html_path, &layout_tree);
+        output_cassius_layout(&html_path, &layout_tree);
     }
 
     // Write image to output:
