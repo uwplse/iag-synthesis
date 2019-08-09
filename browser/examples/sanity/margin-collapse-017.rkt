@@ -5,7 +5,11 @@
    #;[border-bottom-color currentcolor]
    [border-bottom-style solid]
    [border-bottom-width medium])
-  ((desc (tag div) (tag div))
+  ((id div2)
+   [height (px 20)]
+   [margin-top (px 60)]
+   [width (px 60)])
+  ((id div3)
    [height (px 20)]
    [margin-top (px 60)]
    [width (px 60)])

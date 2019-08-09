@@ -1,7 +1,11 @@
 ;; From file:///Users/yufeng/research/other/iag-synthesis/browser/examples/sanity/adjacent-floats-001.html
 
 (define-stylesheet doc-1
-  ((desc (tag div) (tag div))
+  ((id div1)
+   [float left]
+   [height (px 16)]
+   [width (px 16)])
+  ((id div2)
    [float left]
    [height (px 16)]
    [width (px 16)])

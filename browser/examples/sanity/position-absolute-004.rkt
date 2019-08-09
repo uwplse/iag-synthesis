@@ -5,7 +5,10 @@
    [height (px 192)]
    [position relative]
    [width (px 192)])
-  ((desc (tag div) (tag div))
+  ((id div2)
+   [height (px 96)]
+   [width (px 96)])
+  ((id div3)
    [height (px 96)]
    [width (px 96)])
   ((id div2)
