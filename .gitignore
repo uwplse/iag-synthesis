@@ -8,3 +8,6 @@ browser/Cargo.lock
 browser/bin
 browser/target
 browser/output.*
+
+# Ignore test results
+*.out.cassius
