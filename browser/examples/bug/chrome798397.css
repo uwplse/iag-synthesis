@@ -1,8 +1,12 @@
+#wrapper {
+    overflow: hidden;
+}
+
 #float {
     background: blue;
     float: left;
     height: 30px;
-    float:left; 
+    float:left;
     width: 50px;
 }
 
@@ -11,6 +15,6 @@
     margin-top:50px;
     height: 50px;
     background: red;
-    width: 50px; 
+    width: 50px;
     clear:left
 }

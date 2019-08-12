@@ -1,20 +1,23 @@
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
+
 .box {
-  direction: rtl;
-  width: 220px;
-  height: 220px;
-  border: 1px solid black;
-  overflow-y: auto;
-  overflow-x: hidden;
+    direction: rtl;
+    width: 220px;
+    height: 220px;
+    border: 1px solid black;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
+
 .box:after {
     content: '';
     display: block;
     clear: both;
     height: 0;
 }
+
 .item {
     width: 55px;
     height: 55px;

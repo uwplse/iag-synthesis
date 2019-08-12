@@ -1,0 +1,22 @@
+#first {
+    position: absolute;
+    z-index: 2;
+    width: 100px;
+    height: 100px;
+    background: red;
+}
+
+#second {
+    position: absolute;
+    z-index: 1;
+    top: 50px;
+    left: 50px;
+    height: 100px;
+    width: 100px;
+    height: 100px;
+    background: green;
+}
+
+#third {
+    position: fixed;
+}
