@@ -6,32 +6,44 @@
    [width (px 300)])
   ((id inner)
    [display inline-block]
-   [width (% 100)]))
+   [width (px 300)])
+  ((id c1)
+   [width (px 20)]
+   [height (px 20)]
+   [background-color red]
+   #;[background-position-x (% 0)]
+   #;[background-position-y (% 0)]
+   #;[background-repeat repeat]
+   #;[background-attachment scroll]
+   #;[background-image none]
+   #;[background-size auto]
+   #;[background-origin padding-box]
+   #;[background-clip border-box])
+  ((id c2)
+   [width (px 20)]
+   [height (px 20)]
+   [background-color blue]
+   #;[background-position-x (% 0)]
+   #;[background-position-y (% 0)]
+   #;[background-repeat repeat]
+   #;[background-attachment scroll]
+   #;[background-image none]
+   #;[background-size auto]
+   #;[background-origin padding-box]
+   #;[background-clip border-box]))
 
 (define-fonts doc-1
   [16 "serif" 400 normal 12 4 0 0 19.2])
 
 (define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
-  ([BLOCK :x 0 :y 0 :w 1280 :h 150.4 :elt 0]
-   ([BLOCK :x 8 :y 8 :w 1264 :h 134.4 :elt 3]
-    ([BLOCK :x 8 :y 8 :w 300 :h 134.4 :elt 4]
+  ([BLOCK :x 0 :y 0 :w 1280 :h 61.6 :elt 0]
+   ([BLOCK :x 8 :y 8 :w 1264 :h 45.6 :elt 3]
+    ([BLOCK :x 8 :y 8 :w 300 :h 45.6 :elt 4]
      ([LINE]
-      ([INLINE :x 8 :y 8 :w 300 :h 134.4 :elt 5]
-       ([LINE]
-        ([TEXT :x 8 :y 9.6 :w (/ 1711 6) :h 16 :text " Bloobity bloobity bloobity bloobity bloobity "]))
-       ([LINE]
-        ([TEXT :x 8 :y 28.8 :w 282.5 :h 16 :text "bloobity bloobity bloobity bloobity bloobity "]))
-       ([LINE]
-        ([TEXT :x 8 :y 48 :w 282.5 :h 16 :text "bloobity bloobity bloobity bloobity bloobity "]))
-       ([LINE]
-        ([TEXT :x 8 :y 67.2 :w 282.5 :h 16 :text "bloobity bloobity bloobity bloobity bloobity "]))
-       ([LINE]
-        ([TEXT :x 8 :y 86.4 :w 282.5 :h 16 :text "bloobity bloobity bloobity bloobity bloobity "]))
-       ([LINE]
-        ([TEXT :x 8 :y 105.6 :w 282.5 :h 16 :text "bloobity bloobity bloobity bloobity bloobity "]))
-       ([LINE]
-        ([TEXT :x 8 :y 124.8 :w 110.6 :h 16 :text "bloobity bloobity "])))))))))
+      ([INLINE :x 8 :y 8 :w 300 :h 40 :elt 5]
+       ([BLOCK :x 8 :y 8 :w 20 :h 20 :elt 6])
+       ([BLOCK :x 8 :y 28 :w 20 :h 20 :elt 7]))))))))
 
 (define-document doc-1
   ([html :num 0]
@@ -39,7 +51,9 @@
     ([link :num 2]))
    ([body :num 3]
     ([div :num 4 :id outer]
-     ([div :num 5 :id inner] " Bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity bloobity ")) " ")))
+     ([div :num 5 :id inner]
+      ([div :num 6 :id c1])
+      ([div :num 7 :id c2]))) " ")))
 
 (define-problem doc-1
   :title ""

@@ -1,11 +1,17 @@
-.container {
+#container {
     width: 0px;
 }
 
-.breadcrumbs {
+#breadcrumbs {
   float: left;
+  height: 20px;
+  width: 20px;
+  background: red;
 }
 
-.content {
+#content {
   float: left;
+  height: 20px;
+  width: 20px;
+  background: blue;
 }
