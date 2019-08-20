@@ -41,16 +41,37 @@ pub struct Declaration {
 pub enum Value {
     Keyword(String),
     Length(f32, Unit),
+    Percent(f32),
     ColorValue(Color),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Unit {
+    Cm,
+    Mm,
+    Q,
+    In,
+    Pc,
+    Pt,
     Px,
     // Em,
-    // Pt,
-    // Cm,
-    // Mm,
+    // Rem,
+}
+
+impl Unit {
+    pub fn to_px(self, length: f32) -> f32 {
+        use Unit::*;
+
+        match self {
+            Cm => In.to_px(length) / 2.54,
+            Mm => Cm.to_px(length) / 10.0,
+            Q => Cm.to_px(length) / 40.0,
+            In => length * 96.0,
+            Pc => In.to_px(length) / 6.0,
+            Pt => In.to_px(length) / 72.0,
+            Px => length,
+        }
+    }
 }
 
 pub type Specificity = (usize, usize, usize);
@@ -71,6 +92,7 @@ impl std::fmt::Display for Value {
         match self {
             Value::Keyword(ref kw) => f.write_str(kw),
             Value::Length(l, u) => write!(f, "{}{}", l, u),
+            Value::Percent(p) => write!(f, "{}%", p),
             Value::ColorValue(c) => write!(f, "{}", c),
         }
     }
@@ -79,7 +101,14 @@ impl std::fmt::Display for Value {
 impl std::fmt::Display for Unit {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Unit::Cm => f.write_str("cm"),
+            Unit::Mm => f.write_str("mm"),
+            Unit::Q => f.write_str("Q"),
+            Unit::In => f.write_str("in"),
+            Unit::Pc => f.write_str("pc"),
+            Unit::Pt => f.write_str("pt"),
             Unit::Px => f.write_str("px"),
+            // Unit::Em => f.write_str("em"),
         }
     }
 }
@@ -213,27 +242,41 @@ impl Parser {
 
     fn parse_value(&mut self) -> Value {
         match self.next_char() {
-            '0'...'9' => self.parse_length(),
+            '-' | '0'...'9' | '.' => self.parse_length(),
             '#' => self.parse_color(),
             _ => Value::Keyword(self.parse_identifier()),
         }
     }
 
     fn parse_length(&mut self) -> Value {
-        Value::Length(self.parse_float(), self.parse_unit())
+        let number = self.parse_float();
+        if self.next_char() == '%' {
+            self.consume_char();
+            Value::Percent(number)
+        } else {
+            Value::Length(number, self.parse_unit())
+        }
     }
 
     fn parse_float(&mut self) -> f32 {
-        let s = self.consume_while(|c| match c {
-            '0'...'9' | '.' => true,
-            _ => false,
-        });
-        s.parse().unwrap()
+        self.consume_while(
+            |ch| match ch {
+                '-' | '0'...'9' | '.' => true,
+                _ => false
+            }
+        ).parse::<f32>().unwrap()
     }
 
     fn parse_unit(&mut self) -> Unit {
         match &*self.parse_identifier().to_ascii_lowercase() {
+            "cm" => Unit::Cm,
+            "mm" => Unit::Mm,
+            "q" => Unit::Q,
+            "in" => Unit::In,
+            "pc" => Unit::Pc,
+            "pt" => Unit::Pt,
             "px" => Unit::Px,
+            // "em" => Unit::Em,
             _ => panic!("unrecognized unit"),
         }
     }
@@ -288,18 +331,6 @@ impl Parser {
         self.pos += view.find(|ch| !pred(ch)).unwrap_or(view.len());
         self.input[base..self.pos].to_owned()
     }
-
-    // /// Consume characters until `test` returns false.
-    // fn consume_while<F>(&mut self, test: F) -> String
-    // where
-    //     F: Fn(char) -> bool,
-    // {
-    //     let mut result = String::new();
-    //     while !self.eof() && test(self.next_char()) {
-    //         result.push(self.consume_char());
-    //     }
-    //     result
-    // }
 
     /// Return the current character, and advance self.pos to the next character.
     fn consume_char(&mut self) -> char {

@@ -35,7 +35,11 @@ impl Color {
 
     pub fn by_css_name(name: &str) -> Option<Color> {
         let rgb = |r, g, b| Some(Color::rgb(r, g, b));
+        let rgba = |r, g, b, a| Some(Color::rgba(r, g, b, a));
         match name {
+            // Special colors
+            "transparent" => rgba(0, 0, 0, 0),
+
             // VGA colors
             "black" => rgb(0x00, 0x00, 0x00),
             "silver" => rgb(0xc0, 0xc0, 0xc0),
@@ -557,11 +561,113 @@ impl FloatCursor {
         FloatCursor { block, inline }
     }
 
-    pub fn add_left(&self, content: &Rect<Pixels>) -> FloatCursor {
-        self.advance(content.y, FloatLevel::left(&content))
+    pub fn insert_left(&self, content: &Rect<Pixels>) -> FloatCursor {
+        if content.height > 0.0 {
+            self.advance(content.y, FloatLevel::left(&content))
+        } else {
+            self.clone()
+        }
     }
 
-    pub fn add_right(&self, content: &Rect<Pixels>) -> FloatCursor {
-        self.advance(content.y, FloatLevel::right(&content))
+    pub fn insert_right(&self, content: &Rect<Pixels>) -> FloatCursor {
+        if content.height > 0.0 {
+            self.advance(content.y, FloatLevel::right(&content))
+        } else {
+            self.clone()
+        }
+    }
+
+    pub fn place_left(&self, container: &Rect<Pixels>, width: Pixels) -> (Pixels, Pixels) {
+        let mut y = self.block.max(container.y);
+        let x = container.x;
+        for level in &self.inline {
+            // Is the proposed left-floating anchor above this layer of
+            // floated boxes? If so, it doesn't tell us anything.
+            if level.bottom < y {
+                continue;
+            }
+            // Would this layer of floated boxes force the proposed
+            // left-floating anchor to shift excessively, thus overflowing
+            // it's container? If so, then we must do better.
+            if level.left - x > container.width - width {
+                y = level.bottom; // descend below this layer
+                continue;
+            }
+            let x = level.left.max(x);
+            // Does this layer of floated boxes have enough interior
+            // width available to use the proposed left-floating anchor?
+            // If so, then we must do better.
+            if level.right - x < width {
+                y = level.bottom; // descend below this layer
+                continue;
+            }
+            return (x, y);
+        }
+
+        // At this point, we've descended beyond the existing layers of
+        // floated boxes.
+        (x, y)
+    }
+
+    pub fn place_right(&self, container: &Rect<Pixels>, width: Pixels) -> (Pixels, Pixels) {
+        let mut y = self.block.max(container.y);
+        let x = container.x + container.width;
+        for level in &self.inline {
+            // Is the proposed right-floating anchor above this layer of
+            // floated boxes? If so, it doesn't tell us anything.
+            if level.bottom < y {
+                continue;
+            }
+            // Would this layer of floated boxes force the proposed
+            // right-floating anchor to shift excessively, thus overflowing
+            // it's container? If so, then we must do better.
+            if x - level.right > container.width - width {
+                y = level.bottom; // descend below this layer
+                continue;
+            }
+            let x = level.right.min(x);
+            // Does this layer of floated boxes have enough interior
+            // width available to use the proposed right-floating anchor?
+            // If so, then we must do better.
+            if x - level.left < width {
+                y = level.bottom; // descend below this layer
+                continue;
+            }
+            return (x - width, y);
+        }
+
+        // At this point, we've descended beyond the existing layers of
+        // floated boxes.
+        (x - width, y)
+    }
+
+    pub fn clear_left(&self, block: Pixels) -> Pixels {
+        self.inline.last().map_or(self.block, |l| l.bottom).max(block) - block
+    }
+
+    pub fn clear_right(&self, block: Pixels) -> Pixels {
+        self.inline.last().map_or(self.block, |l| l.bottom).max(block) - block
     }
 }
+
+/*
+#[derive(Clone, Debug)]
+struct Pen {
+    char_count: u32, // number of characters/atoms, including the current line
+    line_count: u32, // number of lines, including the current line
+    current: LineData, // active, continued line box
+    previous: Vec<(u32, LineData)>, // inactive, completed line boxes
+    floating_impact: FloatImpact, // e.g., left/right width used
+    floating_context: FloatContext, // potentially updated
+}
+*/
+
+/*
+pub enum Inline {
+    TextRun, InlineFlow, BlockRoot, FloatedBox, Replaced,
+}
+
+pub enum Block {
+    InlineRoot, BlockFlow, BlockRoot, Floated, Replaced
+}
+*/

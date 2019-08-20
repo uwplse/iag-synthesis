@@ -38,7 +38,7 @@ const CASSIUS_WRITE_ERR: &str = "Error writing Cassius output.";
 const CASSIUS_PROBLEM: &str = "
 
 (define-problem doc-2
-  :sheets baseline doc-1
+  :sheets default doc-1
   :fonts doc-1
   :documents doc-1
   :layouts doc-2)
@@ -56,13 +56,13 @@ fn command_options() -> getopts::Options {
     opts.optopt("", "height", "Viewport height", "PIXELS");
     opts.optopt("", "scrollbar", "Scrollbar width", "PIXELS");
     opts.optopt("", "font-size", "Font size", "POINTS");
-    //opts.optflag("", "dump-layout-tree", "Print Cassius layout tree");
+    opts.optflag("", "dump-layout-tree", "Print Cassius layout tree");
     opts.optflag("v", "cassius", "Output Cassius file");
     opts.optflag("h", "help", "Print this usage summary");
     opts
 }
 
-fn path_to_input(args: &getopts::Matches, ext: &str) -> PathBuf {
+fn path_to_file(args: &getopts::Matches, ext: &str) -> PathBuf {
     if let Some(manual) = args.opt_str(ext) {
         return PathBuf::from(manual);
     }
@@ -82,18 +82,17 @@ fn path_to_input(args: &getopts::Matches, ext: &str) -> PathBuf {
 }
 
 fn path_to_html(args: &getopts::Matches) -> PathBuf {
-    path_to_input(args, "html")
+    path_to_file(args, "html")
 }
 
 fn path_to_css(args: &getopts::Matches) -> PathBuf {
-    path_to_input(args, "css")
+    path_to_file(args, "css")
 }
 
 fn path_to_png(args: &getopts::Matches) -> PathBuf {
-    match args.opt_str("out") {
-        Some(filename) => PathBuf::from(filename),
-        None => PathBuf::from(String::from("output.png"))
-    }
+    let mut path = path_to_file(args, "out");
+    path.set_extension("png");
+    path
 }
 
 fn layout_parameters(args: &getopts::Matches) -> layout::Parameters {
@@ -162,6 +161,10 @@ fn main() {
         layout_params.viewport_height
     );
     let image = paint::buffer_image(&canvas);
+
+    if args.opt_present("dump-layout-tree") {
+        println!("{}", layout_tree);
+    }
 
     if args.opt_present("cassius") {
         output_cassius_layout(&html_path, &layout_tree);

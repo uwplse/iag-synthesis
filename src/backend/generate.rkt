@@ -12,121 +12,46 @@
 (define directives
   (list '(hash-bang allow (unused_parens))
         '(hash-bang allow (unused_variables))
-        '(hash-bang allow (non_snake_case))
         '(hash-bang allow (dead_code))
         '(blank)))
 
 (define imports
-  (list '(use crate dom)
-        '(use crate style (StyledNode Style Display Edge Pixels))
-        '(use crate paint (DisplayList DisplayCommand))
-        '(use std default Default)
-        '(use std fmt)
+  (list '(use crate dom DocumentNode)
+        '(use crate style (StyledTree StyledNode Style DisplayType Floated Positioned))
+        '(use crate paint DisplayList)
+        '(use crate utility (Pixels Edge Rect FloatCursor))
+        '(use crate utility (MarginAccumulator FloatCursor))
+        '(use crate lazy Lazy)
         '(use itertools Itertools)))
 
-(define struct-Rect
+(define struct-Layout
   (list '(blank)
-        '(hash derive (Clone Copy Default PartialEq Debug))
-        '(struct Rect ()
-           (record (: x Pixels)
-                   (: y Pixels)
-                   (: width Pixels)
-                   (: height Pixels)))))
-
-(define impl-Rect-expanded_by
-  (list '(blank)
-        '(impl () Rect
-               (fn expanded_by () ((: self (ref Self)) (: edge (gen Edge (Pixels)))) Rect
-                   (do (return (struct Rect
-                                 ((: x (- (select self x) (select edge left)))
-                                  (: y (- (select self y) (select edge top)))
-                                  (: width (+ (select self width) (+ (select edge left) (select edge right))))
-                                  (: height (+ (select self height) (+ (select edge top) (select edge bottom))))))))))))
-
-(define struct-CollapsibleMargin
-  (list '(blank)
-        '(hash derive (Clone Copy Default PartialEq Debug))
-        '(struct CollapsibleMargin ()
-           (record (: positive Pixels)
-                   (: negative Pixels)
-                   (: collapse bool)))))
-
-(define struct-MarginAccumulator
-  (list '(blank)
-        '(hash derive (Clone Copy Default PartialEq Debug))
-        '(struct MarginAccumulator ()
-           (record (: clearance bool)
-                   (: weirdness bool)
-                   (: top CollapsibleMargin)
-                   (: bottom CollapsibleMargin)))))
-
-(define struct-FloatItem
-  (list '(blank)
-        '(hash derive (Clone Copy Default PartialEq Debug))
-        '(struct FloatItem ()
-            (record (: adjusted Pixels)
-                    (: available Pixels)
-                    (: width Pixels)
-                    (: height Pixels)
-                    (: clearance bool)))))
-
-(define struct-FloatList
-  (list '(blank)
-        '(hash derive (Clone))
-        '(struct FloatList () (tuple (gen Vec (FloatItem))))))
-
-(define impl-FloatList
-  (list '(blank) ; TODO
-        '(impl () FloatList
-            (fn empty () () FloatList (do (return (call FloatList ((call (:: Vec new) ()))))))
-            ;(blank)
-            (fn addLeft () ((: self (ref Self))
-                            (: adjusted Pixels) (: available Pixels)
-                            (: width Pixels) (: height Pixels)
-                            (: clearance bool))
-              FloatList
-              (do (let-mut list (call (select self clone) ()))
-                  (let item (struct FloatItem
-                              ((: adjusted adjusted) (: available available)
-                               (: width width) (: height height)
-                               (: clearance clearance))))
-                  (call (select (select list 0) push) (item))
-                  (return list)
-                )
-              )
-            )
-        ))
-
-(define enum-BoxType
-  (list '(blank)
-        '(hash derive (Clone Copy PartialEq Eq Debug))
-        '(enum BoxType ()
-               (variant None (unit))
-               (variant Inline (unit))
-               (variant Block (unit))
-               (variant Float (unit)))))
+        '(hash derive (Clone Default PartialEq Debug))
+        '(struct Layout ()
+           (record (: container (gen Rect (Pixels)))
+                   (: content_box (gen Rect (Pixels)))
+                   (: padding_box (gen Rect (Pixels)))
+                   (: border_box (gen Rect (Pixels)))
+                   (: margin_box (gen Rect (Pixels)))
+                   (: flow_height Pixels)
+                   (: margin_clear bool)
+                   (: margin_weird bool)
+                   (: margin_above MarginAccumulator)
+                   (: margin_below MarginAccumulator)
+                   (: padding (gen Edge (Pixels)))
+                   (: border (gen Edge (Pixels)))
+                   (: margin (gen Edge (Pixels)))
+                   (: float_cursor (gen Lazy (FloatCursor)))
+                   (: underflow Pixels)))))
 
 (define struct-LayoutBox
   (list '(blank)
         '(struct LayoutBox ((life a))
-           (record (: element (gen Option ((:: dom NodeId))))
-                   (: container Rect)
-                   (: content_box Rect)
-                   (: padding_box Rect)
-                   (: border_box Rect)
-                   (: margin_box Rect)
-                   (: computedHeight Pixels)
-                   (: margin_acc MarginAccumulator)
-                   (: padding (gen Edge (Pixels)))
-                   (: border (gen Edge (Pixels)))
-                   (: margin (gen Edge (Pixels)))
-                   (: floatLstIn FloatList)
-                   (: floatLstOut FloatList)
-                   (: underflow Pixels)
+           (record (: element (gen Option ((ref a DocumentNode))))
+                   (: class LayoutClass)
+                   (: layout Layout)
                    (: style (ref a Style))
-                   (: anonymous bool)
-                   (: class BoxType)
-                   (: children (gen Vec ((gen LayoutBox ((life a))))))))))
+                   (: children (gen Vec ((gen LayoutNode ((life a))))))))))
 
 (define impl-LayoutBox-new
   (list '(blank)
@@ -274,14 +199,7 @@
 (define header
   (append directives
           imports
-          struct-Rect
-          impl-Rect-expanded_by
-          struct-CollapsibleMargin
-          struct-MarginAccumulator
-          struct-FloatItem
-          struct-FloatList
-          impl-FloatList
-          enum-BoxType
+          struct-Layout
           struct-LayoutBox
           impl-LayoutBox-new
           impl-Display-for-LayoutBox
@@ -326,6 +244,19 @@
           (map generate-label-field (ag:interface-labels interface))))
 
   `(struct ,sort () (record . ,fields)))
+
+(define (generate-class-enumeration interface)
+  (define sort (ag:interface-name interface))
+  (define type-name (symbol-append sort 'Class))
+
+  (define variants
+    (for/list ([class (ag:interface-classes interface)])
+      (define tag (ag:class-name class))
+      `(variant ,tag (unit))))
+
+  (list '(blank)
+        '(hash derive (Clone Copy PartialEq Eq Debug))
+        `(enum ,type-name . ,variants)))
 
 (define (generate-structure G)
   (define interfaces (ag:grammar-interfaces G))
@@ -417,7 +348,7 @@
   (define pattern `(constructor ,variant (record . ,fields)))
   (define body (append-map (curry generate-command name class) (flatten commands)))
 
-  `(=> (constructor (:: BoxType ,kind) (unit)) (do . ,body)))
+  `(=> (constructor (:: LayoutClass ,kind) (unit)) (do . ,body)))
 
 (define (generate-traversal G traversal)
   (define name (ag:traversal-name traversal))
@@ -432,12 +363,12 @@
     `(impl ((life a)) ,sort
            (fn ,name () ((: self (ref (mut Self)))) (unit)
                (do (match (select self class)
-                     (=> (constructor (:: BoxType None) (unit)) (skip))
+                     (=> (constructor (:: LayoutClass None) (unit)) (skip))
                      .
                      ,cases))))))
 
 (define (generate-program G S)
-  (append header
+  (append ;header
           ;(add-between (generate-structure G) `(blank))
           (list `(blank))
           (add-between (generate-traversal G S) `(blank))))

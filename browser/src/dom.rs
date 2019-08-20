@@ -8,7 +8,7 @@ pub struct DocumentTree {
 
 /// A node of the document tree (a baby DOM tree).
 pub struct DocumentNode {
-    pub index: NodeIndex,
+    pub index: NodeIndex, // N.B., meaningless for text!
     pub children: Vec<DocumentNode>,
     pub node_type: NodeType,
 }
@@ -85,6 +85,18 @@ impl DocumentNode {
         }
     }
 
+    pub fn is_elem(&self) -> bool {
+        self.as_elem().is_some()
+    }
+
+    pub fn is_text(&self) -> bool {
+        self.as_text().is_some()
+    }
+
+    pub fn tag(&self) -> Option<&str> {
+        self.as_elem().map(|elem| elem.tag.as_ref())
+    }
+
     /// Number each node in the document tree such that assigned node indices
     /// ascend with preorder traversal, also returning the maximal node index.
     ///
@@ -92,7 +104,7 @@ impl DocumentNode {
     /// invoked as the tree root, assigning it node index 0.
     fn number_preorder(&mut self) -> NodeIndex {
         let mut i = self.index;
-        for child in self.children.iter_mut() {
+        for child in self.children.iter_mut().filter(|node| node.is_elem()) {
             child.index = i + 1;
             i = child.number_preorder();
         }

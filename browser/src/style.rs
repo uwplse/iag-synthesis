@@ -4,7 +4,7 @@
 //! complicated if I add support for compound selectors.
 
 use crate::css::{
-    self, Declaration, Rule, Selector, SimpleSelector, Specificity, Stylesheet, Unit, Value,
+    self, Declaration, Rule, Selector, SimpleSelector, Specificity, Stylesheet, Value,
 };
 use crate::dom::{DocumentNode, DocumentTree, ElementData};
 use crate::utility::{
@@ -54,7 +54,7 @@ pub struct StyledNode<'a> {
 impl<'a> StyledNode<'a> {
     /// Construct the style tree, initializing style properties to their
     /// CSS-defined defaults.
-    pub fn new(document_node: &'a DocumentNode) -> StyledNode<'a> {
+    pub fn new(document_node: &'a DocumentNode) -> Self {
         StyledNode {
             node: document_node,
             specified: Style::initial(),
@@ -78,8 +78,14 @@ impl<'a> StyledNode<'a> {
                     style.apply_declaration(declaration);
                 }
             }
-            style.display = style.display.floated(style.float);
         }
+        for child in &mut self.children {
+            child.cascade(stylesheet);
+        }
+    }
+
+    pub fn as_text(&self) -> Option<&str> {
+        self.node.as_text()
     }
 }
 
@@ -87,10 +93,20 @@ impl<'a> StyledNode<'a> {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Style {
     // layout mode
-    pub display: DisplayMode,
+    pub display: DisplayType,
     pub position: Positioned,
     pub float: Floated,
     pub clear: Clearance,
+    pub overflow: Overflow,
+
+    // positioning offsets
+    pub left: Option<Pixels>,
+    pub right: Option<Pixels>,
+    pub top: Option<Pixels>,
+    pub bottom: Option<Pixels>,
+
+    // font metrics
+    pub font_size: Pixels,
 
     // box colors
     pub background_color: Color,
@@ -118,26 +134,16 @@ pub struct Style {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DisplayMode {
+pub enum DisplayType {
     Inline,
+    InlineBlock,
     Block,
-    Float, // A virtual layout mode for `display: block` with `float: left|right`.
     None,
 }
 
-impl Default for DisplayMode {
+impl Default for DisplayType {
     fn default() -> Self {
-        DisplayMode::Inline
-    }
-}
-
-impl DisplayMode {
-    pub fn floated(self, floating: Floated) -> DisplayMode {
-        if self == DisplayMode::None || floating == Floated::None {
-            self
-        } else {
-            DisplayMode::Float
-        }
+        DisplayType::Inline
     }
 }
 
@@ -156,6 +162,15 @@ impl Default for Positioned {
     }
 }
 
+impl Positioned {
+    pub fn is_positioned(self) -> bool {
+        match self {
+            Positioned::Absolute | Positioned::Fixed => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Floated {
     Left,
@@ -166,6 +181,15 @@ pub enum Floated {
 impl Default for Floated {
     fn default() -> Self {
         Floated::None
+    }
+}
+
+impl Floated {
+    pub fn is_floated(self) -> bool {
+        match self {
+            Floated::Left | Floated::Right => true,
+            Floated::None => false,
+        }
     }
 }
 
@@ -203,7 +227,7 @@ impl Default for Clearance {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Size {
     // {width,height}
-    Length(f32, Unit),
+    Length(f32), // in pixels
     Percent(f32),
     // border-box
     BorderBox,
@@ -235,7 +259,7 @@ impl TryFrom<Size> for Automatic<Pixels> {
     fn try_from(s: Size) -> Result<Self, Self::Error> {
         match s {
             Size::Auto => Ok(Auto),
-            Size::Length(px, Unit::Px) => Ok(Given(px)),
+            Size::Length(px) => Ok(Given(px)),
             v => Err(v),
         }
     }
@@ -244,7 +268,7 @@ impl TryFrom<Size> for Automatic<Pixels> {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Bound {
     // {min,max}-{width,height}
-    Length(f32, Unit),
+    Length(f32), // in pixels
     Percent(f32),
     // {auto,none} = the otherwise default behavior
     Auto,
@@ -268,7 +292,7 @@ impl Default for Bound {
 impl std::fmt::Display for Bound {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Bound::Length(px, Unit::Px) => write!(f, "{}px", px),
+            Bound::Length(px) => write!(f, "{}px", px),
             Bound::Percent(pct) => write!(f, "{}%", pct),
             Bound::Auto => f.write_str("auto"),
             Bound::MaxContent => f.write_str("max-content"),
@@ -285,8 +309,35 @@ impl TryFrom<Bound> for Automatic<Pixels> {
     fn try_from(s: Bound) -> Result<Self, Self::Error> {
         match s {
             Bound::Auto => Ok(Auto),
-            Bound::Length(px, Unit::Px) => Ok(Given(px)),
+            Bound::Length(px) => Ok(Given(px)),
             v => Err(format!("recognized but unimplemented keyword `{}`", v)),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Overflow {
+    Visible,
+    Hidden,
+    Clip,
+    Scroll,
+    Auto,
+}
+
+impl Default for Overflow {
+    fn default() -> Self {
+        Overflow::Visible
+    }
+}
+
+impl std::fmt::Display for Overflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Overflow::Visible => f.write_str("visible"),
+            Overflow::Hidden => f.write_str("hidden"),
+            Overflow::Clip => f.write_str("clip"),
+            Overflow::Scroll => f.write_str("scroll"),
+            Overflow::Auto => f.write_str("auto"),
         }
     }
 }
@@ -296,10 +347,18 @@ impl Style {
     /// the corresponding "initial" semantics in CSS).
     pub fn initial() -> Style {
         Style {
-            display: DisplayMode::default(),
+            display: DisplayType::default(),
             position: Positioned::default(),
             float: Floated::default(),
             clear: Clearance::default(),
+            overflow: Overflow::default(),
+
+            left: None,
+            right: None,
+            top: None,
+            bottom: None,
+
+            font_size: 16.0,
 
             background_color: Color::default(),
             border_color: Color::default(),
@@ -321,9 +380,11 @@ impl Style {
     /// Create a style record with each inherited-by-default property copied
     /// from a parent style record, initializing the other (uninherited)
     /// properties anew, as in `initial()`.
-    pub fn inherit(_: &Self) -> Style {
+    pub fn inherit(parent: &Self) -> Style {
         // Apparently none of these CSS properties is inherited.
-        Style::initial()
+        let mut style = Style::initial();
+        style.font_size = parent.font_size;
+        style
     }
 
     pub fn apply_declaration(&mut self, declaration: &Declaration) {
@@ -331,8 +392,17 @@ impl Style {
         let value = &declaration.value;
         match property {
             "display" => self.display = value.try_into().expect(property),
+            "position" => self.position = value.try_into().expect(property),
             "float" => self.float = value.try_into().expect(property),
             "clear" => self.clear = value.try_into().expect(property),
+            "overflow" => self.overflow = value.try_into().expect(property),
+
+            "left" => self.left = Some(value.try_into().expect(property)),
+            "right" => self.right = Some(value.try_into().expect(property)),
+            "top" => self.top = Some(value.try_into().expect(property)),
+            "bottom" => self.bottom = Some(value.try_into().expect(property)),
+
+            "font-size" => self.font_size = value.try_into().expect(property),
 
             "width" => self.width = value.try_into().expect(property),
             "min-width" => self.min_width = value.try_into().expect(property),
@@ -363,6 +433,10 @@ impl Style {
             "border-width" => self.border = Edge::new(value.try_into().expect(property)),
 
             _ => (), // XXX: Ignore any unsupported styling property!
+        }
+
+        if self.position.is_positioned() || self.float.is_floated() {
+            self.display = DisplayType::Block;
         }
     }
 }
@@ -423,15 +497,16 @@ fn matches_simple_selector(elem: &ElementData, selector: &SimpleSelector) -> boo
     true
 }
 
-impl TryFrom<&Value> for DisplayMode {
+impl TryFrom<&Value> for DisplayType {
     type Error = String;
 
     fn try_from(v: &Value) -> Result<Self, Self::Error> {
         match v {
             Value::Keyword(kw) => match kw.as_str() {
-                "inline" => Ok(DisplayMode::Inline),
-                "block" => Ok(DisplayMode::Block),
-                "none" => Ok(DisplayMode::None),
+                "inline" => Ok(DisplayType::Inline),
+                "inline-block" => Ok(DisplayType::InlineBlock),
+                "block" => Ok(DisplayType::Block),
+                "none" => Ok(DisplayType::None),
                 _ => Err(format!("invalid display mode `{}`", kw)),
             },
             _ => Err(format!("expected display mode but found `{}`", v)),
@@ -489,7 +564,8 @@ impl TryFrom<&Value> for Size {
                 "fit-content" => Ok(Size::FitContent),
                 _ => Err(format!("invalid dimension size `{}`", kw)),
             },
-            Value::Length(px, Unit::Px) => Ok(Size::Length(*px, Unit::Px)),
+            Value::Length(len, unit) => Ok(Size::Length(unit.to_px(*len))),
+            Value::Percent(pct) => Ok(Size::Percent(*pct)),
             _ => Err(format!("expected dimension size but found `{}`", v)),
         }
     }
@@ -508,7 +584,8 @@ impl TryFrom<&Value> for Bound {
                 "fit-content" => Ok(Bound::FitContent),
                 _ => Err(format!("invalid dimension bound `{}`", kw)),
             },
-            Value::Length(px, Unit::Px) => Ok(Bound::Length(*px, Unit::Px)),
+            Value::Length(len, unit) => Ok(Bound::Length(unit.to_px(*len))),
+            Value::Percent(pct) => Ok(Bound::Percent(*pct)),
             _ => Err(format!("expected dimension bound but found `{}`", v)),
         }
     }
@@ -524,9 +601,27 @@ impl TryFrom<&Value> for Clearance {
                 "right" => Ok(Clearance::RIGHT),
                 "both" => Ok(Clearance::BOTH),
                 "none" => Ok(Clearance::NONE),
-                _ => Err(format!("invalid floating mode `{}`", kw)),
+                _ => Err(format!("invalid clearance mode `{}`", kw)),
             },
-            _ => Err(format!("expected floating mode but found `{}`", v)),
+            _ => Err(format!("expected clearance mode but found `{}`", v)),
+        }
+    }
+}
+
+impl TryFrom<&Value> for Overflow {
+    type Error = String;
+
+    fn try_from(v: &Value) -> Result<Self, Self::Error> {
+        match v {
+            Value::Keyword(kw) => match kw.as_str() {
+                "visible" => Ok(Overflow::Visible),
+                "hidden" => Ok(Overflow::Hidden),
+                "scroll" => Ok(Overflow::Scroll),
+                "clip" => Ok(Overflow::Clip),
+                "auto" => Ok(Overflow::Auto),
+                _ => Err(format!("invalid overflow mode `{}`", kw)),
+            },
+            _ => Err(format!("expected overflow mode but found `{}`", v)),
         }
     }
 }
@@ -536,7 +631,7 @@ impl TryFrom<&Value> for Automatic<Pixels> {
 
     fn try_from(v: &Value) -> Result<Self, Self::Error> {
         match v {
-            Value::Length(px, Unit::Px) => Ok(Given(*px)),
+            Value::Length(len, unit) => Ok(Given(unit.to_px(*len))),
             Value::Keyword(kw) if kw == "auto" => Ok(Auto),
             _ => Err(format!("expected auto/length but found `{}`", v)),
         }
@@ -548,8 +643,8 @@ impl TryFrom<&Value> for Pixels {
 
     fn try_from(v: &Value) -> Result<Self, Self::Error> {
         match v {
-            Value::Length(l, Unit::Px) => Ok(*l),
-            _ => Err(format!("expected auto/length but found `{}`", v)),
+            Value::Length(len, unit) => Ok(unit.to_px(*len)),
+            _ => Err(format!("expected length but found `{}`", v)),
         }
     }
 }

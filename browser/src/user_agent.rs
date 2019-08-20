@@ -22,18 +22,19 @@ td, th          { display: table-cell; }
 caption         { display: table-caption; }
 th              { font-weight: bolder; text-align: center; }
 caption         { text-align: center; }
+html            { font-size: 16px; }
 body            { margin: 8px; }
 /*
-h1              { font-size: 2em; margin: .67em 0; }
-h2              { font-size: 1.5em; margin: .75em 0; }
-h3              { font-size: 1.17em; margin: .83em 0; }
+h1              { font-size: 2em; margin-top: 0.67em; margin-bottom: 0.67em; }
+h2              { font-size: 1.5em; margin-top: 0.75em; margin-bottom: 0.75em; }
+h3              { font-size: 1.17em; margin-top: 0.83em; margin-bottom: 0.83em; }
 h4, p,
 blockquote, ul,
 fieldset, form,
 ol, dl, dir,
-menu            { margin: 1.12em 0; }
-h5              { font-size: .83em; margin: 1.5em 0; }
-h6              { font-size: .75em; margin: 1.67em 0; }
+menu            { margin-top: 1.12em; margin-bottom: 1.12em; }
+h5              { font-size: .83em; margin-top: 1.5em; margin-bottom: 1.5em; }
+h6              { font-size: .75em; margin-top: 1.67em; margin-bottom: 1.67em; }
 */
 h1, h2, h3, h4,
 h5, h6, b,
@@ -48,7 +49,7 @@ pre             { white-space: pre; }
 button, textarea,
 input, select   { display: inline-block; }
 big             { font-size: 1.17em; }
-small, sub, sup { font-size: .83em; }
+small, sub, sup { font-size: 0.83em; }
 */
 sub             { vertical-align: sub; }
 sup             { vertical-align: super; }
@@ -56,16 +57,14 @@ table           { border-spacing: 2px; }
 thead, tbody,
 tfoot           { vertical-align: middle; }
 td, th          { vertical-align: inherit; }
-s, strike, del  { text-decoration: line-through; }
-/*
-hr              { border: 1px inset; }
-*/
+hr              { border-width: 1px; border-style: inset; }
 ol, ul, dir,
 menu, dd        { margin-left: 40px; }
-ol              { list-style-type: decimal; }
 /*
 ol ul, ul ol,
-ul ul, ol ol    { margin-top: 0; margin-bottom: 0; }
+ul ul, ol ol    { margin-top: 0px; margin-bottom: 0px; }
+s, strike, del  { text-decoration: line-through; }
+ol              { list-style-type: decimal; }
 u, ins          { text-decoration: underline; }
 br:before       { content: \"\\A\" }
 :before, :after { white-space: pre-line }

@@ -11,3 +11,4 @@ browser/output.*
 
 # Ignore test results
 *.out.cassius
+*.png
