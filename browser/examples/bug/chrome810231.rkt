@@ -39,18 +39,14 @@
 
 (define-layout (doc-1 :matched true :w 1280 :h 703 :fs 16 :scrollw 0)
  ([VIEW :w 1280]
-  ([BLOCK :x 0 :y 0 :w 1280 :h 95.2 :elt 0]
-   ([BLOCK :x 8 :y 8 :w 1264 :h 79.2 :elt 4]
+  ([BLOCK :x 0 :y 0 :w 1280 :h 76 :elt 0]
+   ([BLOCK :x 8 :y 8 :w 1264 :h 60 :elt 4]
     ([BLOCK :x 8 :y 8 :w 1264 :h 20 :elt 5]
      ([BLOCK :x 8 :y 8 :w 1264 :h 20 :elt 6]))
     ([BLOCK :x 8 :y 28 :w 1264 :h 20 :elt 7]
      ([BLOCK :x 8 :y 28 :w 1264 :h 20 :elt 8]))
-    ([ANON]
-     ([LINE]
-      ([INLINE :elt 9]))
-     ([LINE]))
-    ([BLOCK :x 8 :y 67.2 :w 1264 :h 20 :elt 10]
-     ([BLOCK :x 8 :y 67.2 :w 1264 :h 20 :elt 11]))))))
+    ([BLOCK :x 8 :y 48 :w 1264 :h 20 :elt 9]
+     ([BLOCK :x 8 :y 48 :w 1264 :h 20 :elt 10]))))))
 
 (define-document doc-1
   ([html :num 0]
@@ -62,9 +58,8 @@
      ([div :num 6 :id c1]))
     ([div :num 7 :class (container)]
      ([div :num 8 :id c2]))
-    ([br :num 9])
-    ([div :num 10 :class (container)]
-     ([div :num 11 :id c3])) " ")))
+    ([div :num 9 :class (container)]
+     ([div :num 10 :id c3])) " ")))
 
 (define-problem doc-1
   :title "JS Bin"
