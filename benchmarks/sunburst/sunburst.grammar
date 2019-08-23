@@ -1,26 +1,50 @@
 traversal pre {
-    Root { visit; recur child }
-    Radial { visit; loop child { visit }; loop child { recur } }
-    Leaf { visit }
+    case Root {
+        ??;
+        recur child;
+    }
+    case Radial {
+        ??;
+        iterate child { ??; }
+        iterate child { recur child; }
+    }
+    case Leaf {
+        ??;
+    }
 }
 
 traversal post {
-    Root { recur child; visit }
-    Radial { loop child { recur }; loop child { visit }; visit }
-    Leaf { visit }
+    case Root {
+        recur child;
+        ??;
+    }
+    case Radial {
+        iterate child { recur child; }
+        iterate child { ??; }
+        ??;
+    }
+    case Leaf {
+        ??;
+    }
 }
 
 traversal zip {
-    Root { visit; recur child }
-    Radial { loop child { visit; recur; visit }; visit }
-    Leaf { visit }
+    case Root {
+        ??;
+        recur child;
+    }
+    case Radial {
+        iterate child {
+            ??;
+            recur child;
+            ??;
+        }
+        ??;
+    }
+    case Leaf {
+        ??;
+    }
 }
-
-// traversal zigzag {
-//     Root { visit; recur child }
-//     Radial { loop child { visit }; loop child { recur }; loop child { visit } }
-//     Leaf { visit }
-// }
 
 interface Node {
     input open : int;
@@ -37,8 +61,6 @@ interface Node {
 
     output rootCenterX : int;
     output rootCenterY : int;
-
-    output show_out : int;
 
     output numOpenChildren : int;
 
@@ -60,66 +82,73 @@ class Root : IRoot {
         input h : int;
     }
 
-    evaluation {
+    statements {
         child.alpha := 45;
-        child.maxR := radius;
+        child.maxR := self.radius;
         child.parentTotR := 0;
         child.sectorAng := 360;
 
         child.show := 1;
-        child.show_out := 1;
 
-        child.rootCenterX := centerRadius * centerAlpha;
-        child.rootCenterY := centerRadius * centerAlpha;
+        child.rootCenterX := self.centerRadius * self.centerAlpha;
+        child.rootCenterY := self.centerRadius * self.centerAlpha;
     }
 }
 
 class Radial : Node {
     children {
-        child : [ Node ];
+        child : [Node];
     }
     attributes {
         output numOpenGrandChildren : int;
     }
-    evaluation {
-        r := (maxR - parentTotR)/3 < 10 ? 10 : (maxR - parentTotR)/4;
-        numOpenGrandChildren := child$$.numOpenChildren;
+    statements {
+        self.r := if (self.maxR - self.parentTotR)/3 < 10 then 10 else (self.maxR - self.parentTotR)/4;
+        self.numOpenGrandChildren := child[-1].numOpenChildren : 0;
 
-        loop child {
-            //subtreeWeight := fold 1 .. child$-.subtreeWeight + child$i.subtreeWeight;
+        child[i].parentTotR := self.parentTotR + self.r;
 
-            child.parentTotR := parentTotR + r;
+        child[i].rootCenterX := self.rootCenterX;
+        child[i].rootCenterY := self.rootCenterY;
 
-            child.rootCenterX := rootCenterX;
-            child.rootCenterY := rootCenterY;
+        child[i].show := self.show * child[i].open;
 
-            child.show := show * child$i.open;
+        child[i].maxR := self.maxR;
 
-            child.maxR := maxR;
+        child[i].sectorAng :=
+            if self.numOpenGrandChildren > 0 then
+                child[i].show * self.sectorAng / self.numOpenGrandChildren
+            else
+                0;
 
-            child.sectorAng := numOpenGrandChildren > 0 ? child$i.show * sectorAng / numOpenGrandChildren : 0;
+        child[i].alpha :=
+            scanl
+                if self.numOpenGrandChildren > 0 then
+                    self.alpha - self.sectorAng / 2 - self.sectorAng / (self.numOpenGrandChildren * 2)
+                else
+                    0
+            ..
+                if self.numOpenGrandChildren > 0 then
+                    child[@].alpha + child[i].show * (self.sectorAng / self.numOpenGrandChildren)
+                else
+                    0;
 
-            child.alpha :=
-            fold
-              (numOpenGrandChildren > 0 ?
-               alpha - (sectorAng / 2) - (sectorAng/(numOpenGrandChildren*2)) :
-               0)
-              ..
-              (numOpenGrandChildren > 0 ?
-               child$-.alpha + child$i.show * (sectorAng/numOpenGrandChildren) :
-               0);
+        self.numOpenChildren := foldl 0 .. self[@].numOpenChildren + child[i].show;
 
-            child.show_out := fold 0 .. child$-.show_out + child$i.show;
-        }
-        self.numOpenChildren := child$$.show_out;
-        self.render := rootCenterX + rootCenterY + show * (parentTotR + r) + alpha + sectorAng + (show * 4 * r) / 5 + bgcolor;
+        self.render := self.rootCenterX + self.rootCenterY + self.show * (self.parentTotR + self.r) + self.alpha + self.sectorAng + (self.show * 4 * self.r) / 5 + self.bgcolor;
     }
 }
 
 class Leaf : Node {
-    evaluation {
-        self.r := (maxR - parentTotR)/3 < 10 ? 10 : (maxR - parentTotR)/4;
+    statements {
+        self.r :=
+            if (self.maxR - self.parentTotR)/3 < 10 then
+                10
+            else
+                (self.maxR - self.parentTotR)/4;
         self.numOpenChildren := 0;
-        self.render := rootCenterX + rootCenterY + show * (parentTotR + r) + alpha + sectorAng + (show * 4 * r) / 5 + bgcolor;
+        self.render :=
+            self.rootCenterX + self.rootCenterY + self.show * (self.parentTotR + self.r)
+            + self.alpha + self.sectorAng + (self.show * 4 * self.r) / 5 + self.bgcolor;
     }
 }

@@ -1,0 +1,11 @@
+<Root radius="100" centerRadius="10" centerAlpha="50" w="1000" h="1000">
+  <Radial open="4" bgcolor="6">
+    <Radial open="4" bgcolor="6">
+        <Leaf open="0" bgcolor="2" />
+        <Leaf open="0" bgcolor="2" />
+    </Radial>
+    <Radial open="4" bgcolor="6">
+    </Radial>
+    <Leaf open="0" bgcolor="2" />
+  </Radial>
+</Root>

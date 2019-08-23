@@ -6,11 +6,11 @@
       showFraud="1"
       fixWidth="0"
       showJavascript="1">
-  <Region>
-    <CountryContainer>
-      <HSquare>
+  <CountryContainer>
+    <Region>
+      <District>
         <VSquare>
-          <District>
+          <HSquare>
             <PollingPlace totalVotes="100"
                           totalVotesUR="64"
                           urVotes="64"
@@ -29,16 +29,14 @@
                           urColor="6"
                           fraudColor="99"
                           inJavascript="1" />
-          </District>
+          </HSquare>
         </VSquare>
-      </HSquare>
-    </CountryContainer>
-  </Region>
-  <Region>
-    <CountryContainer>
-      <HSquare>
+      </District>
+    </Region>
+    <Region>
+      <District>
         <VSquare>
-          <District>
+          <HSquare>
             <PollingPlace totalVotes="100"
                           totalVotesUR="86"
                           urVotes="86"
@@ -48,9 +46,9 @@
                           urColor="6"
                           fraudColor="99"
                           inJavascript="1" />
-          </District>
+          </HSquare>
         </VSquare>
-      </HSquare>
-    </CountryContainer>
-  </Region>
+      </District>
+    </Region>
+  </CountryContainer>
 </Root>

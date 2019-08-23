@@ -1,83 +1,99 @@
 traversal pre {
-    Root { visit; recur child }
-    CountryContainer { visit; loop childs { visit }; loop childs { recur } }
-    Region { visit; loop childs { visit }; loop childs { recur } }
-    District { visit; loop childs { visit }; loop childs { recur } }
-    VSquare { visit; loop childs { visit }; loop childs { recur } }
-    HSquare { visit; loop childs { visit }; loop childs { recur } }
-    PollingPlace { visit }
+    case Root {
+        ??;
+        recur child;
+    }
+    case CountryContainer {
+        ??;
+        iterate childs { ??; recur childs; ??; }
+    }
+    case Region {
+        ??;
+        iterate childs { ??; recur childs; ??; }
+    }
+    case District {
+        ??;
+        iterate childs { ??; recur childs; ??; }
+    }
+    case VSquare {
+        ??;
+        iterate childs { ??; recur childs; ??; }
+    }
+    case HSquare {
+        ??;
+        iterate childs { ??; recur childs; ??; }
+    }
+    case PollingPlace {
+        ??;
+    }
 }
 
 traversal post {
-    Root { recur child; visit }
-    CountryContainer { loop childs { recur }; visit; loop childs { visit } }
-    Region { loop childs { recur }; visit; loop childs { visit } }
-    District { loop childs { recur }; visit; loop childs { visit } }
-    VSquare { loop childs { recur }; visit; loop childs { visit } }
-    HSquare { loop childs { recur }; visit; loop childs { visit } }
-    PollingPlace { visit }
+    case Root {
+        recur child;
+        ??;
+    }
+    case CountryContainer {
+        iterate childs { ??; recur childs; ??; }
+        ??;
+    }
+    case Region {
+        iterate childs { ??; recur childs; ??; }
+        ??;
+    }
+    case District {
+        iterate childs { ??; recur childs; ??; }
+        ??;
+    }
+    case VSquare {
+        iterate childs { ??; recur childs; ??; }
+        ??;
+    }
+    case HSquare {
+        iterate childs { ??; recur childs; ??; }
+        ??;
+    }
+    case PollingPlace {
+        ??;
+    }
 }
-
-traversal zip {
-    Root { visit; recur child }
-    CountryContainer { loop childs { visit; recur; visit } }
-    Region { loop childs { visit; recur; visit } }
-    District { loop childs { visit; recur; visit } }
-    VSquare { loop childs { visit; recur; visit } }
-    HSquare { loop childs { visit; recur; visit } }
-    PollingPlace { visit }
-}
-
-// traversal zigzag {
-//     Root { visit; recur child }
-//     CountryContainer { loop childs { visit }; loop childs { recur }; loop childs { visit } }
-//     Region { loop childs { visit }; loop childs { recur }; loop childs { visit } }
-//     District { loop childs { visit }; loop childs { recur }; loop childs { visit } }
-//     VSquare { loop childs { visit }; loop childs { recur }; loop childs { visit } }
-//     HSquare { loop childs { visit }; loop childs { recur }; loop childs { visit } }
-//     PollingPlace { visit }
-// }
 
 interface IRoot {
     input width : int;
     input height : int;
+    input fixWidth : int;
 
     input minTurnout : int;
     input maxTurnout : int;
 
     input showFraud : int;
-
     input showProjected : int;
-
-    output votesUR : int;
-
-    input fixWidth : int;
-
     input showJavascript : int;
 
+    output votesUR : int;
     output totalMag : int;
 }
 
 class Root : IRoot {
     children { child : Node; }
-    evaluation {
-        child.w := (fixWidth != 0) ? width : width * (totalMag / 63895164);
-        child.h := height * (totalMag / 63895164);
+    statements {
+        child.w := if self.fixWidth != 0 then self.width else self.width * (self.totalMag / 63895164);
+        child.h := self.height * (self.totalMag / 63895164);
 
-        child.rx := width;
-        child.by := height;
+        child.rx := self.width;
+        child.by := self.height;
 
-        child.minTurnout := minTurnout;
-        child.maxTurnout := maxTurnout;
+        child.minTurnout := self.minTurnout;
+        child.maxTurnout := self.maxTurnout;
 
-        child.showFraud := showFraud;
-        child.showProjected := showProjected;
+        child.showFraud := self.showFraud;
+        child.showProjected := self.showProjected;
 
-        child.fixWidth := fixWidth;
-        child.showJavascript := showJavascript;
+        child.fixWidth := self.fixWidth;
+        child.showJavascript := self.showJavascript;
 
         self.totalMag := child.totalMag;
-        self.votesUR := child.votesUR / totalMag;
+        self.votesUR := child.votesUR / self.totalMag;
     }
 }
 
@@ -107,103 +123,89 @@ interface Node {
 
 trait tweenMagnitude {
     children { childs : [Node]; }
-    evaluation {
-        loop childs {
-            self.totalMag := fold 0 .. self$-.totalMag + childs$i.totalMag;
-            childs.minTurnout := minTurnout;
-            childs.maxTurnout := maxTurnout;
+    statements {
+        self.totalMag := foldl 0 .. self[@].totalMag + childs[i].totalMag;
+        childs[i].minTurnout := self.minTurnout;
+        childs[i].maxTurnout := self.maxTurnout;
 
-            childs.showFraud := showFraud;
-            childs.showProjected := showProjected;
+        childs[i].showFraud := self.showFraud;
+        childs[i].showProjected := self.showProjected;
 
-            childs.fixWidth := fixWidth;
+        childs[i].fixWidth := self.fixWidth;
 
-            childs.showJavascript := showJavascript;
+        childs[i].showJavascript := self.showJavascript;
 
-            //childs.votesUR_sum := fold 0 .. childs$-.votesUR_sum + childs$i.votesUR;
-            self.votesUR := fold 0 .. self$-.votesUR + childs$i.votesUR;
-        }
+        self.votesUR := foldl 0 .. self[@].votesUR + childs[i].votesUR;
     }
 }
 
 class CountryContainer(tweenMagnitude) : Node {
-    evaluation {
-        x := rx - w;
-        y := by - h;
+    statements {
+        self.x := self.rx - self.w;
+        self.y := self.by - self.h;
 
-        render := (fixWidth != 0) ? x + y + w + h : 0;
+        self.render := if self.fixWidth != 0 then self.x + self.y + self.w + self.h else 0;
 
-        loop childs {
-            childs.w := (childs$i.totalMag / totalMag) * w;
-            childs.h := h;
-            childs.rx := fold x .. childs$-.rx + childs$i.w;
-            childs.by := y + h;
-        }
+        childs[i].w := (childs[i].totalMag / self.totalMag) * self.w;
+        childs[i].h := self.h;
+        childs[i].rx := scanl self.x .. childs[@].rx + childs[i].w;
+        childs[i].by := self.y + self.h;
     }
 }
 
 class Region(tweenMagnitude) : Node {
-    evaluation {
-        x := rx - w;
-        y := by - h;
+    statements {
+        self.x := self.rx - self.w;
+        self.y := self.by - self.h;
 
-        render := 0;
+        self.render := 0;
 
-        loop childs {
-
-            childs.w := w;
-            childs.h := (childs$i.totalMag / totalMag) * h;
-            childs.rx := x + w;
-            childs.by := fold y .. childs$-.by + childs$i.h;
-        }
+        childs[i].w := self.w;
+        childs[i].h := (childs[i].totalMag / self.totalMag) * self.h;
+        childs[i].rx := self.x + self.w;
+        childs[i].by := scanl self.y .. childs[@].by + childs[i].h;
     }
 }
 
 class District(tweenMagnitude) : Node {
-    evaluation {
-        x := rx - w;
-        y := by - h;
+    statements {
+        self.x := self.rx - self.w;
+        self.y := self.by - self.h;
 
-        render := (fixWidth != 0) ? x + y + w + h : 0;
+        self.render := if self.fixWidth != 0 then self.x + self.y + self.w + self.h else 0;
 
-        loop childs {
-            childs.w := (childs$i.totalMag / totalMag) * w;
-            childs.h := h;
-            childs.rx := fold x .. childs$-.rx + childs$i.w;
-            childs.by := y + h;
-        }
+        childs[i].w := (childs[i].totalMag / self.totalMag) * self.w;
+        childs[i].h := self.h;
+        childs[i].rx := scanl self.x .. childs[@].rx + childs[i].w;
+        childs[i].by := self.y + self.h;
     }
 }
 
 class VSquare(tweenMagnitude) : Node {
-    evaluation {
-        x := rx - w;
-        y := by - h;
+    statements {
+        self.x := self.rx - self.w;
+        self.y := self.by - self.h;
 
-        render := 0;
+        self.render := 0;
 
-        loop childs {
-            childs.w := w;
-            childs.h := (childs$i.totalMag / totalMag) * h;
-            childs.rx := x + w;
-            childs.by := fold y .. childs$-.by + childs$i.h;
-        }
+        childs[i].w := self.w;
+        childs[i].h := (childs[i].totalMag / self.totalMag) * self.h;
+        childs[i].rx := self.x + self.w;
+        childs[i].by := scanl self.y .. childs[@].by + childs[i].h;
     }
 }
 
 class HSquare(tweenMagnitude) : Node {
-    evaluation {
-        x := rx - w;
-        y := by - h;
+    statements {
+        self.x := self.rx - self.w;
+        self.y := self.by - self.h;
 
-        render := 0;
+        self.render := 0;
 
-        loop childs {
-            childs.w := (childs$i.totalMag / totalMag) * w;
-            childs.h := h;
-            childs.rx := fold x .. childs$-.rx + childs$i.w;
-            childs.by := y + h;
-        }
+        childs[i].w := (childs[i].totalMag / self.totalMag) * self.w;
+        childs[i].h := self.h;
+        childs[i].rx := scanl self.x .. childs[@].rx + childs[i].w;
+        childs[i].by := self.y + self.h;
     }
 }
 
@@ -222,33 +224,35 @@ class PollingPlace : Node {
         input inJavascript : int;
 
         output calcRegularColor : int;
-        output calcFraudColor: int;
+        output calcFraudColor : int;
         output calcProjectedColor : int;
         output calcVotesColor : int;
 
         output magnitude : int;
     }
+    statements {
+        self.calcProjectedColor := self.defColor + self.urColor + self.urVotesProjected;
+        self.calcRegularColor := self.defColor + self.urColor + self.urVotes;
+        self.calcVotesColor := if self.turnout > 0 then self.calcRegularColor + self.calcProjectedColor + self.showProjected else self.calcRegularColor;
+        self.calcFraudColor := if self.turnout > 0 then self.fraudColor else self.calcVotesColor;
 
-    evaluation {
-        calcProjectedColor := defColor + urColor + urVotesProjected;
-        calcRegularColor := defColor + urColor + urVotes;
-        calcVotesColor := (turnout > 0) ? calcRegularColor + calcProjectedColor + showProjected : calcRegularColor;
-        calcFraudColor := (turnout > 0) ? fraudColor : calcVotesColor;
+        self.render := self.x + self.y + self.w + self.h + self.calcVotesColor + self.calcFraudColor + self.showFraud;
 
-        // In the original work on FTL, this was actually an (undocumented)
-        // rendering command. The following evaluation rule is equivalent for
-        // the purposes of static scheduling (i.e., same dependences).
-        render := x + y + w + h + calcVotesColor + calcFraudColor + showFraud;
+        self.x := self.rx - self.w;
+        self.y := self.by - self.h;
 
-        x := rx - w;
-        y := by - h;
+        self.magnitude := if self.turnout > self.minTurnout && self.turnout <= self.maxTurnout then self.totalVotes else 0;
+        self.totalMag := if self.inJavascript != 0 then self.magnitude else self.showJavascript * self.magnitude;
 
-        magnitude := (turnout > minTurnout && turnout <= maxTurnout) ? totalVotes : 0;
-        totalMag := (inJavascript != 0) ? magnitude : showJavascript * magnitude;
-
-        votesUR := (turnout > minTurnout && turnout <= maxTurnout) ?
-            ((turnout > 0) ? ((totalVotesUR * (1 - showProjected)) + ((totalVotes * urVotesProjected) * showProjected)) : totalVotesUR)
-            : 0;
+        self.votesUR :=
+            if self.turnout > self.minTurnout && self.turnout <= self.maxTurnout then
+                if self.turnout > 0 then
+                    self.totalVotesUR * (1 - self.showProjected)
+                    + self.totalVotes * self.urVotesProjected * self.showProjected
+                else
+                    self.totalVotesUR
+            else
+                0;
     }
 
 }
