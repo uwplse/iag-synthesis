@@ -16,7 +16,8 @@
 
 ;(define verbose? (make-parameter #f))
 (define *root* (make-parameter 'Root))
-(define *output* (make-parameter "browser/src/layout.rs"))
+(define *output* (make-parameter #f))
+(define *example* (make-parameter #f))
 
 (define (parse-grammar filename)
   (let ([G (file->grammar filename)])
@@ -41,14 +42,19 @@
                   (*root* (string->symbol classname))]
  [("-o" "--out") filename "File to output generated code"
                   (*output* filename)]
+ [("-T" "--tree") filename "Tree to use as synthesis example"
+                  (*example* filename)]
  #:args (schedule-sketch grammar-filename)
  (let* ([G (parse-grammar grammar-filename)]
-        [E (tree-examples G (*root*))]
+        [E (if (*example*)
+               (list (file->tree G (*example*)))
+               (tree-examples G (*root*)))]
         [S (parse-schedule-sketch G schedule-sketch)]
         [S* (complete-sketch G S E)])
    (when S*
      (displayln (schedule->string S*))
-     (let ([P (generate-program G S*)]
-           [file (open-output-file (*output*) #:mode 'text #:exists 'replace)])
-       (parameterize ([current-output-port file])
-         (print-program P))))))
+     (when (*output*)
+       (let ([P (generate-program G S*)]
+             [file (open-output-file (*output*) #:mode 'text #:exists 'replace)])
+         (parameterize ([current-output-port file])
+           (print-program P)))))))

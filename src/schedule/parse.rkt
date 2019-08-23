@@ -18,7 +18,7 @@
 (define-empty-tokens e-tkns
   (LBRACE RBRACE LPAREN RPAREN LBRACKET RBRACKET
    DOT SEMICOLON SEQ PAR
-   TRAVERSAL CASE ITERATE LEFT RIGHT
+   TRAVERSAL CASE ITERATE REVERSE LEFT RIGHT
    RECUR CALL EVAL SKIP HOLE
    SELF
    EOF))
@@ -52,6 +52,7 @@
    ["traversal" (token-TRAVERSAL)]
    ["case" (token-CASE)]
    ["iterate" (token-ITERATE)]
+   ["reverse" (token-REVERSE)]
    ["left" (token-LEFT)]
    ["right" (token-RIGHT)]
    ["recur" (token-RECUR)]
@@ -109,6 +110,7 @@
      ((TRAVERSAL) 'traversal)
      ((CASE) 'case)
      ((ITERATE) 'iterate)
+     ((REVERSE) 'reverse)
      ((LEFT) 'left)
      ((RIGHT) 'right)
      ((RECUR) 'recur)
@@ -158,13 +160,13 @@
    (define content
      (parameterize ([indentation (+ (indentation) 1)])
        (string-join (map command->string commands) "\n")))
-   (format "~aiterate[left] ~a {\n~a\n~a}"
+   (format "~aiterate ~a {\n~a\n~a}"
            (indent) child content (indent))]
   [((ag:iter/right child commands))
    (define content
      (parameterize ([indentation (+ (indentation) 1)])
        (string-join (map command->string commands) "\n")))
-   (format "~aiterate[right] ~a {\n~a\n~a}"
+   (format "~areverse ~a {\n~a\n~a}"
            (indent) child content (indent))]
   [((ag:recur child))
    (format "~arecur ~a;" (indent) child)]

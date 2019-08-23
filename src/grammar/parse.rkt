@@ -18,12 +18,18 @@
 
 (define-empty-tokens e-tkns
   (RBRACE LBRACE LPAREN RPAREN LBRACKET RBRACKET
-   COLON SEMICOLON COMMA DOT
+   OPTION COLON SEMICOLON COMMA DOT
    TRAVERSAL CASE ITERATE REVERSE RECUR CALL EVAL SKIP HOLE
    INTERFACE CLASS TRAIT
    CHILDREN ATTRIBUTES STATEMENTS RULES
-   INPUT OUTPUT
-   DEFINE FOLDL FOLDR DOTDOT AT FIRST LAST
+   INPUT OUTPUT LOCAL
+   DEFINE FOLDL FOLDR SCANL SCANR DOTDOT
+   INDEXED
+   ACCUMULATOR SUPREMUM
+   PREDECESSOR SUCCESSOR
+   FIRST LAST
+   LENGTH
+   PHASE
    BANG
    PLUS MINUS STAR SLASH
    LT LE EQ NE GE GT
@@ -74,15 +80,13 @@
 (define lex
   (lexer-src-pos
    [(comment) (return-without-pos (lex input-port))]
-   ["@" (token-AT)]
-   ["[0]" (token-FIRST)]
-   ["[#]" (token-LAST)]
    ["}" (token-RBRACE)]
    ["{" (token-LBRACE)]
    ["(" (token-LPAREN)]
    [")" (token-RPAREN)]
    ["[" (token-LBRACKET)]
    ["]" (token-RBRACKET)]
+   ["?" (token-OPTION)]
    [":" (token-COLON)]
    [";" (token-SEMICOLON)]
    ["," (token-COMMA)]
@@ -104,10 +108,22 @@
    ["rules" (token-RULES)]
    ["input" (token-INPUT)]
    ["output" (token-OUTPUT)]
+   ["local" (token-LOCAL)]
    [":=" (token-DEFINE)]
    ["foldl" (token-FOLDL)]
    ["foldr" (token-FOLDR)]
+   ["scanl" (token-SCANL)]
+   ["scanr" (token-SCANR)]
    [".." (token-DOTDOT)]
+   ["[i]" (token-INDEXED)] ; children[i].attribute // indexed node
+   ["[@]" (token-ACCUMULATOR)] ; children[@].attribute, self[@].attribute // current accumulator
+   ["[$]" (token-SUPREMUM)] ; children[$].attribute, self[$].attribute // final accumulator
+   ["[i-1]" (token-PREDECESSOR)] ; children[i-1].attribute : default // backward peeked node
+   ["[i+1]" (token-SUCCESSOR)] ; children[i+1].attribute : default // forward peeked node
+   ["[0]" (token-FIRST)] ; children[0].attribute : default // first node
+   ["[-1]" (token-LAST)] ; children[-1].attribute : default // last node
+   ["[#]" (token-LENGTH)]
+   ["%" (token-PHASE)]
    ["!" (token-BANG)]
    ["+" (token-PLUS)]
    ["-" (token-MINUS)]
@@ -121,7 +137,6 @@
    [">" (token-GT)]
    ["&&" (token-AND)]
    ["||" (token-OR)]
-   ["?" (token-QUESTION)]
    ["if" (token-IF)]
    ["then" (token-THEN)]
    ["else" (token-ELSE)]
@@ -152,13 +167,14 @@
    (precs
     (nonassoc LPAREN RPAREN)
     (nonassoc IF THEN ELSE)
-    (nonassoc QUESTION COLON)
+    (left COLON)
     (left OR)
     (left AND)
     (nonassoc LT LE EQ NE GE GT)
     (left STAR SLASH)
     (left PLUS MINUS)
-    (nonassoc BANG))
+    (nonassoc BANG)
+    (left DOT))
    (grammar
     (program
      ((entity-list) (ag:make-grammar $1)))
@@ -236,26 +252,48 @@
 
     (attribute
      ((INPUT field COLON name) (ag:label/in $2 $4))
-     ((OUTPUT field COLON name) (ag:label/out $2 $4)))
+     ((OUTPUT field COLON name) (ag:label/out $2 $4))
+     ((LOCAL attribute-path COLON name) (ag:label/var $2 $4)))
+
+    ; XXX: The option modifier should apply to attribute path components.
+    ; Ex.: margin?.{left?, right?, top, bottom}
+    (attribute-path
+     ((IDENT DOT LBRACE attribute-path-list RBRACE) (list $1 $4))
+     ((IDENT) $1))
+
+    (attribute-path-list
+     ((attribute-path COMMA attribute-path-list) (cons $1 $3))
+     ((attribute-path) (list $1)))
 
     (rule-list
      ((rule SEMICOLON rule-list) (cons $1 $3))
      (() null))
 
     (rule
-     ((reference DEFINE formula) (ag:rule $1 $3)))
+     ((node DOT field DEFINE scalar) (ag:rule/scalar (cons $1 $3) $5 #f))
+     ((node INDEXED DOT field DEFINE vector) (ag:rule/vector (cons $1 $4) $6 $1)))
 
-    (formula
+    (scalar
      ((FOLDL term DOTDOT term) (ag:fold/left $2 $4))
      ((FOLDR term DOTDOT term) (ag:fold/right $2 $4))
      ((term) $1))
 
+    (vector
+     ((SCANL term DOTDOT term) (ag:scan/left $2 $4))
+     ((SCANR term DOTDOT term) (ag:scan/right $2 $4))
+     ((term) $1))
+
     (term
      ((constant) (ag:const $1))
-     ((reference) (ag:field $1))
-     ((AT LBRACE reference RBRACE) (ag:accum $3))
-     ((FIRST LBRACE reference COLON term RBRACE) (ag:index/first $3 $5))
-     ((LAST LBRACE reference COLON term RBRACE) (ag:index/last $3 $5))
+     ((node DOT field) (ag:field/get (cons $1 $3)))
+     ((node INDEXED DOT field) (ag:field/cur (cons $1 $4)))
+     ((node ACCUMULATOR DOT field) (ag:field/acc (cons $1 $4)))
+     ((node SUPREMUM DOT field) (ag:field/sup (cons $1 $4)))
+     ((node PREDECESSOR DOT field COLON term) (ag:field/pred (cons $1 $4) $6))
+     ((node SUCCESSOR DOT field COLON term) (ag:field/succ (cons $1 $4) $6))
+     ((node FIRST DOT field COLON term) (ag:field/first (cons $1 $4) $6))
+     ((node LAST DOT field COLON term) (ag:field/last (cons $1 $4) $6))
+     ((node LENGTH) (ag:length $1))
      ((BANG term) (ag:expr '! (list $2)))
      ((term AND term) (ag:expr '&& (list $1 $3)))
      ((term OR term) (ag:expr '\|\| (list $1 $3)))
@@ -271,8 +309,9 @@
      ((term GT term) (ag:expr '> (list $1 $3)))
      ((name LPAREN RPAREN) (ag:call $1 null))
      ((name LPAREN term-list RPAREN) (ag:call $1 $3))
-     ((IF term THEN term ELSE term) (ag:ite $2 $4 $6))
-     ((term QUESTION term COLON term) (ag:ite $1 $3 $5))
+     ((term DOT name LPAREN RPAREN) (ag:invoke $1 $3 null))
+     ((term DOT name LPAREN term-list RPAREN) (ag:invoke $1 $3 $5))
+     ((IF term THEN term ELSE term) (ag:branch $2 $4 $6))
      ((LPAREN term RPAREN) $2))
 
     (term-list
@@ -431,9 +470,15 @@
    (format "\n    ~a : [~a];" name (identify-interface interface))])
 
 (define/match (rule->string rule)
-  [((ag:rule attr formula _))
-   (format "\n    ~a := ~a;"
-           (attribute->string attr)
+  [((ag:rule/scalar (cons object field) formula _))
+   (format "\n    ~a.~a := ~a;"
+           object
+           field
+           (formula->string formula))]
+  [((ag:rule/vector (cons object field) formula _))
+   (format "\n    ~a[i].~a := ~a;"
+           object
+           field
            (formula->string formula))])
 
 (define/match (formula->string formula)
@@ -445,6 +490,14 @@
    (format "foldr ~a .. ~a"
            (term->string init)
            (term->string next))]
+  [((ag:scan/left init next))
+   (format "scanl ~a .. ~a"
+           (term->string init)
+           (term->string next))]
+  [((ag:scan/right init next))
+   (format "scanr ~a .. ~a"
+           (term->string init)
+           (term->string next))]
   [(term)
    (term->string term)])
 
@@ -452,19 +505,45 @@
   [((ag:const #t)) "true"]
   [((ag:const #f)) "false"]
   [((ag:const (? number? n))) (number->string n)]
-  [((ag:field attr))
-   (attribute->string attr)]
-  [((ag:accum attr))
-   (format "@{~a}"
-           (attribute->string attr))]
-  [((ag:index/first attr default))
-   (format "[0]{~a : ~a}"
-           (attribute->string attr)
+  [((ag:field/get (cons object label)))
+   (format "~a.~a"
+           object
+           label)]
+  [((ag:field/cur (cons object label)))
+   (format "~a[i].~a"
+           object
+           label)]
+  [((ag:field/acc (cons object label)))
+   (format "~a[@].~a"
+           object
+           label)]
+  [((ag:field/sup (cons object label)))
+   (format "~a[$].~a"
+           object
+           label)]
+  [((ag:field/pred (cons object label) default))
+   (format "(~a[i-1].~a : ~a)"
+           object
+           label
            (term->string default))]
-  [((ag:index/last attr default))
-   (format "[#]{~a : ~a}"
-           (attribute->string attr)
+  [((ag:field/succ (cons object label) default))
+   (format "(~a[i+1].~a : ~a)"
+           object
+           label
            (term->string default))]
+  [((ag:field/first (cons object label) default))
+   (format "(~a[0].~a : ~a)"
+           object
+           label
+           (term->string default))]
+  [((ag:field/last (cons object label) default))
+   (format "(~a[-1].~a : ~a)"
+           object
+           label
+           (term->string default))]
+  [((ag:length child))
+   (format "~a[#]"
+           child)]
   [((ag:expr unop (list only)))
    (format "~a~a"
            unop
@@ -478,7 +557,12 @@
    (format "~a(~a)"
            fun
            (list->string term->string args ", "))]
-  [((ag:ite if then else))
+  [((ag:invoke recv meth args))
+   (format "~a.~a(~a)"
+           (term->string recv)
+           meth
+           (list->string term->string args ", "))]
+  [((ag:branch if then else))
    (format "(if ~a then ~a else ~a)"
            (term->string if)
            (term->string then)

@@ -11,17 +11,19 @@
 
 (provide complete-sketch)
 
-(define substitute 0)
-
-(define/match (concretize* S)
-  [((ag:sequential sched-1 sched-2))
-   (ag:sequential (concretize* sched-1) (concretize* sched-2))]
-  [((ag:parallel sched-1 sched-2))
-   (ag:parallel (concretize* sched-1) (concretize* sched-2))]
-  [((ag:traversal order visitor-list))
-   (ag:traversal order (map concretize* visitor-list))]
-  [((ag:visitor class command-list))
-   (ag:visitor class (substitute command-list))])
+(define (concretize* subst S)
+  (match S
+    [(ag:sequential sched-1 sched-2)
+     (ag:sequential (concretize* subst sched-1)
+                    (concretize* subst sched-2))]
+    [(ag:parallel sched-1 sched-2)
+     (ag:parallel (concretize* subst sched-1)
+                  (concretize* subst sched-2))]
+    [(ag:traversal order visitor-list)
+     (ag:traversal order
+                  (map (curry concretize* subst) visitor-list))]
+    [(ag:visitor class command-list)
+     (ag:visitor class (subst command-list))]))
 
 (define (permute* . xs)
   (permute (length xs) xs))
@@ -52,6 +54,4 @@
       (printf "Symbolic Evaluation: ~ams\n" (+ running-time overhead-time))
       (printf "Constraint Solving: ~ams\n" (- solving-time overhead-time))
       (printf "Constraint Size: ~a nodes and ~a variables\n" nodes variables)
-      (when concretize
-        (set! substitute concretize)
-        (concretize* schedule)))))
+      (and concretize (concretize* concretize schedule)))))

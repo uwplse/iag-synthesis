@@ -17,7 +17,7 @@
                      [set-ref! set-box!])
          tree-ref/field
          tree-ref/child
-         tree-select
+         tree-ref*/field
          tree-copy
          xml->tree
          xexpr->tree
@@ -42,7 +42,8 @@
 
 (define (make-node class children)
   (define fields
-    (for/list ([label (ag:class-labels* class)])
+    (for/list ([label (ag:class-labels* class)]
+               #:unless (ag:label/var? label))
       (cons (ag:label-name label) (ref (ag:label/in? label)))))
 
   (tree class fields children))
@@ -53,14 +54,12 @@
 (define (tree-ref/child tree name)
   (dict-ref (tree-children tree) name))
 
-(define (tree-select self attr #:iterator [iter #f] #:cursor [cur #f])
+(define (tree-ref*/field self attr)
   (match attr
-    [(cons 'self field)
-     (tree-ref/field self field)]
-    [(cons (== iter) field)
-     (tree-ref/field cur field)]
-    [(cons child field)
-     (tree-ref/field (tree-ref/child self child) field)]))
+    [(cons 'self label)
+     (tree-ref/field self label)]
+    [(cons child label)
+     (tree-ref/field (tree-ref/child self child) label)]))
 
 (define (tree-copy node)
   (define fields
@@ -103,7 +102,7 @@
              [(list (ag:child/one names _) ...)
               (map cons names subtrees)]
              [(list (ag:child/seq name _))
-              (cons name subtrees)])))
+              (list (cons name subtrees))])))
 
        (define fields
          (for/list ([label (ag:class-labels* class)])

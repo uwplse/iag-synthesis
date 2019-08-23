@@ -11,8 +11,10 @@
                                  grammar-link!
                                  make-child
                                  make-label
+                                 make-rule
                                  make-fold
-                                 make-index
+                                 make-scan
+                                 make-field
                                  make-iter
                                  set-class-interface!
                                  set-class-traits!
@@ -48,9 +50,12 @@
 (struct label (name type) #:constructor-name make-label)
 (struct label/in label ())
 (struct label/out label ())
+(struct label/var label ())
 
 ; rule definition
-(struct rule (attribute formula [iteration #:mutable #:auto]) #:auto-value #f #:transparent)
+(struct rule (attribute formula [iteration #:mutable]) #:transparent #:constructor-name make-rule)
+(struct rule/scalar rule () #:transparent)
+(struct rule/vector rule () #:transparent)
 (define rule-object (compose car rule-attribute))
 (define rule-field (compose cdr rule-attribute))
 
@@ -58,18 +63,28 @@
 (struct fold (init next) #:transparent #:constructor-name make-fold)
 (struct fold/left fold () #:transparent)
 (struct fold/right fold () #:transparent)
+(struct scan (init next) #:transparent #:constructor-name make-scan)
+(struct scan/left scan () #:transparent)
+(struct scan/right scan () #:transparent)
 
 ; terms
 (struct const (value) #:transparent)
-(struct field (attribute) #:transparent)
-(struct accum (attribute) #:transparent)
-(struct index (attribute default) #:transparent #:constructor-name make-index)
-(struct index/first index () #:transparent)
-(struct index/last index () #:transparent)
+(struct field (attribute) #:transparent #:constructor-name make-field)
+(struct field/get field () #:transparent)
+(struct field/cur field () #:transparent)
+(struct field/acc field () #:transparent)
+(struct field/sup field () #:transparent)
+(struct field/peek field (default) #:transparent)
+(struct field/pred field/peek () #:transparent)
+(struct field/succ field/peek () #:transparent)
+(struct field/first field (default) #:transparent)
+(struct field/last field (default) #:transparent)
+(struct length (child) #:transparent)
 (struct expr (operator operands) #:transparent)
 (struct call (function arguments) #:transparent)
-(struct ite (if then else) #:transparent)
-(define term? (disjoin ite? expr? call? const? field? accum? index?))
+(struct invoke (receiver method arguments) #:transparent)
+(struct branch (if then else) #:transparent)
+(define term? (disjoin const? field? length? expr? call? invoke? branch?))
 
 ; traversal definition
 (struct traversal (name visitors) #:transparent)
@@ -133,7 +148,7 @@
 
     (set-class-counters! class
                          (for/list ([rule (class-rules* class)]
-                                    #:when (rule-folds? rule))
+                                    #:when (rule-iterative? rule))
                            (rule-attribute rule)))
 
     (for ([rule (class-rules* class)])
@@ -225,7 +240,7 @@
           #:key rule-attribute))
 
 (define (class-accumulators* class)
-  (map rule-attribute (filter rule-folds? (class-rules* class))))
+  (map rule-attribute (filter rule-iterative? (class-rules* class))))
 
 (define (class-ref*/child class name #:partial? [partial? #f])
   (or (class-ref/child class name)
@@ -317,57 +332,79 @@
 ; Odds and ends
 ; -------------
 
-(define (rule-folds? rule)
-  (fold? (rule-formula rule)))
+(define (rule-iterative? rule)
+  (match (rule-formula rule)
+    [(fold _ _) #t] ; either `fold/left` or `fold/right`
+    [(scan _ _) #t] ; either `scan/left` or `scan/right`
+    [_ #f]))
 
 (define (rule-step rule)
   (match (rule-formula rule)
     [(fold _ next) next]
+    [(scan _ next) next]
     [term term]))
 
-(define (rule-fold-init rule)
-  (and (rule-folds? rule)
-       (fold-init (rule-formula rule))))
+(define (rule-init rule)
+  (match (rule-formula rule)
+    [(fold init _) init] ; either `fold/left` or `fold/right`
+    [(scan init _) init] ; either `scan/left` or `scan/right`
+    [_ #f]))
 
-(define (rule-fold-next rule)
-  (and (rule-folds? rule)
-       (fold-next (rule-formula rule))))
+(define (rule-next rule)
+  (match (rule-formula rule)
+    [(fold _ next) next] ; either `fold/left` or `fold/right`
+    [(scan _ next) next] ; either `scan/left` or `scan/right`
+    [_ #f]))
 
 (define (rule-order rule)
-  (and (rule-folds? rule)
-       (fold-order (rule-formula rule))))
+  (match (rule-formula rule)
+    [(fold/left _ _) 'left]
+    [(fold/right _ _) 'right]
+    [(scan/left _ _) 'left]
+    [(scan/right _ _) 'right]
+    [_ #f]))
 
 (define (rule-iterates class rule)
-  (if (rule-folds? rule)
-      (term-iterates class (fold-next (rule-formula rule)))
-      (let ([object (rule-object rule)])
-        (and (child/seq? (class-ref/child class object))
-             object))))
-
-(define/match (fold-order fold)
-  [((fold/left _ _)) 'left]
-  [((fold/right _ _)) 'right])
+  (match rule
+    [(rule/vector (cons child _) _ _) child]
+    [(rule/scalar _ (fold _ next) _) (term-iterates class next)]
+    [_ #f]))
 
 (define (term-iterates class term)
   (match term
     [(const _)
      #f]
-    [(field (cons object _))
-     (and (child/seq? (class-ref*/child class object))
-          object)]
-    [(accum _)
-     ; NOTE: Technically implies same iteration as this accumulator's rule.
+    [(field/get _)
      #f]
-    [(index _ default)
+    [(field/cur (cons child _))
+     child]
+    [(field/acc (cons object _))
+     (if (child/seq? (class-ref*/child class object #:partial? #t))
+         object
+         ; NOTE: Really implies same iteration as the accumulator's rule, which
+         ; is independent of the accumulating attribute's node for a fold rule.
+         #f)]
+    [(field/sup _)
+     #f]
+    [(field/peek (cons child _) _)
+     child]
+    [(field/first _ default)
      (term-iterates class default)]
+    [(field/last _ default)
+     (term-iterates class default)]
+    [(length _)
+     #f]
     [(expr _ operands)
      (ormap (curry term-iterates class) operands)]
     [(call _ arguments)
      (ormap (curry term-iterates class) arguments)]
-    [(ite if then else)
+    [(invoke receiver _ arguments)
+     (ormap (curry term-iterates class) (cons receiver arguments))]
+    [(branch if then else)
      (ormap (curry term-iterates class) (list if then else))]))
 
 (define fold-rev? fold/right?)
+(define scan-rev? scan/right?)
 (define iter-rev? iter/right?)
 
 (define (attribute->string attr)

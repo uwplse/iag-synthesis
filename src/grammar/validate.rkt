@@ -13,8 +13,8 @@
   [((ag:child/one name _)) (format "on scalar child '~a'" name)]
   [((ag:child/seq name _)) (format "on vector child '~a'" name)]
   [((ag:label name _)) (format "for label '~a'" name)]
-  [((ag:rule attr _ #f)) (format "in scalar rule for '~a'" (ag:attribute->string attr))]
-  [((ag:rule attr _ (? symbol?))) (format "in vector rule for '~a'" (ag:attribute->string attr))])
+  [((ag:rule/scalar (cons object label) _ _)) (format "in scalar rule for '~a.~a'" object label)]
+  [((ag:rule/vector (cons object label) _ _)) (format "in vector rule for '~a.~a'" object label)])
 
 (define context
   (make-parameter null (λ (item) (cons (contextualize item) (context)))))
@@ -49,27 +49,51 @@
 (define (validate-term G class term [iterates #f])
   (define/match (recur term)
     [((ag:const _)) (void)]
-    [((ag:field (cons 'self field)))
+    [((ag:field/get (cons 'self field)))
      (unless (ag:class-ref*/label class field #:partial? #t)
        (reject "Undefined field '~a' on self" field))]
-    [((ag:field (cons node field)))
+    [((ag:field/get (cons node field)))
      (define child (ag:class-ref*/child class node #:partial? #t))
      (unless child
        (reject "No such child '~a'" node))
      (parameterize ([context child])
        (unless (ag:interface-ref/label (ag:child-interface child) field)
          (reject "Undefined field '~a'" field))
-       (unless (implies (ag:child/seq? child) (eq? node iterates))
-         (reject "Mismatched iteration for field '~a'" field)))]
-    [((ag:accum attr))
+       (unless (ag:child/one? child)
+         (reject "Mismatched index for scalar field '~a'" field)))]
+    [((ag:field/cur (cons node field)))
+     (define child (ag:class-ref*/child class node #:partial? #t))
+     (unless child
+       (reject "No such child '~a'" node))
+     (parameterize ([context child])
+       (unless (ag:interface-ref/label (ag:child-interface child) field)
+         (reject "Undefined field '~a'" field))
+       (unless (and (ag:child/seq? child) (eq? node iterates))
+         (reject "Mismatched index for vector field '~a'" field)))]
+    [((ag:field/acc attr))
      (define friend (ag:class-ref*/rule class attr #:partial? #t))
      (unless friend
        (reject "No such attribute '~a'" attr))
-     (unless (ag:rule-folds? friend)
+     (unless (ag:rule-iterative? friend)
        (reject "No such accumulator for attribute '~a'" attr))
      (unless (eq? (ag:rule-iteration friend) iterates)
        (reject "Mismatched iteration for accumulator of attribute '~a'" attr))]
-    [((ag:index (cons node field) default))
+    [((ag:field/sup attr))
+     (define friend (ag:class-ref*/rule class attr #:partial? #t))
+     (unless friend
+       (reject "No such attribute '~a'" attr))
+     (unless (ag:rule-iterative? friend)
+       (reject "No such accumulator for attribute '~a'" attr))]
+    [((ag:field/peek (cons node field) default))
+     (define child (ag:class-ref*/child class node #:partial? #t))
+     (unless child
+       (reject "No such child '~a'" node))
+     (parameterize ([context child])
+       (unless (ag:interface-ref/label (ag:child-interface child) field)
+         (reject "Undefined field '~a'" field))
+       (unless (and (ag:child/seq? child) (eq? node iterates))
+         (reject "Mismatched index for scalar/uniterated field '~a'" field)))]
+    [((ag:field/first (cons node field) default))
      (define child (ag:class-ref*/child class node #:partial? #t))
      (unless child
        (reject "No such child '~a'" node))
@@ -77,10 +101,20 @@
        (unless (ag:interface-ref/label (ag:child-interface child) field)
          (reject "Undefined field '~a'" field))
        (unless (ag:child/seq? child)
-         (reject "Cannot index first/last field '~a'" field)))]
+         (reject "Mismatched index for scalar field '~a'" field)))]
+    [((ag:field/last (cons node field) default))
+     (define child (ag:class-ref*/child class node #:partial? #t))
+     (unless child
+       (reject "No such child '~a'" node))
+     (parameterize ([context child])
+       (unless (ag:interface-ref/label (ag:child-interface child) field)
+         (reject "Undefined field '~a'" field))
+       (unless (ag:child/seq? child)
+         (reject "Mismatched index for scalar field '~a'" field)))]
     [((ag:expr _ operands)) (for-each recur operands)]
     [((ag:call _ arguments)) (for-each recur arguments)]
-    [((ag:ite if then else)) (for-each recur (list if then else))])
+    [((ag:invoke receiver _ arguments)) (for-each recur (cons receiver arguments))]
+    [((ag:branch if then else)) (for-each recur (list if then else))])
   (recur term))
 
 ; Validate well-formedness of the rule statement.
@@ -88,6 +122,9 @@
   (validate-target G class (ag:rule-attribute rule))
   (match (ag:rule-formula rule)
     [(ag:fold init next)
+     (validate-term G class init)
+     (validate-term G class next (ag:rule-iteration rule))]
+    [(ag:scan init next)
      (validate-term G class init)
      (validate-term G class next (ag:rule-iteration rule))]
     [term

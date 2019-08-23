@@ -59,7 +59,6 @@
     (match command
       [(ag:recur child)
        (define subtree (tree-ref/child self child))
-       ;((distribute (curry traverse trav)) subtree)
        (if (list? subtree)
            (for ([node subtree])
              (traverse trav node))
@@ -69,82 +68,97 @@
       [(ag:iter/right child commands)
        (iterate self child reverse commands trav)]
       [(ag:eval attr)
-       (define rule (ag:class-ref*/rule class attr))
-       (set-box! (tree-select self attr)
-                 (evaluate self (ag:rule-formula rule)))]
+       (define expr (ag:rule-formula (ag:class-ref*/rule class attr)))
+       (set-box! (tree-ref*/field self attr) (evaluate self expr))]
       [(ag:skip)
        (void)])))
 
 (define (iterate self child order commands trav)
   (define class (tree-class self))
   (define state0 (accumulator self))
+  (define iterator (order (tree-ref/child self child)))
 
   (for*/permuted ([command commands])
     (match command
       [(ag:recur _)
        (void)]
       [(ag:eval attr)
-       (define rule (ag:class-ref*/rule class attr))
-       (when (ag:rule-folds? rule)
-         (set-box! (dict-ref state0 attr)
-                   (evaluate self (ag:rule-fold-init rule))))]
+       (define expr (ag:rule-init (ag:class-ref*/rule class attr)))
+       (when expr
+         (set-box! (dict-ref state0 attr) (evaluate self expr)))]
       [(ag:skip)
        (void)]))
 
-  (define state#
-    (for/fold ([state- state0])
-              ([node (order (tree-ref/child self child))])
+  (define state$
+    (for/fold ([state@ state0])
+              ([cursor iterator]
+               [follow (rest (append iterator (list #f)))])
       (define state+ (accumulator self))
       (for*/permuted ([command commands])
-                     (match command
-                       [(ag:recur (== child))
-                        (traverse trav node)]
-                       [(ag:eval attr)
-                        (define rule (ag:class-ref*/rule class attr))
-                        (define eval
-                          (curry evaluate self #:iterator child #:cursor node #:accumulator state-))
-                        ;; (match attr
-                        ;;   [(cons (== child) field)
-                        ;;    (set-box! (tree-ref/field node field)
-                        ;;              (eval (ag:rule-formula rule)))]
-                        ;;   [_
-                        ;;    (set-box! (dict-ref state+ attr)
-                        ;;              (eval (ag:rule-fold-next rule)))])
-                        (if (ag:rule-folds? rule)
-                            (set-box! (dict-ref state+ attr)
-                                      (eval (ag:rule-fold-next rule)))
-                            (set-box! (tree-select self attr #:iterator child #:cursor node)
-                                      (eval (ag:rule-formula rule))))]
-                       [(ag:skip)
-                        (void)]))
+        (match command
+          [(ag:recur (== child))
+           (traverse trav cursor)]
+          [(ag:eval (cons (== child) label))
+           (define rule (ag:class-ref*/rule class (cons child label)))
+           (define value (evaluate self (ag:rule-step rule) child state@ cursor follow))
+           (set-box! (tree-ref/field cursor label) value)
+           (when (ag:rule-iterative? rule)
+             (set-box! (dict-ref state+ (cons child label)) value))]
+          [(ag:eval attr)
+           (define expr (ag:rule-next (ag:class-ref*/rule class attr)))
+           (set-box! (dict-ref state+ attr) (evaluate self expr child state@ cursor follow))]
+          [(ag:skip)
+           (void)]))
 
       state+))
 
-  (for ([(attr value) (in-dict state#)])
-    (set-box! (tree-select self attr) (unbox value))))
+  (for*/permuted ([command commands])
+    (match command
+      [(ag:recur _)
+       (void)]
+      [(ag:eval (cons (== child) label))
+       ; TODO: Stash these values somewhere.
+       (void)]
+      [(ag:eval attr)
+       (set-box! (tree-ref*/field self attr) (unbox (dict-ref state$ attr)))]
+      [(ag:skip)
+       (void)])))
 
-(define (evaluate self term #:iterator [iter #f] #:cursor [cur #f] #:accumulator [acc #f])
+(define (evaluate self term [iter #f] [accum #f] [this #f] [next #f])
   (define/match (recur term)
     [((ag:const val))
      val]
-    [((ag:field attr))
-     (unbox (tree-select self attr #:iterator iter #:cursor cur))]
-    [((ag:accum attr))
-     (unbox (dict-ref acc attr))]
-    [((ag:index/first (cons child field) default))
+    [((ag:field/get attr))
+     (unbox (tree-ref*/field self attr))]
+    [((ag:field/cur (cons (== iter) label)))
+     (unbox (tree-ref/field this label))]
+    [((ag:field/acc attr))
+     (unbox (dict-ref accum attr))]
+    ; XXX: Unimplemented but also unused.
+    ; [((ag:field/sup attr))
+    ;  (unbox (dict-ref super attr))]
+    [((ag:field/peek (cons (== iter) label) default))
+     (if next
+         (unbox (tree-ref/field next label))
+         (recur default))]
+    [((ag:field/first (cons child label) default))
      (define nodes (tree-ref/child self child))
      (if (null? nodes)
          (recur default)
-         (unbox (tree-ref/field (first nodes) field)))]
-    [((ag:index/last (cons child field) default))
+         (unbox (tree-ref/field (first nodes) label)))]
+    [((ag:field/last (cons child label) default))
      (define nodes (tree-ref/child self child))
      (if (null? nodes)
          (recur default)
-         (unbox (tree-ref/field (last nodes) field)))]
-    [((ag:ite if then else))
+         (unbox (tree-ref/field (last nodes) label)))]
+    [((ag:length child))
+     (length (tree-ref/child self child))]
+    [((ag:branch if then else))
      (denote-ite (recur if) (recur then) (recur else))]
     [((ag:expr operator operands))
      (denote-op operator (map recur operands))]
     [((ag:call function arguments))
-     (denote-fn function (map recur arguments))])
+     (denote-fn function (map recur arguments))]
+    [((ag:invoke receiver function arguments))
+     (denote-fn function (map recur (cons receiver arguments)))])
   (recur term))

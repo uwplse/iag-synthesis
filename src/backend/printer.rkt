@@ -210,6 +210,7 @@
 ;;           | `(ref ,pattern)
 ;;           | `(mut ,pattern)
 ;;           | `(tuple ,pattern ...)
+;;           | '_
 ;;           | name
 (define/match (print-pattern pattern)
   [(`(constructor ,global ,content-pattern))
@@ -223,6 +224,8 @@
    (print-pattern pattern)]
   [(`(tuple ,pattern-list ...))
    (print-each print-pattern pattern-list "(" ")")]
+  [('_)
+   (display "_")]
   [(var)
    (display var)])
 
@@ -368,6 +371,8 @@
 (define/match (print-declaration declaration)
   [(`(blank))
    (newline)]
+  [(`(raw ,text))
+   (display text)]
   [(`(extern ,package))
    (printf "extern crate ~a;" package)
    (newline)]
