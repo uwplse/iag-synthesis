@@ -1,6 +1,27 @@
 ;; From file:///Users/yufeng/research/other/iag-synthesis/browser/examples/bug/servo9306.html
 
-(define-stylesheet doc-1)
+(define-stylesheet doc-1
+  ((tag body)
+   [margin-top (px 0)]
+   [margin-bottom (px 0)]
+   [margin-left (px 0)]
+   [margin-right (px 0)])
+  ((class green)
+   [background-color lime]
+   [height (px 40)]
+   [width (px 400)]
+   [top (px 40)]
+   [left (% 50)]
+   [margin-left  (px -300)]
+   [position absolute]
+   [padding-top (px 0)]
+   [padding-bottom (px 0)]
+   [padding-left (px 100)]
+   [padding-right (px 100)])
+  ((class red)
+   [background-color red]
+   [position absolute]
+   [right (px 0)]))
 
 (define-fonts doc-1
   [16 "serif" 400 normal 12 4 0 0 19.2])

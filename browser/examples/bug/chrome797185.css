@@ -25,3 +25,7 @@ body {
 .absolute {
     position: absolute;
 }
+
+br {
+    clear: both;
+}

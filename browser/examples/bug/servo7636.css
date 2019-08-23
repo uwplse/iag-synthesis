@@ -4,7 +4,7 @@ body {
 
 #first {
     margin-left: 10px;
-    display: block; /* inline style property */
+    display: block; /* property from attribute rule */
     background-color: red;
     height: 50px;
     width: 100px;

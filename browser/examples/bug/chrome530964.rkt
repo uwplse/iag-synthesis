@@ -1,8 +1,6 @@
 ;; From file:///Users/yufeng/research/other/iag-synthesis/browser/examples/bug/chrome530964.html
 
 (define-stylesheet doc-1
-  (*
-   [box-sizing border-box])
   ((class container)
    #;[border-top-color red]
    [border-top-style solid]
@@ -27,8 +25,8 @@
    #;[border-bottom-color black]
    [border-bottom-style solid]
    [border-bottom-width (px 1)]
-   [width (% 100)]
-   [height (px (/ 200 3))]
+   [width (px 300)]
+   [height (px 66.6666)]
    [float left]))
 
 (define-fonts doc-1

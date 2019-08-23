@@ -1,36 +1,22 @@
 ;; From file:///Users/yufeng/research/other/iag-synthesis/browser/examples/bug/chrome670208.html
 
 (define-stylesheet doc-1
-  (*
-   [box-sizing border-box])
   ((class box)
-   #;[direction rtl]
    [width (px 220)]
    [height (px 220)]
-   #;[border-top-color black]
+   [border-top-color black]
    [border-top-style solid]
    [border-top-width (px 1)]
-   #;[border-right-color black]
+   [border-right-color black]
    [border-right-style solid]
    [border-right-width (px 1)]
-   #;[border-bottom-color black]
+   [border-bottom-color black]
    [border-bottom-style solid]
    [border-bottom-width (px 1)]
-   #;[border-left-color black]
+   [border-left-color black]
    [border-left-style solid]
    [border-left-width (px 1)]
-   #;[border-image-outset 0]
-   #;[border-image-repeat stretch]
-   #;[border-image-slice (% 100)]
-   #;[border-image-source none]
-   #;[border-image-width 1]
-   [overflow-y auto]
-   [overflow-x hidden])
-  ((fake ".box::after")
-   #;[content ""]
-   [display block]
-   [clear both]
-   [height (px 0)])
+   [overflow auto])
   ((class item)
    [width (px 55)]
    [height (px 55)]
@@ -38,23 +24,18 @@
    [margin-left (px 10)]
    [margin-bottom (px 10)]
    [background-color red]
-   #;[border-top-color transparent]
+   [border-top-color transparent]
    [border-top-style solid]
    [border-top-width (px 1)]
-   #;[border-right-color transparent]
+   [border-right-color transparent]
    [border-right-style solid]
    [border-right-width (px 1)]
-   #;[border-bottom-color transparent]
+   [border-bottom-color transparent]
    [border-bottom-style solid]
    [border-bottom-width (px 1)]
-   #;[border-left-color transparent]
+   [border-left-color transparent]
    [border-left-style solid]
-   [border-left-width (px 1)]
-   #;[border-image-outset 0]
-   #;[border-image-repeat stretch]
-   #;[border-image-slice (% 100)]
-   #;[border-image-source none]
-   #;[border-image-width 1]))
+   [border-left-width (px 1)]))
 
 (define-fonts doc-1
   [16 "serif" 400 normal 12 4 0 0 19.2])

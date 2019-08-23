@@ -34,7 +34,7 @@
      ([BLOCK :x 8 :y 8 :w 30 :h 90 :elt 7]
       ([LINE]
        ([INLINE :x 8 :y 98 :w 30 :h 90 :elt 8])
-       ([TEXT :x 38 :y 176 :w 0 :h 16 :text " "])
+       ;([TEXT :x 38 :y 176 :w 0 :h 16 :text " "])
        ([BLOCK :x 8 :y 193.6 :w 30 :h 90 :elt 9]))))))))
 
 (define-document doc-1
@@ -46,8 +46,8 @@
     ([div :num 5 :id d0]
      ([div :num 6 :id d1])
      ([div :num 7]
-      ([div :num 8 :id d2]) " "
-      ([div :num 9 :id d3]))) " ")))
+      ([div :num 8 :id d2])
+      ([div :num 9 :id d3]))))))
 
 (define-problem doc-1
   :title "JS Bin"

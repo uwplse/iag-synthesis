@@ -1,9 +1,11 @@
 body {
   width: 100px;
-  border: 3px solid red;
+  border-width: 3px;
+  border-style: solid;
+  border-color: red;
 }
 
-div:nth-child(1) {
+#div-first-child {
   float: right;
   height: 30px;
   width: 30px;
@@ -13,24 +15,26 @@ div:nth-child(1) {
 em {
   display: block;
   clear: both;
+  width: 16px;
+  height: 16px;
 }
 
-em::before {
+#em-before {
   display: block;
-  content: ".";
-  height: 0;
+  width: 16px;
+  height: 0px;
   overflow: hidden;
   clear: both;
 }
 
-em + div {
+#em-after {
   margin-top: -30px;
-  line-height: 0;
+  /* line-height: 0px; */
 }
 
-em + div > span {
+#div-child {
   display: inline-block;
-  width: 50%;
+  width: 50px;
   height: 30px;
   background: yellow;
 }

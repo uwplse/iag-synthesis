@@ -15,7 +15,7 @@
    #;[background-origin padding-box]
    #;[background-clip border-box])
   ((tag span)
-   [color (rgb 0 0 0)]))
+   [color black]))
 
 (define-fonts doc-1
   [16 "serif" 400 normal 12 4 0 0 19.2])

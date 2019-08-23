@@ -13,6 +13,8 @@
    [border-right-style solid]
    [border-bottom-style solid]
    [border-left-style solid]
+   [border-left-width (px 3)]
+   [border-right-width (px 3)]
    [border-top-width (px 32)]
    [border-bottom-width (px 32)]
    [left (px 0)]

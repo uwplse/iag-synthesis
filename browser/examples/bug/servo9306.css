@@ -1,20 +1,23 @@
 body {
-    margin: 0;
+    margin: 0px;
 }
 
 .green {
-    background: #0F0;
+    background-color: lime;
     height: 40px;
     width: 400px;
     top: 40px;
     left: 50%;
     margin-left: -300px;
     position: absolute;
-    padding: 0px 100px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    padding-left: 100px;
+    padding-right: 100px;
 }
 
 .red {
-    background: #F00;
+    background-color: red;
     position: absolute;
-    right: 0;
+    right: 0px;
 }

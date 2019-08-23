@@ -10,8 +10,7 @@
    [position absolute]
    [background-color red]
    [width (px 100)]
-   [height (px 100)]
-   #;[z-index -1])
+   [height (px 100)])
   ((id test-overlapping-green)
    [background-color green]
    [width (px 100)]

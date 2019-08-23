@@ -2,7 +2,7 @@
 
 (define-stylesheet doc-1
   ((id div1)
-   [display flow-root])
+   [overflow auto])
   ((id div2)
    [float left]
    [width (px 100)]

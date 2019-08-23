@@ -2,6 +2,7 @@
 
 (define-stylesheet doc-1
   ((tag div)
+   [width (px 100)]
    [height (px 20)])
   ((id c1)
    [background-color yellow]

@@ -6,6 +6,8 @@
    [margin-right (px 0)]
    [margin-bottom (px 0)]
    [margin-left (px 0)])
+  ((tag br)
+   [clear both])
   ((class float)
    [float left]
    [width (px 50)]
@@ -73,7 +75,7 @@
     ([div :num 4 :class (container)]
      ([div :num 5]
       ([div :num 6 :class (float)])
-      ([br :num 7]))
+      ([div :num 7]))
      ([div :num 8 :class (absolute)])
      ([div :num 9 :class (content)])) " ")))
 

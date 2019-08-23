@@ -1,6 +1,20 @@
 ;; From file:///Users/yufeng/research/other/iag-synthesis/browser/examples/bug/servo7166.html
 
-(define-stylesheet doc-1)
+(define-stylesheet doc-1
+  ((id first)
+   [position absolute]
+   [width (px 100)]
+   [height (px 100)]
+   [background-color red])
+  ((id second)
+   [position absolute]
+   [top (px 50)]
+   [left (px 50)]
+   [width (px 100)]
+   [height (px 100)]
+   [background-color green])
+  ((id third)
+   [position fixed]))
 
 (define-fonts doc-1
   [16 "serif" 400 normal 12 4 0 0 19.2])

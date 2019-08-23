@@ -20,7 +20,7 @@
    #;[border-image-slice (% 100)]
    #;[border-image-source none]
    #;[border-image-width 1])
-  ((fake "div:nth-child(1)" (id edoc-10001))
+  ((id div-first-child)
    [float right]
    [height (px 30)]
    [width (px 30)]
@@ -35,20 +35,22 @@
    #;[background-clip border-box])
   ((tag em)
    [display block]
-   [clear both])
-  ((fake "em::before")
+   [clear both]
+   [width (px 16)]
+   [height (px 16)])
+  ((id em-before)
    [display block]
-   #;[content "."]
+   [width (px 16)]
    [height (px 0)]
    [overflow-x hidden]
    [overflow-y hidden]
    [clear both])
-  ((fake "em + div" (id edoc-10002))
+  ((id em-after)
    [margin-top (px -30)]
-   [line-height 0])
-  ((fake "em + div > span" (id edoc-10003) (id edoc-10004))
+   [line-height (px 0)])
+  ((class div-child)
    [display inline-block]
-   [width (% 50)]
+   [width (px 50)]
    [height (px 30)]
    [background-color yellow]
    #;[background-position-x (% 0)]
@@ -81,11 +83,11 @@
    ([head :num 1]
     ([link :num 2]))
    ([body :num 3]
-    ([div :num 4 :id edoc-10001])
+    ([span :num 4 :id em-before])
     ([em :num 5])
-    ([div :num 6 :id edoc-10002]
-     ([span :num 7 :id edoc-10003])
-     ([span :num 8 :id edoc-10004])) " ")))
+    ([div :num 6 :id em-after]
+     ([span :num 7 :id div-first-child :class (div-child)])
+     ([span :num 8 :class (div-child)])))))
 
 (define-problem doc-1
   :title ""

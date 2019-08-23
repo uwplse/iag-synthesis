@@ -96,10 +96,10 @@
     ([title :num 3]))
    ([body :num 4]
     ([div :num 5 :id edoc-10001]
-     ([span :num 6 :id s1]) " "
-     ([div :num 7 :id d1]) " "
-     ([div :num 8 :id d2]) " "
-     ([div :num 9 :id d3])) " ")))
+     ([span :num 6 :id s1])
+     ([div :num 7 :id d1])
+     ([div :num 8 :id d2])
+     ([div :num 9 :id d3])))))
 
 (define-problem doc-1
   :title "JS Bin"

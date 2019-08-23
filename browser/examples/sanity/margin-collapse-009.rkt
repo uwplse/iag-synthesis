@@ -2,15 +2,15 @@
 
 (define-stylesheet doc-1
   ((tag div)
-   [height (px 5)]
-   [width (px 5)])
+   [height (px 80)]
+   [width (px 80)])
   ((id div1)
-   [height (px 2)]
-   [margin-top (px 2)]
+   [height (px 32)]
+   [margin-top (px 32)]
    [overflow-x hidden]
    [overflow-y hidden])
   ((id div2)
-   [height (px 1)]
+   [height (px 16)]
    [background-color red]
    #;[background-position-x (% 0)]
    #;[background-position-y (% 0)]
@@ -20,7 +20,7 @@
    #;[background-size auto]
    #;[background-origin padding-box]
    #;[background-clip border-box]
-   [margin-top (px 2)]))
+   [margin-top (px 32)]))
 
 (define-fonts doc-1
   [16 "serif" 400 normal 12 4 0 0 19.2])

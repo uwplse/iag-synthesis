@@ -1,7 +1,8 @@
+/*
 main {
     height: 300px;
     width: 250px;
-    background-image: linear-gradient(to bottom, red, blue);
+    background-image: blue;
     overflow: scroll;
 }
 
@@ -12,8 +13,9 @@ div {
     overflow: scroll;
 }
 
-  p {
+p {
     height: 250px;
-    background-image: linear-gradient(to bottom, white, black);
-    margin: 0;
-  }
+    background-image: white;
+    margin: 0px;
+}
+*/

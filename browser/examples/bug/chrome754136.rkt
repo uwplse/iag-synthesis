@@ -81,8 +81,8 @@
     ([title :num 3]))
    ([body :num 4]
     ([div :num 5 :class (container)]
-     ([span :num 6 :class (padded)] " "
-      ([span :num 7 :class (float)]) " ")) " ")))
+     ([span :num 6 :class (padded)]
+      ([span :num 7 :class (float)]))))))
 
 (define-problem doc-1
   :title "JS Bin"
