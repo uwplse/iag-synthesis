@@ -54,4 +54,5 @@
       (printf "Symbolic Evaluation: ~ams\n" (+ running-time overhead-time))
       (printf "Constraint Solving: ~ams\n" (- solving-time overhead-time))
       (printf "Constraint Size: ~a nodes and ~a variables\n" nodes variables)
+      (clear)
       (and concretize (concretize* concretize schedule)))))

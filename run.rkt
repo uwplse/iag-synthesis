@@ -17,7 +17,8 @@
 ;(define verbose? (make-parameter #f))
 (define *root* (make-parameter 'Root))
 (define *output* (make-parameter #f))
-(define *example* (make-parameter #f))
+(define *examples* (make-parameter null))
+(define *sketches* (make-parameter null))
 
 (define (parse-grammar filename)
   (let ([G (file->grammar filename)])
@@ -38,23 +39,35 @@
  #:once-each
  ;[("-v" "--verbose") "Display verbose intermediate information"
  ;                    (verbose? #t)]
- [("-R" "--root") classname "Class to use as tree root"
+ [("-R" "--root") classname "Root interface of the attribute grammar"
                   (*root* (string->symbol classname))]
- [("-o" "--out") filename "File to output generated code"
-                  (*output* filename)]
- [("-T" "--tree") filename "Tree to use as synthesis example"
-                  (*example* filename)]
- #:args (schedule-sketch grammar-filename)
- (let* ([G (parse-grammar grammar-filename)]
-        [E (if (*example*)
-               (list (file->tree G (*example*)))
-               (tree-examples G (*root*)))]
-        [S (parse-schedule-sketch G schedule-sketch)]
-        [S* (complete-sketch G S E)])
-   (when S*
-     (displayln (schedule->string S*))
-     (when (*output*)
-       (let ([P (generate-program G S*)]
-             [file (open-output-file (*output*) #:mode 'text #:exists 'replace)])
-         (parameterize ([current-output-port file])
-           (print-program P)))))))
+ [("-o" "--out") filename "File to output generated Rust implementation"
+                 (*output* filename)]
+ #:multi
+ [("-x" "--example") filename "Example tree in XML format to constrain synthesis"
+                     (*examples* (cons filename (*examples*)))]
+ [("-s" "--sketch") sketch "Schedule sketch against which to attempt synthesis"
+                    (*sketches* (cons sketch (*sketches*)))]
+ #:args (grammar-filename)
+
+ (define G (parse-grammar grammar-filename))
+ (define E
+   (if (empty? (*examples*))
+       (tree-examples G (*root*))
+       (map (curry file->tree G) (*examples*))))
+
+ (define S*
+   (for/or ([sketch (reverse (*sketches*))])
+     (printf "Schedule Sketch: ~a~n" sketch)
+     (define S (parse-schedule-sketch G sketch))
+     (define S* (complete-sketch G S E))
+     (newline)
+     S*))
+
+ (when S*
+   (displayln (schedule->string S*))
+
+   (when (*output*)
+     (define P (generate-program G S*))
+     (parameterize ([current-output-port (open-output-file (*output*) #:mode 'text #:exists 'replace)])
+       (print-program P)))))
