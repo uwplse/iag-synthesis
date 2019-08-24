@@ -20,15 +20,6 @@
                           urColor="6"
                           fraudColor="99"
                           inJavascript="1" />
-            <PollingPlace totalVotes="100"
-                          totalVotesUR="50"
-                          urVotes="50"
-                          urVotesProjected="32"
-                          turnout="100"
-                          defColor="10"
-                          urColor="6"
-                          fraudColor="99"
-                          inJavascript="1" />
           </HSquare>
         </VSquare>
       </District>
@@ -37,15 +28,6 @@
       <District>
         <VSquare>
           <HSquare>
-            <PollingPlace totalVotes="100"
-                          totalVotesUR="86"
-                          urVotes="86"
-                          urVotesProjected="42"
-                          turnout="100"
-                          defColor="10"
-                          urColor="6"
-                          fraudColor="99"
-                          inJavascript="1" />
           </HSquare>
         </VSquare>
       </District>
