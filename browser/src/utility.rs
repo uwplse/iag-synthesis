@@ -492,6 +492,9 @@ pub struct MarginAccumulator {
     pub collapse: bool,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FloatDirection { Left, Right }
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 struct FloatLevel {
     bottom: Pixels, // block_end
@@ -531,23 +534,35 @@ impl FloatLevel {
 
 #[derive(Clone, Default, PartialEq, Debug)]
 pub struct FloatCursor {
-    block: Pixels,
+    block_start: Pixels,
     inline: Vec<FloatLevel>,
+    left_block_end: Pixels,
+    right_block_end: Pixels,
 }
 
 impl FloatCursor {
+    pub fn empty() -> crate::lazy::Lazy<FloatCursor> {
+        crate::lazy::Lazy::new(FloatCursor::new())
+    }
+
     pub fn new() -> FloatCursor {
         FloatCursor {
-            block: 0.0,
+            block_start: 0.0,
             inline: Vec::new(),
+            left_block_end: 0.0,
+            right_block_end: 0.0,
         }
     }
 
-    fn advance(&self, block: Pixels, level: FloatLevel) -> FloatCursor {
+    fn advance(&self, dir: FloatDirection, area: &Rect<Pixels>) -> FloatCursor {
+        let level = match dir {
+            FloatDirection::Left => FloatLevel::left(area),
+            FloatDirection::Right => FloatLevel::right(area),
+        };
         let mut inline: Vec<FloatLevel> = self
             .inline
             .iter()
-            .skip_while(|l| l.bottom < block)
+            .skip_while(|l| l.bottom < area.y)
             .cloned()
             .collect();
         match inline.binary_search_by(|l| l.order(&level)) {
@@ -558,27 +573,33 @@ impl FloatCursor {
                 inline.insert(i, level);
             }
         }
-        FloatCursor { block, inline }
+        let block_start = area.y;
+        let block_end = area.y + area.height;
+        let (left_block_end, right_block_end) = match dir {
+            FloatDirection::Left => (block_end, self.right_block_end),
+            FloatDirection::Right => (self.left_block_end, block_end),
+        };
+        FloatCursor { block_start, inline, left_block_end, right_block_end }
     }
 
     pub fn insert_left(&self, content: &Rect<Pixels>) -> FloatCursor {
-        if content.height > 0.0 {
-            self.advance(content.y, FloatLevel::left(&content))
-        } else {
-            self.clone()
-        }
+        self.advance(FloatDirection::Left, content)
     }
 
     pub fn insert_right(&self, content: &Rect<Pixels>) -> FloatCursor {
-        if content.height > 0.0 {
-            self.advance(content.y, FloatLevel::right(&content))
-        } else {
-            self.clone()
-        }
+        self.advance(FloatDirection::Right, content)
+    }
+
+    pub fn add_left(&self, x: Pixels, y: Pixels, width: Pixels, height: Pixels) -> crate::lazy::Lazy<FloatCursor> {
+        crate::lazy::Lazy::new(self.insert_left(&Rect { x, y, width, height }))
+    }
+
+    pub fn add_right(&self, x: Pixels, y: Pixels, width: Pixels, height: Pixels) -> crate::lazy::Lazy<FloatCursor> {
+        crate::lazy::Lazy::new(self.insert_right(&Rect { x, y, width, height }))
     }
 
     pub fn place_left(&self, container: &Rect<Pixels>, width: Pixels) -> (Pixels, Pixels) {
-        let mut y = self.block.max(container.y);
+        let mut y = self.block_start.max(container.y);
         let x = container.x;
         for level in &self.inline {
             // Is the proposed left-floating anchor above this layer of
@@ -610,7 +631,7 @@ impl FloatCursor {
     }
 
     pub fn place_right(&self, container: &Rect<Pixels>, width: Pixels) -> (Pixels, Pixels) {
-        let mut y = self.block.max(container.y);
+        let mut y = self.block_start.max(container.y);
         let x = container.x + container.width;
         for level in &self.inline {
             // Is the proposed right-floating anchor above this layer of
@@ -641,13 +662,17 @@ impl FloatCursor {
         (x - width, y)
     }
 
-    pub fn clear_left(&self, block: Pixels) -> Pixels {
-        self.inline.last().map_or(self.block, |l| l.bottom).max(block) - block
+    pub fn inline_space(&self, inline_start: Pixels, inline_end: Pixels, block_start: Pixels) -> (Pixels, Pixels) {
+        if let Some(level) = self.inline.iter().skip_while(|l| l.bottom < block_start).next() {
+            (inline_start.max(level.left), inline_end.min(level.right))
+        } else {
+            (inline_start, inline_end)
+        }
     }
 
-    pub fn clear_right(&self, block: Pixels) -> Pixels {
-        self.inline.last().map_or(self.block, |l| l.bottom).max(block) - block
-    }
+    pub fn left_clearance(&self) -> Pixels { self.left_block_end }
+
+    pub fn right_clearance(&self) -> Pixels { self.right_block_end }
 }
 
 /*
