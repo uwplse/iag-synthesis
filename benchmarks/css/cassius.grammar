@@ -1,3 +1,4 @@
+/* WIP: Syntactic translation of Cassius semantics */
 traversal layout {
     case Viewport {
         ??;
@@ -8,7 +9,7 @@ traversal layout {
         iterate children { ??; recur children; ??; }
         ??;
     }
-    case Float {
+    case Floated {
         ??;
         iterate children { ??; recur children; ??; }
         ??;
@@ -22,20 +23,20 @@ interface Tree {
 
 interface Layout {
     /* X, Y and width/height */
-    input x : Pixels;
-    input y : Pixels;
-    input w : Pixels;
-    input h : Pixels;
+    output x : Pixels;
+    output y : Pixels;
+    output w : Pixels;
+    output h : Pixels;
 
     /* X and Y offset */
-    //input xo : Pixels;
-    //input yo : Pixels;
+    output xo : Pixels;
+    output yo : Pixels;
 
     /* margins */
-    input mt : Pixels;
-    input mr : Pixels;
-    input mb : Pixels;
-    input ml : Pixels;
+    output mt : Pixels;
+    output mr : Pixels;
+    output mb : Pixels;
+    output ml : Pixels;
 
     /* top/bottom positive/negative margins for collapsing */
     output mtp : Pixels;
@@ -56,30 +57,78 @@ interface Layout {
     output collapse_weird : bool; /* s831c */
 
     /* padding */
-    input pt : Pixels;
-    input pr : Pixels;
-    input pb : Pixels;
-    input pl : Pixels;
+    output pt : Pixels;
+    output pr : Pixels;
+    output pb : Pixels;
+    output pl : Pixels;
 
     /* border */
-    input bt : Pixels;
-    input br : Pixels;
-    input bb : Pixels;
-    input bl : Pixels;
+    output bt : Pixels;
+    output br : Pixels;
+    output bb : Pixels;
+    output bl : Pixels;
 
-    output width : Pixels;
-    output height : Pixels;
+    output scroll_x : Pixels;
+    output scroll_y : Pixels;
 
-    input scroll_x : Pixels;
-    input scroll_y : Pixels;
+    output stf_width : Pixels;
+    output stf_max : Pixels;
+    output float_stf_max : Pixels;
+    output w_from_stf_width : bool;
+    output width_set : bool;
 
-    input has_contents : bool;
-    input has_clearance : bool;
-    input is_first_box : bool;
-    input is_last_box : bool;
+    output text_indent : Pixels;
+    output baseline : Pixels;
+    output above_baseline : Pixels;
+    output below_baseline : Pixels;
+
+    output float_cursor_in : FloatCursor;
+    output float_cursor_out : FloatCursor;
+
+    output has_content : bool;
+    output is_first_box : bool;
+    output is_last_box : bool;
+    output is_replaced : bool;
+
+    output is_firstish_box : bool;
+    output is_collapsed_through : bool;
+    output inline_float_next_line : bool;
+    output lookback_overflow_width : Pixels;
+    output line_height : Pixels;
+    output uses_parent_width : Pixels;
+    output inline_block_offset : Pixels;
+
+    output foreground : Color;
+    output background : Color;
+
+    input is_in_flow : bool;
     input is_replaced : bool;
-
     input style : Style; // computed
+
+    /* Temporary accumulators */
+    output has_content__rec : bool;
+}
+
+trait BoxModel {
+    self.has_content__rec :=
+        foldl
+            false
+        ..
+            if children.is_in_flow then children.has_content else @{self.has_content__rec};
+
+    children.has_content :=
+        children.ml > 0 || children.bl > 0 || children.pl > 0 ||
+        children.pr > 0 || children.br > 0 || children.mr > 0 ||
+        children.w > 0 ||
+        @{self.has_content__rec} ||
+        children.has_content__rec;
+
+    self.is_collapsed_through :=
+        self.box_height == 0.0 &&
+        !self.is_replaced &&
+        ((self.is_line() &&
+          ![#]{children.has_content : false}) ||
+         [#]{children.is_collapsed_through : false});
 }
 
 /* The document viewport. */
@@ -254,7 +303,7 @@ class Block : Layout {
 }
 
 /* A box under floating layout. */
-class Float(NonCollapsibleMargin) : Layout {
+class Floated(NonCollapsibleMargin) : Layout {
     children {
         children : [Layout];
     }
