@@ -1,4 +1,4 @@
-traversal layout {
+traversal inorder {
     case Viewport {
         ??;
         recur root;
@@ -64,69 +64,82 @@ class Viewport : Tree {
     children {
         root : LayoutNode; // The initial containing block.
     }
-    rules {
-        root.container.x := 0.0;
-        root.container.y := 0.0;
-        root.container.width := self.width;
-        root.container.height := 0.0; // self.height
-        root.float_cursor_in := FloatCursor::empty();
+    statements {
+        root.layout.container.x := 0.0;
+        root.layout.container.y := 0.0;
+        root.layout.container.width := self.width;
+        root.layout.container.height := 0.0; // self.height
+        root.layout.float_cursor_in := FloatCursor::empty();
     }
 }
 
 interface LayoutNode {
     // Container box
-    output container.x : Pixels;
-    output container.y : Pixels;
-    output container.width : Pixels;
-    output container.height : Pixels;
+    output layout.container.x : Pixels;
+    output layout.container.y : Pixels;
+    output layout.container.width : Pixels;
+    output layout.container.height : Pixels;
 
     // Content box (computed)
-    output content_box.x : Pixels;
-    output content_box.y : Pixels;
-    output content_box.width : Pixels;
-    output content_box.height : Pixels;
+    output layout.content_box.x : Pixels;
+    output layout.content_box.y : Pixels;
+    output layout.content_box.width : Pixels;
+    output layout.content_box.height : Pixels;
 
     // Padding box (computed)
-    output padding_box.x : Pixels;
-    output padding_box.y : Pixels;
-    output padding_box.width : Pixels;
-    output padding_box.height : Pixels;
+    output layout.padding_box.x : Pixels;
+    output layout.padding_box.y : Pixels;
+    output layout.padding_box.width : Pixels;
+    output layout.padding_box.height : Pixels;
 
     // Border box (computed)
-    output border_box.x : Pixels;
-    output border_box.y : Pixels;
-    output border_box.width : Pixels;
-    output border_box.height : Pixels;
+    output layout.border_box.x : Pixels;
+    output layout.border_box.y : Pixels;
+    output layout.border_box.width : Pixels;
+    output layout.border_box.height : Pixels;
 
     // Margin box (computed)
-    output margin_box.x : Pixels;
-    output margin_box.y : Pixels;
-    output margin_box.width : Pixels;
-    output margin_box.height : Pixels;
+    output layout.margin_box.x : Pixels;
+    output layout.margin_box.y : Pixels;
+    output layout.margin_box.width : Pixels;
+    output layout.margin_box.height : Pixels;
 
     // Padding edges (computed)
-    output padding.left : Pixels;
-    output padding.right : Pixels;
-    output padding.top : Pixels;
-    output padding.bottom : Pixels;
+    output layout.padding.left : Pixels;
+    output layout.padding.right : Pixels;
+    output layout.padding.top : Pixels;
+    output layout.padding.bottom : Pixels;
 
     // Border edges (computed)
-    output border.left : Pixels;
-    output border.right : Pixels;
-    output border.top : Pixels;
-    output border.bottom : Pixels;
+    output layout.border.left : Pixels;
+    output layout.border.right : Pixels;
+    output layout.border.top : Pixels;
+    output layout.border.bottom : Pixels;
 
     // Margin edges (computed)
-    output margin.left : Pixels;
-    output margin.right : Pixels;
-    output margin.top : Pixels;
-    output margin.bottom : Pixels;
+    output layout.margin.left : Pixels;
+    output layout.margin.right : Pixels;
+    output layout.margin.top : Pixels;
+    output layout.margin.bottom : Pixels;
+
+    // Margin collapse
+    //output layout.margin_above.positive : Pixels;
+    //output layout.margin_above.negative : Pixels;
+    output layout.margin_above.collapse : bool;
+    //output layout.margin_below.positive : Pixels;
+    //output layout.margin_below.negative : Pixels;
+    output layout.margin_below.collapse : bool;
 
     // Difference between intrinsic and container widths
-    output underflow : Pixels;
+    output layout.underflow : Pixels;
+
+    output layout.float_cursor_in : FloatCursor;
+    output layout.float_cursor_out : FloatCursor;
+    //output layout.float_clearance : Pixels;
+    output layout.block_size : Pixels;
 
     // Anonymity
-    input anonymous : bool;
+    input layout.anonymous : bool;
 
     // Display and position mode
     input style.display : Display;
@@ -167,222 +180,121 @@ interface LayoutNode {
     input style.border.top : Pixels;
     input style.border.bottom : Pixels;
 
-    // Margin collapse
-    //output margin_above.positive : Pixels;
-    //output margin_above.negative : Pixels;
-    output margin_above.collapse : bool;
-    //output margin_below.positive : Pixels;
-    //output margin_below.negative : Pixels;
-    output margin_below.collapse : bool;
-
     // Float positioning
     input style.float : Float;
-    output float_cursor_in : FloatCursor;
-    output float_cursor_out : FloatCursor;
-    output float_clearance : Pixels;
-    output block_size : Pixels;
-    input carried_margin : Pixels;
+    input layout.carried_margin : Pixels;
 }
 
 class Block : LayoutNode {
     children {
         children : [LayoutNode];
     }
-    rules {
-        self.border.top := self.style.border.top;
-        self.border.bottom := self.style.border.bottom;
+    statements {
+        self.layout.border.left := self.style.border.left;
+        self.layout.border.right := self.style.border.right;
+        self.layout.border.top := self.style.border.top;
+        self.layout.border.bottom := self.style.border.bottom;
 
-        self.padding.top := self.style.padding.top;
-        self.padding.bottom := self.style.padding.bottom;
+        self.layout.padding.left := self.style.padding.left;
+        self.layout.padding.right := self.style.padding.right;
+        self.layout.padding.top := self.style.padding.top;
+        self.layout.padding.bottom := self.style.padding.bottom;
 
-        self.margin_above.collapse :=
-            self.padding.top == 0.0 && self.border.top == 0.0;
-        self.margin_below.collapse :=
-            self.padding.bottom == 0.0 && self.border.bottom == 0.0 &&
-            is_auto(self.style.height);
+        self.layout.margin_above.collapse :=
+            self.layout.padding.top == 0.0 && self.layout.border.top == 0.0;
+        self.layout.margin_below.collapse :=
+            self.layout.padding.bottom == 0.0 && self.layout.border.bottom == 0.0 &&
+            self.style.height->is_auto();
 
-        self.margin.top := max(value(self.style.margin.top) - self.carried_margin, 0.0);
-        self.margin.bottom := value(self.style.margin.bottom);
+        self.layout.margin.left :=
+            if self.style.margin.left->is_auto() then
+                if self.style.width->is_auto() || self.layout.underflow < 0.0 then
+                    0.0
+                else if self.style.margin.right->is_auto() then
+                    self.layout.underflow / 2.0
+                else
+                    self.layout.underflow
+            else
+                self.style.margin.left->value();
 
-        self.content_box.x :=
-            self.container.x +
-            self.padding.left + self.border.left + self.margin.left;
+        self.layout.margin.right :=
+            if self.style.width->is_auto() && self.layout.underflow < 0.0 then
+                self.style.margin.right->value() + self.layout.underflow
+            else if self.style.margin.right->is_auto() then
+                if self.style.width->is_auto() then
+                    0.0
+                else if self.style.margin.left->is_auto() then
+                    self.layout.underflow / 2.0
+                else
+                    self.layout.underflow
+            else if !self.style.margin.left->is_auto() || !self.style.width->is_auto() then
+                self.style.margin.right->value() + self.layout.underflow
+            else
+                self.style.margin.right->value();
 
-        // Position the box below all the previous boxes in the container.
-        self.content_box.y :=
+        self.layout.margin.top := max(self.style.margin.top->value() - self.layout.carried_margin, 0.0);
+        self.layout.margin.bottom := self.style.margin.bottom->value();
+
+        self.layout.underflow :=
+            self.layout.container.width
+            - self.style.padding.left - self.style.padding.right
+            - self.style.border.left - self.style.border.right
+            - self.style.margin.left->value() - self.style.margin.right->value()
+            - self.style.width->value();
+
+        self.layout.content_box.x :=
+            self.layout.container.x +
+            self.layout.padding.left + self.layout.border.left /* + self.layout.margin.left */;
+        self.layout.content_box.width :=
+            if self.style.width->is_auto() then
+                max(self.layout.underflow, 0.0)
+            else
+                self.style.width->value();
+
+        self.layout.content_box.y :=
             max(
-                self.container.y + self.container.height +
-                self.padding.top + self.border.top + self.margin.top,
+                self.layout.container.y + //self.layout.container.height +
+                self.layout.padding.top + self.layout.border.top + self.layout.margin.top,
                 max(
-                    if self.style.clear.left then left_clearance(self.float_cursor_in) else 0.0,
-                    if self.style.clear.right then right_clearance(self.float_cursor_in) else 0.0
+                    if self.style.clear.left then 64.0 /*left_clearance(self.layout.float_cursor_in)*/ else 0.0,
+                    if self.style.clear.right then 64.0 /*right_clearance(self.layout.float_cursor_in)*/ else 0.0
                 )
             );
-
-        self.underflow :=
-            self.container.width -
-            (value(self.style.margin.left) + value(self.style.margin.right) +
-             self.style.border.left + self.style.border.right +
-             self.style.padding.left + self.style.padding.right +
-             value(self.style.width));
-
-        self.padding.left := self.style.padding.left;
-        self.padding.right := self.style.padding.right;
-
-        self.border.left := self.style.border.left;
-        self.border.right := self.style.border.right;
-
-        self.content_box.width :=
-            if is_auto(self.style.width) then
-                max(self.underflow, 0.0)
+        self.layout.content_box.height :=
+            if self.style.height->is_auto() then
+                children[$].layout.container.height
             else
-                value(self.style.width);
+                self.style.height->value();
 
-        self.margin.left :=
-            if is_auto(self.style.margin.left) then
-                if is_auto(self.style.width) || self.underflow < 0.0 then
-                    0.0
-                else if is_auto(self.style.margin.right) then
-                    self.underflow / 2.0
-                else
-                    self.underflow
-            else
-                value(self.style.margin.left);
+        children[i].layout.container.x := self.layout.content_box.x;
+        children[i].layout.container.width := self.layout.content_box.width;
 
-        self.margin.right :=
-            if is_auto(self.style.width) && self.underflow < 0.0 then
-                value(self.style.margin.right) + self.underflow
-            else if is_auto(self.style.margin.right) then
-                if is_auto(self.style.width) then
-                    0.0
-                else if is_auto(self.style.margin.left) then
-                    self.underflow / 2.0
-                else
-                    self.underflow
-            else if !is_auto(self.style.margin.left) || !is_auto(self.style.width) then
-                value(self.style.margin.right) + self.underflow
-            else
-                value(self.style.margin.right);
+        children[i].layout.container.y := self.layout.content_box.y;
+        children[i].layout.container.height :=
+            scanl
+                0.0
+            ..
+                children[@].layout.container.height + children[i].layout.content_box.height;
 
-        children[i].container.x := self.content_box.x;
-        children[i].container.y := self.content_box.y;
+        self.layout.padding_box.x := self.layout.content_box.x - self.layout.padding.left;
+        self.layout.padding_box.y := self.layout.content_box.y - self.layout.padding.top;
+        self.layout.padding_box.width := self.layout.content_box.width + self.layout.padding.left + self.layout.padding.right;
+        self.layout.padding_box.height := self.layout.content_box.height + self.layout.padding.top + self.layout.padding.bottom;
 
-        children[i].container.width := self.content_box.width;
-        self.block_size := self.margin_box.height;
+        self.layout.border_box.x := self.layout.padding_box.x - self.layout.border.left;
+        self.layout.border_box.y := self.layout.padding_box.y - self.layout.border.top;
+        self.layout.border_box.width := self.layout.padding_box.width + self.layout.border.left + self.layout.border.right;
+        self.layout.border_box.height := self.layout.padding_box.height + self.layout.border.top + self.layout.border.bottom;
 
-        children[i].container.height := scanl 0.0 .. children[@].container.height + children[i].block_size;
+        self.layout.margin_box.x := self.layout.border_box.x - self.layout.margin.left;
+        self.layout.margin_box.y := self.layout.border_box.y - self.layout.margin.top;
+        self.layout.margin_box.width := self.layout.border_box.width + self.layout.margin.left + self.layout.margin.right;
+        self.layout.margin_box.height := self.layout.border_box.height + self.layout.margin.top + self.layout.margin.bottom;
 
-        self.content_box.height :=
-            if is_auto(self.style.height) then
-                children[$].container.height
-            else
-                value(self.style.height);
+        self.layout.block_size := self.layout.margin_box.height;
 
-        self.padding_box.x := self.content_box.x - self.padding.left;
-        self.padding_box.y := self.content_box.y - self.padding.top;
-        self.padding_box.width := self.content_box.width + self.padding.left + self.padding.right;
-        self.padding_box.height := self.content_box.height + self.padding.top + self.padding.bottom;
-
-        self.border_box.x := self.padding_box.x - self.border.left;
-        self.border_box.y := self.padding_box.y - self.border.top;
-        self.border_box.width := self.padding_box.width + self.border.left + self.border.right;
-        self.border_box.height := self.padding_box.height + self.border.top + self.border.bottom;
-
-        self.margin_box.x := self.border_box.x - self.margin.left;
-        self.margin_box.y := self.border_box.y - self.margin.top;
-        self.margin_box.width := self.border_box.width + self.margin.left + self.margin.right;
-        self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
-
-        children[i].float_cursor_in := FloatCursor::empty();
-        self.float_cursor_out := clone(self.float_cursor_in);
-    }
-}
-
-/* display: inline */
-class Inline : LayoutNode {
-    rules {
-        self.underflow :=
-            self.container.width -
-            (value(self.style.margin.left) + value(self.style.margin.right) +
-             self.style.border.left + self.style.border.right +
-             self.style.padding.left + self.style.padding.right +
-             value(self.style.width));
-
-        self.padding.left := self.style.padding.left;
-        self.padding.right := self.style.padding.right;
-
-        self.border.left := self.style.border.left;
-        self.border.right := self.style.border.right;
-
-        self.content_box.width :=
-            if is_auto(self.style.width) then
-                max(self.underflow, 0.0)
-            else
-                value(self.style.width);
-
-        self.margin.left :=
-            if is_auto(self.style.margin.left) then
-                if is_auto(self.style.width) || self.underflow < 0.0 then
-                    0.0
-                else if is_auto(self.style.margin.right) then
-                    self.underflow / 2.0
-                else
-                    self.underflow
-            else
-                value(self.style.margin.left);
-
-        self.margin.right :=
-            if is_auto(self.style.width) && self.underflow < 0.0 then
-                value(self.style.margin.right) + self.underflow
-            else if is_auto(self.style.margin.right) then
-                if is_auto(self.style.width) then
-                    0.0
-                else if is_auto(self.style.margin.left) then
-                    self.underflow / 2.0
-                else
-                    self.underflow
-            else if !is_auto(self.style.margin.left) || !is_auto(self.style.width) then
-                value(self.style.margin.right) + self.underflow
-            else
-                value(self.style.margin.right);
-
-        self.margin.top := value(self.style.margin.top); // auto ==> 0
-        self.margin.bottom := value(self.style.margin.bottom); // auto ==> 0
-
-        self.border.top := self.style.border.top;
-        self.border.bottom := self.style.border.bottom;
-
-        self.padding.top := self.style.padding.top;
-        self.padding.bottom := self.style.padding.bottom;
-
-        self.content_box.x :=
-            self.container.x +
-            self.margin.left + self.border.left + self.padding.left;
-
-        self.content_box.y :=
-            self.container.y + self.container.height +
-            self.margin.top + self.border.top + self.padding.top;
-
-        self.content_box.height := value(self.style.height);
-
-        self.padding_box.x := self.content_box.x - self.padding.left;
-        self.padding_box.y := self.content_box.y - self.padding.top;
-        self.padding_box.width := self.content_box.width + self.padding.left + self.padding.right;
-        self.padding_box.height := self.content_box.height + self.padding.top + self.padding.bottom;
-
-        self.border_box.x := self.padding_box.x - self.border.left;
-        self.border_box.y := self.padding_box.y - self.border.top;
-        self.border_box.width := self.padding_box.width + self.border.left + self.border.right;
-        self.border_box.height := self.padding_box.height + self.border.top + self.border.bottom;
-
-        self.margin_box.x := self.border_box.x - self.margin.left;
-        self.margin_box.y := self.border_box.y - self.margin.top;
-        self.margin_box.width := self.border_box.width + self.margin.left + self.margin.right;
-        self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
-
-        self.float_cursor_out := clone(self.float_cursor_in);
-        // not sure if it's correct.
-        self.block_size := self.content_box.height;
+        children[i].layout.float_cursor_in := FloatCursor::empty();
+        self.layout.float_cursor_out := clone(self.layout.float_cursor_in);
     }
 }
 
@@ -390,80 +302,141 @@ class Floated : LayoutNode {
     children {
         children : [LayoutNode];
     }
-    rules {
-        self.float_cursor_out := add_left(self.float_cursor_in, self.content_box.x, self.content_box.y, self.content_box.width, self.content_box.height);
+    statements {
+        self.layout.border.left := self.style.border.left;
+        self.layout.border.right := self.style.border.right;
+        self.layout.border.top := self.style.border.top;
+        self.layout.border.bottom := self.style.border.bottom;
 
-        ///copy paste
-        self.underflow :=
-            self.container.width -
-            (value(self.style.margin.left) + value(self.style.margin.right) +
-             self.style.border.left + self.style.border.right +
-             self.style.padding.left + self.style.padding.right +
-             value(self.style.width));
+        self.layout.padding.left := self.style.padding.left;
+        self.layout.padding.right := self.style.padding.right;
+        self.layout.padding.top := self.style.padding.top;
+        self.layout.padding.bottom := self.style.padding.bottom;
 
-        self.padding.left := 0.0;
-        self.padding.right := 0.0;
+        self.layout.margin_above.collapse := 1 == 0;
+        self.layout.margin_below.collapse := 1 == 0;
 
-        self.border.left := self.style.border.left;
-        self.border.right := self.style.border.right;
+        self.layout.margin.left := self.style.margin.left->value();
+        self.layout.margin.right := self.style.margin.right->value();
+        self.layout.margin.top := self.style.margin.top->value();
+        self.layout.margin.bottom := self.style.margin.bottom->value();
 
-        self.content_box.width :=
-            if is_auto(self.style.width) then
-                max(self.underflow, 0.0)
+        self.layout.underflow :=
+            self.layout.container.width
+            - self.style.padding.left - self.style.padding.right
+            - self.style.border.left - self.style.border.right
+            - self.style.margin.left->value() - self.style.margin.right->value()
+            - self.style.width->value();
+
+        self.layout.content_box.x :=
+            self.layout.container.x +
+            self.layout.padding.left + self.layout.border.left + self.layout.margin.left;
+        self.layout.content_box.width :=
+            if self.style.width->is_auto() then
+                max(self.layout.underflow, 0.0)
             else
-                value(self.style.width);
+                self.style.width->value();
 
-        self.margin.left := 0.0;
-
-        self.margin.right := 0.0;
-
-        self.margin.top := 0.0; // auto ==> 0
-        self.margin.bottom := 0.0; // auto ==> 0
-
-        self.border.top := self.style.border.top;
-        self.border.bottom := self.style.border.bottom;
-
-        self.padding.top := 0.0;
-        self.padding.bottom := 0.0;
-
-        self.content_box.x :=
-            self.container.x +
-            self.margin.left + self.border.left + self.padding.left;
-
-        self.content_box.y :=
-            self.container.y + self.container.height +
-            self.margin.top + self.border.top + self.padding.top;
-
-        children[i].container.x := self.content_box.x;
-        children[i].container.y := self.content_box.y;
-
-        children[i].container.width := self.content_box.width;
-
-        children[i].container.height := scanl 0.0 .. children[@].container.height + children[i].margin_box.height;
-
-        self.content_box.height :=
-            if is_auto(self.style.height) then
-                children[$].container.height
+        self.layout.content_box.y :=
+            self.layout.container.y + //self.layout.container.height +
+            self.layout.padding.top + self.layout.border.top + self.layout.margin.top;
+        self.layout.content_box.height :=
+            if self.style.height->is_auto() then
+                children[$].layout.container.height
             else
-                value(self.style.height);
+                self.style.height->value();
 
-        self.padding_box.x := self.content_box.x - self.padding.left;
-        self.padding_box.y := self.content_box.y - self.padding.top;
-        self.padding_box.width := self.content_box.width + self.padding.left + self.padding.right;
-        self.padding_box.height := self.content_box.height + self.padding.top + self.padding.bottom;
+        children[i].layout.container.x := self.layout.content_box.x;
+        children[i].layout.container.width := self.layout.content_box.width;
 
-        self.border_box.x := self.padding_box.x - self.border.left;
-        self.border_box.y := self.padding_box.y - self.border.top;
-        self.border_box.width := self.padding_box.width + self.border.left + self.border.right;
-        self.border_box.height := self.padding_box.height + self.border.top + self.border.bottom;
+        children[i].layout.container.y := self.layout.content_box.y;
+        children[i].layout.container.height :=
+            scanl
+                0.0
+            ..
+                children[@].layout.container.height + children[i].layout.content_box.height;
 
-        self.margin_box.x := self.border_box.x - self.margin.left;
-        self.margin_box.y := self.border_box.y - self.margin.top;
-        self.margin_box.width := self.border_box.width + self.margin.left + self.margin.right;
-        self.margin_box.height := self.border_box.height + self.margin.top + self.margin.bottom;
+        self.layout.padding_box.x := self.layout.content_box.x - self.layout.padding.left;
+        self.layout.padding_box.y := self.layout.content_box.y - self.layout.padding.top;
+        self.layout.padding_box.width := self.layout.content_box.width + self.layout.padding.left + self.layout.padding.right;
+        self.layout.padding_box.height := self.layout.content_box.height + self.layout.padding.top + self.layout.padding.bottom;
 
-        children[i].float_cursor_in := FloatCursor::empty();
+        self.layout.border_box.x := self.layout.padding_box.x - self.layout.border.left;
+        self.layout.border_box.y := self.layout.padding_box.y - self.layout.border.top;
+        self.layout.border_box.width := self.layout.padding_box.width + self.layout.border.left + self.layout.border.right;
+        self.layout.border_box.height := self.layout.padding_box.height + self.layout.border.top + self.layout.border.bottom;
 
-        self.block_size := 0.0;
+        self.layout.margin_box.x := self.layout.border_box.x - self.layout.margin.left;
+        self.layout.margin_box.y := self.layout.border_box.y - self.layout.margin.top;
+        self.layout.margin_box.width := self.layout.border_box.width + self.layout.margin.left + self.layout.margin.right;
+        self.layout.margin_box.height := self.layout.border_box.height + self.layout.margin.top + self.layout.margin.bottom;
+
+        self.layout.block_size := 0.0;
+
+        children[i].layout.float_cursor_in := FloatCursor::empty();
+        self.layout.float_cursor_out := add_left(self.layout.float_cursor_in, self.layout.content_box.x, self.layout.content_box.y, self.layout.content_box.width, self.layout.content_box.height);
+    }
+}
+
+/* display: inline */
+class Inline : LayoutNode {
+    statements {
+        self.layout.border.left := self.style.border.left;
+        self.layout.border.right := self.style.border.right;
+        self.layout.border.top := self.style.border.top;
+        self.layout.border.bottom := self.style.border.bottom;
+
+        self.layout.padding.left := self.style.padding.left;
+        self.layout.padding.right := self.style.padding.right;
+        self.layout.padding.top := self.style.padding.top;
+        self.layout.padding.bottom := self.style.padding.bottom;
+
+        self.layout.margin_above.collapse := 1 == 0;
+        self.layout.margin_below.collapse := 1 == 0;
+
+        self.layout.margin.left := self.style.margin.left->value();
+        self.layout.margin.right := self.style.margin.right->value();
+        self.layout.margin.top := self.style.margin.top->value();
+        self.layout.margin.bottom := self.style.margin.bottom->value();
+
+        self.layout.underflow :=
+            self.layout.container.width
+            - self.style.padding.left - self.style.padding.right
+            - self.style.border.left - self.style.border.right
+            - self.style.margin.left->value() - self.style.margin.right->value()
+            - self.style.width->value();
+
+        self.layout.content_box.x :=
+            self.layout.container.x +
+            self.layout.padding.left + self.layout.border.left + self.layout.margin.left;
+        self.layout.content_box.width :=
+            if self.style.width->is_auto() then
+                max(self.layout.underflow, 0.0)
+            else
+                self.style.width->value();
+
+        self.layout.content_box.y :=
+            self.layout.container.y + //self.layout.container.height +
+            self.layout.padding.top + self.layout.border.top + self.layout.margin.top;
+        self.layout.content_box.height := self.style.height->value();
+
+        self.layout.padding_box.x := self.layout.content_box.x - self.layout.padding.left;
+        self.layout.padding_box.y := self.layout.content_box.y - self.layout.padding.top;
+        self.layout.padding_box.width := self.layout.content_box.width + self.layout.padding.left + self.layout.padding.right;
+        self.layout.padding_box.height := self.layout.content_box.height + self.layout.padding.top + self.layout.padding.bottom;
+
+        self.layout.border_box.x := self.layout.padding_box.x - self.layout.border.left;
+        self.layout.border_box.y := self.layout.padding_box.y - self.layout.border.top;
+        self.layout.border_box.width := self.layout.padding_box.width + self.layout.border.left + self.layout.border.right;
+        self.layout.border_box.height := self.layout.padding_box.height + self.layout.border.top + self.layout.border.bottom;
+
+        self.layout.margin_box.x := self.layout.border_box.x - self.layout.margin.left;
+        self.layout.margin_box.y := self.layout.border_box.y - self.layout.margin.top;
+        self.layout.margin_box.width := self.layout.border_box.width + self.layout.margin.left + self.layout.margin.right;
+        self.layout.margin_box.height := self.layout.border_box.height + self.layout.margin.top + self.layout.margin.bottom;
+
+        self.layout.block_size := self.layout.content_box.height;
+
+        self.layout.float_cursor_out := clone(self.layout.float_cursor_in);
     }
 }
