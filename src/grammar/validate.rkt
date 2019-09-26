@@ -1,7 +1,8 @@
 #lang rosette
 
 (require "../utility.rkt"
-         "syntax.rkt")
+         "syntax.rkt"
+         "expression.rkt")
 
 (provide validate-grammar)
 
@@ -48,11 +49,11 @@
 
 (define (validate-term G class term [iterates #f])
   (define/match (recur term)
-    [((ag:const _)) (void)]
-    [((ag:field/get (cons 'self field)))
+    [((ex:const _)) (void)]
+    [((ex:field/get (cons 'self field)))
      (unless (ag:class-ref*/label class field #:partial? #t)
        (reject "Undefined field '~a' on self" field))]
-    [((ag:field/get (cons node field)))
+    [((ex:field/get (cons node field)))
      (define child (ag:class-ref*/child class node #:partial? #t))
      (unless child
        (reject "No such child '~a'" node))
@@ -61,7 +62,7 @@
          (reject "Undefined field '~a'" field))
        (unless (ag:child/one? child)
          (reject "Mismatched index for scalar field '~a'" field)))]
-    [((ag:field/cur (cons node field)))
+    [((ex:field/cur (cons node field)))
      (define child (ag:class-ref*/child class node #:partial? #t))
      (unless child
        (reject "No such child '~a'" node))
@@ -70,21 +71,21 @@
          (reject "Undefined field '~a'" field))
        (unless (and (ag:child/seq? child) (eq? node iterates))
          (reject "Mismatched index for vector field '~a'" field)))]
-    [((ag:field/acc attr))
+    [((ex:field/acc attr))
      (define friend (ag:class-ref*/rule class attr #:partial? #t))
      (unless friend
        (reject "No such attribute '~a'" attr))
-     (unless (ag:rule-iterative? friend)
+     (unless (ag:rule-reductive? friend)
        (reject "No such accumulator for attribute '~a'" attr))
      (unless (eq? (ag:rule-iteration friend) iterates)
        (reject "Mismatched iteration for accumulator of attribute '~a'" attr))]
-    [((ag:field/sup attr))
+    [((ex:field/sup attr))
      (define friend (ag:class-ref*/rule class attr #:partial? #t))
      (unless friend
        (reject "No such attribute '~a'" attr))
-     (unless (ag:rule-iterative? friend)
+     (unless (ag:rule-reductive? friend)
        (reject "No such accumulator for attribute '~a'" attr))]
-    [((ag:field/peek (cons node field) default))
+    [((ex:field/peek (cons node field) default))
      (define child (ag:class-ref*/child class node #:partial? #t))
      (unless child
        (reject "No such child '~a'" node))
@@ -93,7 +94,7 @@
          (reject "Undefined field '~a'" field))
        (unless (and (ag:child/seq? child) (eq? node iterates))
          (reject "Mismatched index for scalar/uniterated field '~a'" field)))]
-    [((ag:field/first (cons node field) default))
+    [((ex:field/first (cons node field) default))
      (define child (ag:class-ref*/child class node #:partial? #t))
      (unless child
        (reject "No such child '~a'" node))
@@ -102,7 +103,7 @@
          (reject "Undefined field '~a'" field))
        (unless (ag:child/seq? child)
          (reject "Mismatched index for scalar field '~a'" field)))]
-    [((ag:field/last (cons node field) default))
+    [((ex:field/last (cons node field) default))
      (define child (ag:class-ref*/child class node #:partial? #t))
      (unless child
        (reject "No such child '~a'" node))
@@ -111,10 +112,12 @@
          (reject "Undefined field '~a'" field))
        (unless (ag:child/seq? child)
          (reject "Mismatched index for scalar field '~a'" field)))]
-    [((ag:expr _ operands)) (for-each recur operands)]
-    [((ag:call _ arguments)) (for-each recur arguments)]
-    [((ag:invoke receiver _ arguments)) (for-each recur (cons receiver arguments))]
-    [((ag:branch if then else)) (for-each recur (list if then else))])
+    [((ex:logic _ operands)) (for-each recur operands)]
+    [((ex:order _ left right)) (recur left) (recur right)]
+    [((ex:arith _ operands)) (for-each recur operands)]
+    [((ex:call _ arguments)) (for-each recur arguments)]
+    [((ex:invoke receiver _ arguments)) (for-each recur (cons receiver arguments))]
+    [((ex:branch if then else)) (for-each recur (list if then else))])
   (recur term))
 
 ; Validate well-formedness of the rule statement.

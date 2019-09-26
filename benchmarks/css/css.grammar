@@ -18,6 +18,30 @@ traversal inorder {
     }
 }
 
+/*
+How do we want to express CSS semantics?
+
+For box-tree construction, a notion of tree transducer extended for unranked
+branching could offer a clean, straightforward formalism. Processing an unranked
+child sequence with a regular expression should suffice for all the tree
+transformations essential to CSS (e.g., block-in-inline splitting).
+
+For box-tree annotation (i.e., layout), a standard notion of attribute grammar
+could technically work but entails sophisticated refactoring of the semantics
+(e.g., non-descendent references, combinatorial feature interaction).
+ */
+
+/*
+transducer Layout(Styled) {
+  Node(Inline*) =>
+  Text =>
+}
+
+if Node.display == Block {
+  // foo
+}
+*/
+
 traversal pre {
     case Viewport {
         ??;

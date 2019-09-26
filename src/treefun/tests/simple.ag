@@ -1,0 +1,27 @@
+traversal postorder {
+  case Node {
+    iterate kids {
+      ??;
+    }
+    ??;
+  }
+}
+
+interface Tree {
+  input v : int;
+  output x : int;
+  output y : int;
+  output z : int;
+}
+
+trait Mixin {
+  self.y := foldr self.v .. self[@].y + kids.w;
+}
+
+class Node(Mixin) : Tree {
+  output w : float;
+
+  self.w := 3.1459;
+
+  kids.x := scanl self.v .. kids[@].x + kids[i].v;
+}

@@ -53,7 +53,7 @@
  (define G (parse-grammar grammar-filename))
  (define E
    (if (empty? (*examples*))
-       (tree-examples G (*root*))
+       (rest (tree-examples G (*root*)))
        (map (curry file->tree G) (*examples*))))
 
  (define S*
@@ -69,5 +69,11 @@
 
    (when (*output*)
      (define P (generate-program G S*))
-     (parameterize ([current-output-port (open-output-file (*output*) #:mode 'text #:exists 'replace)])
+
+     (define file
+       (if (equal? (*output*) "-")
+           (current-output-port)
+           (open-output-file (*output*) #:mode 'text #:exists 'replace)))
+
+     (parameterize ([current-output-port file])
        (print-program P)))))

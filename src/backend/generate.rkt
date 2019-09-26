@@ -1,7 +1,9 @@
 #lang rosette
 
 (require "../utility.rkt"
-         "../grammar/syntax.rkt")
+         "../grammar/syntax.rkt"
+         "../grammar/expression.rkt"
+         "intermediate.rkt")
 
 (provide generate-program)
 
@@ -752,129 +754,184 @@ impl<'a> LayoutNode<'a> {
 ; Generation of tree traversal code
 ; ---------------------------------
 
+(define *class* (make-parameter #f))
+(define *traversal* (make-parameter #f))
+
 (define (normalize-fieldname field)
   (cond
-    [(equal? field 'intrinsic_height)
-     '|layout.content_box.height|]
-    [(equal? field 'float_cursor_in)
+    [(equal? field 'layout.float_cursor_in)
      '|layout.float_cursor|]
-    [(equal? field 'float_cursor_out)
+    [(equal? field 'layout.float_cursor_out)
      '|layout.float_cursor|]
-    [(string-prefix? (symbol->string field) "style.")
-     field]
     [else
-     (symbol-append '|layout.| field)]))
+     field]))
 
-(define (generate-term class term)
+(define (contract-fieldname field)
+  (string->symbol (string-replace (symbol->string field) "." "_")))
+
+(define (generate-term term)
   (define/match (recur term)
-    [((ag:const v)) v]
-    [((or (ag:field/get (cons 'self 'intrinsic_height))
-          (ag:field/acc (cons 'self 'intrinsic_height))))
-     `(select (select (select self layout) content_box) height)]
-    [((ag:field/get (cons 'self field)))
+    [((ex:const v)) v]
+    [((ex:field/get (cons 'self field)))
      `(select self ,(normalize-fieldname field))]
-    [((ag:field/get (cons child field)))
+    [((ex:field/get (cons child field)))
      `(select ,child ,(normalize-fieldname field))]
-    [((ag:field/cur (cons child field)))
-     (define child-i (symbol-append child '_i))
-     `(select ,child-i ,(normalize-fieldname field))]
-    ; XXX: Correct?
-    [((ag:field/acc (cons object field)))
-     (symbol-append object (normalize-fieldname field))]
-    ; XXX: Correct?
-    [((ag:field/sup (cons object field)))
-     (symbol-append object (normalize-fieldname field))]
-    ; [((ag:field/peek (cons child field) default))
+    [((ex:field/cur (cons child field)))
+     (define cursor (symbol-append child '_i))
+     `(select ,cursor ,(normalize-fieldname field))]
+    [((ex:field/acc (cons object field)))
+     (contract-fieldname (normalize-fieldname field))]
+    [((ex:field/sup (cons object field)))
+     (contract-fieldname (normalize-fieldname field))]
+    ; [((ex:field/peek (cons child field) default))
     ;  (define peek-child `(call (select ,(symbol-append child 'iter) peek) ()))
     ;  `(call (select ,first-child map_or_else)
     ;         ((lambda () ,(recur default))
     ;          (lambda (node) (select node ,(normalize-fieldname field)))))]
-    [((ag:field/first (cons child field) default))
+    [((ex:field/first (cons child field) default))
      (define first-child `(call (select ,child first) ()))
      `(call (select ,first-child map_or_else)
             ((lambda () ,(recur default))
              (lambda (node) (select node ,(normalize-fieldname field)))))]
-    [((ag:field/last (cons child field) default))
+    [((ex:field/last (cons child field) default))
      (define last-child `(call (select ,child last) ()))
      `(call (select ,last-child map_or_else)
             ((lambda () ,(recur default))
              (lambda (node) (select node ,(normalize-fieldname field)))))]
-    [((ag:branch condition consequent alternate))
+    [((ex:branch condition consequent alternate))
      `(if ,(recur condition)
           ,(recur consequent)
           ,(recur alternate))]
-    [((ag:expr operator operands))
+    [((ex:logic operator operands))
      `(,operator . ,(map recur operands))]
-    [((ag:call function arguments))
+    [((ex:order comparison left right))
+     `(,comparison ,(recur left) ,(recur right))]
+    [((ex:arith operator operands))
+     `(,operator . ,(map recur operands))]
+    [((ex:call function arguments))
      `(call ,function
             ,(map recur arguments))]
-    [((ag:invoke receiver method arguments))
+    [((ex:invoke receiver method arguments))
      `(call (select ,(recur receiver) ,method)
             ,(map recur arguments))])
   (recur term))
 
-(define (generate-command function class command #:iterated? [iterated? #f])
-  (define recur (curry generate-command function class))
+(define (attribute->formula attr)
+  (ag:rule-formula (ag:class-ref*/rule (*class*) attr)))
+
+(define (command->statement* command)
   (match command
-    [(ag:iter child commands)
-     (define reversed? (ag:iter-rev? command))
-     (define iterator `(call (select (select self ,child) iter_mut) ()))
-     (define cursor (symbol-append child '_i))
-     (define initial (append-map (recur #:iterated? #f) (flatten commands)))
-     (define action (append-map (recur #:iterated? #t) (flatten commands)))
-     (append initial
-             (list `(for ,cursor ,(if reversed? `(call (select ,iterator rev) ()) iterator)
-                      (do . ,action))))]
+    [(ag:iter child body)
+     (define command-list (flatten body))
+     (define loop-body
+       (append (map command->statement/iteration command-list)
+               (map command->statement/increment command-list)))
+
+     (define prologue (map command->statement/prologue command-list))
+     (define loop (list (ir:foreach child (ag:iter-rev? command) loop-body)))
+     (define epilogue (map command->statement/epilogue command-list))
+
+     (append prologue loop epilogue)]
     [(ag:eval attr)
-     (define rule (ag:class-ref*/rule class attr))
-     (define iterator (ag:rule-iteration rule))
-     (define term
-       (match (ag:rule-formula rule)
-         [(ag:fold init next) (if iterated? next init)]
-         [term term]))
-     (define target (generate-term class (ag:field/get attr)))
-     (if (implies (ag:rule-iteration rule) (or (ag:rule-iterative? rule) iterated?))
-         (list `(:= ,target ,(generate-term class term)))
-         null)]
+     (define expr (attribute->formula attr))
+     (list (ir:assign (ex:field/get attr) expr))]
     [(ag:recur child)
-     (define child-i (symbol-append child '_i))
-     (if (implies (ag:child/seq? (ag:class-ref*/child class child)) iterated?)
-         (let ([receiver (if iterated? child-i child)])
-           (list `(call (select ,receiver ,function) ())))
-         null)]
+     (list (ir:invoke (ex:field/get child (*traversal*))))]
     [(ag:skip)
-     (list `(skip))]))
+     (list (ir:skip))]))
 
-(define (generate-visitor name visitor)
-  (define class (ag:visitor-class visitor))
-  (define interface (ag:class-interface class))
-  (define commands (ag:visitor-commands visitor))
+(define (command->statement/prologue command)
+  (match command
+    [(ag:eval attr)
+     (match (attribute->formula attr)
+       [(ag:fold init _) (ir:declare (ex:field/acc attr) init)]
+       [(ag:scan init _) (ir:declare (ex:field/acc attr) init)]
+       [_ (ir:skip)])]
+    [(ag:recur _) (ir:skip)]
+    [(ag:skip) (ir:skip)]))
 
-  (define sort (symbol-append (ag:interface-name interface) 'Class))
-  (define kind (ag:class-name class))
-  (define variant `(:: ,sort ,kind))
-  (define fields (map ag:child-name (ag:class-children* class)))
-  (define pattern `(constructor ,variant (record . ,fields)))
-  (define body (append-map (curry generate-command name class) (flatten commands)))
+(define (command->statement/iteration command)
+  (match command
+    [(ag:eval attr)
+     (match (attribute->formula attr)
+       [(ag:fold _ next) (ir:assign (ex:field/get attr) next)]
+       [(ag:scan _ next) (ir:assign (ex:field/cur attr) next)]
+       [expr (ir:assign (ex:field/cur attr) expr)])]
+    [(ag:recur child)
+     (ir:invoke (ex:field/cur (cons child (*traversal*))))]
+    [(ag:skip) (ir:skip)]))
 
-  `(=> (constructor (:: LayoutClass ,kind) (unit)) (do . ,body)))
+(define (command->statement/increment command)
+  (match command
+    [(ag:eval attr)
+     (match (attribute->formula attr)
+       [(ag:fold _ _) (ir:assign (ex:field/acc attr) (ex:field/get attr))]
+       [(ag:scan _ _) (ir:assign (ex:field/acc attr) (ex:field/cur attr))]
+       [_ (ir:skip)])]
+    [(ag:recur _) (ir:skip)]
+    [(ag:skip) (ir:skip)]))
+
+(define (command->statement/epilogue command)
+  (match command
+    [(ag:eval attr)
+     (match (attribute->formula attr)
+       [(ag:fold _ _) (ir:assign (ex:field/get attr) (ex:field/acc attr))]
+       [(ag:scan _ _) (ir:skip)]
+       [_ (ir:skip)])]
+    [(ag:recur _) (ir:skip)]
+    [(ag:skip) (ir:skip)]))
+
+(define (generate-statement statement)
+  (match statement
+    [(ir:foreach child rev? statement-list)
+     (define iterator
+       (let ([base `(call (select (select self ,child) iter_mut) ())])
+         (if rev? `(call (select ,base rev) ()) base)))
+     (define cursor (symbol-append child '_i))
+     (define body (map generate-statement statement-list))
+
+     `(for ,cursor ,iterator (do . ,body))]
+    [(ir:declare lhs rhs)
+     `(let-mut ,(generate-term lhs) ,(generate-term rhs))]
+    [(ir:assign lhs rhs)
+     `(:= ,(generate-term lhs) ,(generate-term rhs))]
+    [(ir:invoke method)
+     `(call ,(generate-term method) ())]
+    [(ir:skip)
+     `(skip)]))
+
+(define (generate-visitor visitor)
+  (parameterize ([*class* (ag:visitor-class visitor)])
+    (define interface (ag:class-interface (*class*)))
+    (define commands (ag:visitor-commands visitor))
+
+    (define sort (symbol-append (ag:interface-name interface) 'Class))
+    (define kind (ag:class-name (*class*)))
+    (define variant `(:: ,sort ,kind))
+    (define fields (map ag:child-name (ag:class-children* (*class*))))
+    (define pattern `(constructor ,variant (record . ,fields)))
+
+    (define statement-list (append-map command->statement* (flatten commands)))
+    (define body (map generate-statement statement-list))
+
+    `(=> (constructor (:: LayoutClass ,kind) (unit)) (do . ,body))))
 
 (define (generate-traversal G traversal)
-  (define name (ag:traversal-name traversal))
+  (parameterize ([*traversal* (ag:traversal-name traversal)])
 
-  (for/list ([interface (ag:grammar-interfaces G)]
-             #:when (eq? (ag:interface-name interface) 'LayoutNode))
-    (define sort (ag:interface-name interface))
-    (define cases
-      (map (curry generate-visitor name)
-           (ag:traversal-ref/interface traversal interface)))
-    (define default (list '(=> _ (skip))))
+    (for/list ([interface (ag:grammar-interfaces G)]
+               #:when (eq? (ag:interface-name interface) 'LayoutNode))
+      (define sort (ag:interface-name interface))
+      (define cases
+        (map generate-visitor
+             (ag:traversal-ref/interface traversal interface)))
+      (define default (list '(=> _ (skip))))
 
-    `(impl ((life a)) ,sort
-           (fn ,name () ((: self (ref (mut Self)))) (unit)
-               (do (match (select self class)
-                  .
-                  ,(append cases default)))))))
+      `(impl ((life a)) ,sort
+             (fn ,(*traversal*) () ((: self (ref (mut Self)))) (unit)
+                 (do (match (select self class)
+                       .
+                       ,(append cases default))))))))
 
 (define (generate-program G S)
   (append ;header

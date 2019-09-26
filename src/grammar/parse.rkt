@@ -4,6 +4,7 @@
 
 (require "../utility.rkt"
          "syntax.rkt"
+         "expression.rkt"
          parser-tools/lex
          (prefix-in : parser-tools/lex-sre)
          parser-tools/yacc)
@@ -18,7 +19,7 @@
 
 (define-empty-tokens e-tkns
   (RBRACE LBRACE LPAREN RPAREN LBRACKET RBRACKET
-   OPTION COLON SEMICOLON COMMA DOT
+   OPTION COLON SEMICOLON COMMA DOT ACCESS
    TRAVERSAL CASE ITERATE REVERSE RECUR CALL EVAL SKIP HOLE
    INTERFACE CLASS TRAIT
    CHILDREN ATTRIBUTES STATEMENTS RULES
@@ -91,6 +92,7 @@
    [";" (token-SEMICOLON)]
    ["," (token-COMMA)]
    ["." (token-DOT)]
+   ["->" (token-ACCESS)]
    ["traversal" (token-TRAVERSAL)]
    ["case" (token-CASE)]
    ["iterate" (token-ITERATE)]
@@ -166,6 +168,7 @@
               (position-line start) (position-col start))))
    (precs
     (nonassoc LPAREN RPAREN)
+    (left FOLDL FOLDR SCANL SCANR DOTDOT)
     (nonassoc IF THEN ELSE)
     (left COLON)
     (left OR)
@@ -174,7 +177,9 @@
     (left STAR SLASH)
     (left PLUS MINUS)
     (nonassoc BANG)
-    (left DOT))
+    (nonassoc ACCESS)
+    (nonassoc INDEXED ACCUMULATOR SUPREMUM PREDECESSOR SUCCESSOR FIRST LAST LENGTH)
+    (nonassoc DOT))
    (grammar
     (program
      ((entity-list) (ag:make-grammar $1)))
@@ -284,34 +289,34 @@
      ((term) $1))
 
     (term
-     ((constant) (ag:const $1))
-     ((node DOT field) (ag:field/get (cons $1 $3)))
-     ((node INDEXED DOT field) (ag:field/cur (cons $1 $4)))
-     ((node ACCUMULATOR DOT field) (ag:field/acc (cons $1 $4)))
-     ((node SUPREMUM DOT field) (ag:field/sup (cons $1 $4)))
-     ((node PREDECESSOR DOT field COLON term) (ag:field/pred (cons $1 $4) $6))
-     ((node SUCCESSOR DOT field COLON term) (ag:field/succ (cons $1 $4) $6))
-     ((node FIRST DOT field COLON term) (ag:field/first (cons $1 $4) $6))
-     ((node LAST DOT field COLON term) (ag:field/last (cons $1 $4) $6))
-     ((node LENGTH) (ag:length $1))
-     ((BANG term) (ag:expr '! (list $2)))
-     ((term AND term) (ag:expr '&& (list $1 $3)))
-     ((term OR term) (ag:expr '\|\| (list $1 $3)))
-     ((term PLUS term) (ag:expr '+ (list $1 $3)))
-     ((term MINUS term) (ag:expr '- (list $1 $3)))
-     ((term STAR term) (ag:expr '* (list $1 $3)))
-     ((term SLASH term) (ag:expr '/ (list $1 $3)))
-     ((term LT term) (ag:expr '< (list $1 $3)))
-     ((term LE term) (ag:expr '<= (list $1 $3)))
-     ((term EQ term) (ag:expr '== (list $1 $3)))
-     ((term NE term) (ag:expr '!= (list $1 $3)))
-     ((term GE term) (ag:expr '>= (list $1 $3)))
-     ((term GT term) (ag:expr '> (list $1 $3)))
-     ((name LPAREN RPAREN) (ag:call $1 null))
-     ((name LPAREN term-list RPAREN) (ag:call $1 $3))
-     ((term DOT name LPAREN RPAREN) (ag:invoke $1 $3 null))
-     ((term DOT name LPAREN term-list RPAREN) (ag:invoke $1 $3 $5))
-     ((IF term THEN term ELSE term) (ag:branch $2 $4 $6))
+     ((constant) (ex:const $1))
+     ((node DOT field) (ex:field/get (cons $1 $3)))
+     ((node INDEXED DOT field) (ex:field/cur (cons $1 $4)))
+     ((node ACCUMULATOR DOT field) (ex:field/acc (cons $1 $4)))
+     ((node SUPREMUM DOT field) (ex:field/sup (cons $1 $4)))
+     ((node PREDECESSOR DOT field COLON term) (ex:field/pred (cons $1 $4) $6))
+     ((node SUCCESSOR DOT field COLON term) (ex:field/succ (cons $1 $4) $6))
+     ((node FIRST DOT field COLON term) (ex:field/first (cons $1 $4) $6))
+     ((node LAST DOT field COLON term) (ex:field/last (cons $1 $4) $6))
+     ((node LENGTH) (ex:length $1))
+     ((BANG term) (ex:logic '! (list $2)))
+     ((term AND term) (ex:logic '&& (list $1 $3)))
+     ((term OR term) (ex:logic '\|\| (list $1 $3)))
+     ((term PLUS term) (ex:arith '+ (list $1 $3)))
+     ((term MINUS term) (ex:arith '- (list $1 $3)))
+     ((term STAR term) (ex:arith '* (list $1 $3)))
+     ((term SLASH term) (ex:arith '/ (list $1 $3)))
+     ((term LT term) (ex:order '< $1 $3))
+     ((term LE term) (ex:order '<= $1 $3))
+     ((term EQ term) (ex:order '== $1 $3))
+     ((term NE term) (ex:order '!= $1 $3))
+     ((term GE term) (ex:order '>= $1 $3))
+     ((term GT term) (ex:order '> $1 $3))
+     ((name LPAREN RPAREN) (ex:call $1 null))
+     ((name LPAREN term-list RPAREN) (ex:call $1 $3))
+     ((term ACCESS name LPAREN RPAREN) (ex:invoke $1 $3 null))
+     ((term ACCESS name LPAREN term-list RPAREN) (ex:invoke $1 $3 $5))
+     ((IF term THEN term ELSE term) (ex:branch $2 $4 $6))
      ((LPAREN term RPAREN) $2))
 
     (term-list
@@ -461,7 +466,9 @@
   [((ag:label/in name type))
    (format "\n    input ~a : ~a;" name type)]
   [((ag:label/out name type))
-   (format "\n    output ~a : ~a;" name type)])
+   (format "\n    output ~a : ~a;" name type)]
+  [((ag:label/var name type))
+   (format "\n    local ~a : ~a;" name type)])
 
 (define/match (child->string child)
   [((ag:child/one name interface))
@@ -502,67 +509,77 @@
    (term->string term)])
 
 (define/match (term->string term)
-  [((ag:const #t)) "true"]
-  [((ag:const #f)) "false"]
-  [((ag:const (? number? n))) (number->string n)]
-  [((ag:field/get (cons object label)))
+  [((ex:const #t)) "true"]
+  [((ex:const #f)) "false"]
+  [((ex:const (? number? n))) (number->string n)]
+  [((ex:field/get (cons object label)))
    (format "~a.~a"
            object
            label)]
-  [((ag:field/cur (cons object label)))
+  [((ex:field/cur (cons object label)))
    (format "~a[i].~a"
            object
            label)]
-  [((ag:field/acc (cons object label)))
+  [((ex:field/acc (cons object label)))
    (format "~a[@].~a"
            object
            label)]
-  [((ag:field/sup (cons object label)))
+  [((ex:field/sup (cons object label)))
    (format "~a[$].~a"
            object
            label)]
-  [((ag:field/pred (cons object label) default))
+  [((ex:field/pred (cons object label) default))
    (format "(~a[i-1].~a : ~a)"
            object
            label
            (term->string default))]
-  [((ag:field/succ (cons object label) default))
+  [((ex:field/succ (cons object label) default))
    (format "(~a[i+1].~a : ~a)"
            object
            label
            (term->string default))]
-  [((ag:field/first (cons object label) default))
+  [((ex:field/first (cons object label) default))
    (format "(~a[0].~a : ~a)"
            object
            label
            (term->string default))]
-  [((ag:field/last (cons object label) default))
+  [((ex:field/last (cons object label) default))
    (format "(~a[-1].~a : ~a)"
            object
            label
            (term->string default))]
-  [((ag:length child))
+  [((ex:length child))
    (format "~a[#]"
            child)]
-  [((ag:expr unop (list only)))
+  [((ex:logic unop (list only)))
    (format "~a~a"
            unop
            (term->string only))]
-  [((ag:expr binop (list left right)))
+  [((ex:logic binop (list left right)))
    (format "(~a ~a ~a)"
            (term->string left)
            binop
            (term->string right))]
-  [((ag:call fun args))
+  [((ex:order cmp left right))
+   (format "(~a ~a ~a)"
+           (term->string left)
+           cmp
+           (term->string right))]
+  [((ex:arith binop (list left right)))
+   (format "(~a ~a ~a)"
+           (term->string left)
+           binop
+           (term->string right))]
+  [((ex:call fun args))
    (format "~a(~a)"
            fun
            (list->string term->string args ", "))]
-  [((ag:invoke recv meth args))
+  [((ex:invoke recv meth args))
    (format "~a.~a(~a)"
            (term->string recv)
            meth
            (list->string term->string args ", "))]
-  [((ag:branch if then else))
+  [((ex:branch if then else))
    (format "(if ~a then ~a else ~a)"
            (term->string if)
            (term->string then)
